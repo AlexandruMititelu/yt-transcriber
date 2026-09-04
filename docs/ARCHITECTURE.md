@@ -1,16 +1,18 @@
 # YT Transcriber — Architecture Contract
 
 Binding spec. Every module below is implemented EXACTLY as specified — names, shapes, keys, paths.
-Firefox MV2 WebExtension. Plain JS ES modules. No TypeScript. No build step. No npm dependencies
+Firefox MV2 WebExtension; Chromium runs the same files under `manifest.chromium.json` (MV3, `scripts/build-chromium.sh` → `dist/chromium/`). Plain JS ES modules. No TypeScript. No build step. No npm dependencies
 (vendor files already committed in `vendor/`). Single user, local-first.
 
 ## File tree
 
 ```
-manifest.json
-background.js                 (classic script; HTTP proxy + native host bridge + library opener)
+manifest.json                 (Firefox, MV2)
+manifest.chromium.json        (Chromium, MV3: service worker, host_permissions, action, fixed `key` → id akcnfppmgpnlimeohhkddmanaloihnjl)
+background.js                 (classic script; HTTP proxy + native host bridge + library opener; MV2 event page / MV3 service worker)
 native/host.mjs               (Node native-messaging host: the only thing that touches the filesystem)
 native/install.ps1 | install.sh (register the host for Firefox/Zen; NOT part of the xpi)
+src/lib/compat.js             (classic one-liner: `globalThis.browser = chrome` when missing; first in content_scripts and app.html)
 src/lib/format.js             (pure, ESM)
 src/lib/transcript.js         (pure + fetch pipeline, ESM)
 src/lib/bus.js                (runtime message helpers, ESM)
@@ -87,14 +89,16 @@ Every file op carries `root` (= `<vaultDir>/YT-transcriber`); `confine(root, p)`
 outside it (`path outside root`). Frames > 64 MB or unparsable JSON never wedge the host.
 Registered as `yt_transcriber` with `allowed_extensions: ['yt-transcriber@alex.local']` (registry key
 `HKCU\Software\Mozilla\NativeMessagingHosts` + Zen twin on Windows; `~/.mozilla/native-messaging-hosts` on Linux).
+Chromium/Chrome get a second host manifest with `allowed_origins: ['chrome-extension://akcnfppmgpnlimeohhkddmanaloihnjl/']`
+(`HKCU\Software\Chromium|Google\Chrome\NativeMessagingHosts`; `~/.config/chromium|google-chrome/NativeMessagingHosts`).
 
 `background.js` (classic script, MV2 event page):
-- `browser.runtime.onMessage.addListener((msg) => { ... return Promise })` — return the promise directly.
+- `browser.runtime.onMessage.addListener((msg, sender, sendResponse) => { promise.then(sendResponse); return true })` — Chromium ignores a returned promise.
 - ALLOWed URL prefixes for `http`: `https://api.anthropic.com/`, `https://api.openai.com/`.
   Anything else → `{ok:false, error:'host not allowed'}`.
 - When `body` is an object: `JSON.stringify` it and set `content-type: application/json`
   (don't override a caller-provided content-type).
-- `browser.browserAction.onClicked` → `browser.tabs.create({url: browser.runtime.getURL('page/app.html')})`.
+- `(browser.action || browser.browserAction).onClicked` → `browser.tabs.create({url: browser.runtime.getURL('page/app.html')})`.
 - Never throw; always resolve to a `{ok, ...}` object.
 
 ## src/lib/bus.js

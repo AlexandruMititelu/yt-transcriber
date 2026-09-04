@@ -1,5 +1,7 @@
-// MV2 event page — dumb HTTP proxy (host permissions → no CORS), native host bridge, library opener.
+// Firefox MV2 event page / Chromium MV3 service worker — dumb HTTP proxy (host permissions → no CORS),
+// native host bridge, library opener.
 'use strict';
+if (typeof browser === 'undefined') globalThis.browser = chrome;
 
 const ALLOWED_PREFIXES = ['https://api.anthropic.com/', 'https://api.openai.com/'];
 const NATIVE_HOST = 'yt_transcriber';
@@ -132,12 +134,17 @@ async function openLibrary() {
   }
 }
 
-browser.runtime.onMessage.addListener((msg) => {
-  if (msg && msg.type === 'http') return proxyHttp(msg);
-  if (msg && msg.type === 'native') return native(msg);
-  if (msg && msg.type === 'open-library') return openLibrary();
+// sendResponse + `return true` instead of returning the promise: Chromium ignores a returned promise.
+browser.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  let p;
+  if (msg && msg.type === 'http') p = proxyHttp(msg);
+  else if (msg && msg.type === 'native') p = native(msg);
+  else if (msg && msg.type === 'open-library') p = openLibrary();
+  if (!p) return;
+  p.then(sendResponse);
+  return true;
 });
 
-browser.browserAction.onClicked.addListener(() => {
+(browser.action || browser.browserAction).onClicked.addListener(() => {
   browser.tabs.create({ url: browser.runtime.getURL('page/app.html') });
 });

@@ -1,0 +1,58 @@
+{
+  "manifest_version": 3,
+  "name": "YT Transcriber",
+  "version": "0.1.85",
+  "description": "Transcript, chat, and notes for YouTube \u2014 bring your own LLM key, files land in your Obsidian vault.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1aKKbIEaGLFkisJO4pOFm1dOppOjTag49sLy9qfbryfTsMonoaLHKSRROWxoqur09AqiRwKFqrfdwWMvAwRo2VJYufnIXDigqBs2L8jUnwO2FcTiUKopGo+tHNJhMsnU7F3uWu/4sFInBbhCDSEGTVo80ISjrcZ1nXXDDLVKJ8DeHjx0i/yauHibQXZ9+doHzZAiZdFLPL8ZxBEG9Wo66R/B5p1kglGcXSe+1HcFQaq2uV/TUcBXLHfBpmnl0vkh1LLfEm/lSF3lm+nSs3dXWdJ8sh8fgaadQSiuCS8XfURj1JrODt0eAeWsqxOvlcmWwukZjwnSTfPLh5w3zP6hFQIDAQAB",
+  "permissions": [
+    "storage",
+    "clipboardWrite",
+    "nativeMessaging"
+  ],
+  "host_permissions": [
+    "*://*.youtube.com/*",
+    "https://api.anthropic.com/*",
+    "https://api.openai.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.youtube.com/*"
+      ],
+      "js": [
+        "src/lib/compat.js",
+        "content/yt.js"
+      ],
+      "css": [
+        "content/yt.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "YT Transcriber \u2014 Library",
+    "default_icon": "assets/icon.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "src/*",
+        "vendor/*",
+        "page/*",
+        "config/*",
+        "assets/*"
+      ],
+      "matches": [
+        "*://*.youtube.com/*"
+      ]
+    }
+  ],
+  "icons": {
+    "48": "assets/icon.png",
+    "96": "assets/icon.png",
+    "128": "assets/icon.png"
+  }
+}

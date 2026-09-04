@@ -1,4 +1,4 @@
-# Installs the YT Transcriber native messaging host for Firefox / Zen on Windows.
+# Installs the YT Transcriber native messaging host for Firefox / Zen / Chromium / Chrome on Windows.
 # Run from PowerShell:  powershell -ExecutionPolicy Bypass -File native\install.ps1
 # Copies host.mjs + a launcher .bat to %LOCALAPPDATA%\yt-transcriber and registers the manifest.
 $ErrorActionPreference = 'Stop'
@@ -26,6 +26,22 @@ foreach ($root in 'HKCU:\Software\Mozilla\NativeMessagingHosts', 'HKCU:\Software
   $key = Join-Path $root 'yt_transcriber'
   New-Item -Path $key -Force | Out-Null
   Set-ItemProperty -Path $key -Name '(Default)' -Value $manifestPath
+}
+
+# Chromium keys the host on the extension id (fixed by "key" in manifest.chromium.json), not on allowed_extensions.
+$chromiumManifestPath = Join-Path $dest 'yt_transcriber.chromium.json'
+$cjson = @{
+  name = 'yt_transcriber'
+  description = 'YT Transcriber file host (writes notes/chats into your knowledge base folder)'
+  path = $bat
+  type = 'stdio'
+  allowed_origins = @('chrome-extension://akcnfppmgpnlimeohhkddmanaloihnjl/')
+} | ConvertTo-Json
+[IO.File]::WriteAllText($chromiumManifestPath, $cjson, [Text.UTF8Encoding]::new($false))
+foreach ($root in 'HKCU:\Software\Chromium\NativeMessagingHosts', 'HKCU:\Software\Google\Chrome\NativeMessagingHosts') {
+  $key = Join-Path $root 'yt_transcriber'
+  New-Item -Path $key -Force | Out-Null
+  Set-ItemProperty -Path $key -Name '(Default)' -Value $chromiumManifestPath
 }
 Write-Host "Installed. Host: $bat"
 Write-Host "Manifest: $manifestPath"

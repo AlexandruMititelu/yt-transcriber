@@ -1,6 +1,6 @@
 # YT Transcriber
 
-Firefox MV2 extension. Transcript, chat, and notes panel next to any YouTube video — bring your own LLM key.
+Firefox MV2 / Chromium MV3 extension. Transcript, chat, and notes panel next to any YouTube video — bring your own LLM key.
 
 - Fetches the video's caption track and shows it as timestamped segments, with chapters, search, other caption tracks and translation
 - Click a segment to seek; hover for copy / "ask about this"
@@ -24,6 +24,14 @@ Temporary add-ons vanish on browser restart. Permanent options:
 
 - Sign it unlisted on [AMO](https://addons.mozilla.org/developers/) and install the signed `.xpi`
 - Set `xpinstall.signatures.required = false` in `about:config` (works in Zen, Developer Edition, Nightly, ESR — not release Firefox) and install the folder zipped as `.xpi`
+
+## Install in Chromium / Chrome
+
+1. `scripts/build-chromium.sh` — writes `dist/chromium/` (same files, `manifest.chromium.json` as the MV3 manifest).
+   Pass a directory to also copy it there, e.g. `scripts/build-chromium.sh /mnt/c/Users/<you>/Downloads`
+2. Open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked**, pick that folder
+3. Native host: the install scripts below also register the host for Chromium and Chrome
+   (the manifest's `key` pins the extension id to `akcnfppmgpnlimeohhkddmanaloihnjl`, which the host manifest allows)
 
 ## Setup
 
