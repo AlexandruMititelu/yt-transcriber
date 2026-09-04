@@ -32,6 +32,12 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 12px 32px rgba(0, 0, 0, 0.18);
 }
 .ytx-tags-pop.is-open { display: flex; }
+.ytx-tags-pop.is-up { top: auto; bottom: calc(100% + 6px); }
+.ytx-tag.is-locked { opacity: 0.85; cursor: default; }
+.ytx-tag.is-locked:hover { background: hsl(var(--tag-h) 70% 48%); color: #fff; }
+.ytx-tags-inherited { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.ytx-tags-inherited[hidden] { display: none; }
+.ytx-tags-inherited-label { color: var(--muted); font-size: 11px; margin-right: 2px; }
 .ytx-tags-empty { color: var(--muted); font-size: 12px; padding: 2px 2px 0; }
 .ytx-tags-chips { display: flex; flex-wrap: wrap; gap: 4px; }
 .ytx-tags-chips:empty { display: none; }

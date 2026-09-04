@@ -2,7 +2,8 @@
 // creates new ones (Enter / comma), the known tags as toggle chips. Compact form (library cards + detail,
 // note footers): a chip row + a "+" that expands into that same input + list in a small popover.
 // Spaces are refused (Obsidian tags have none). Classes ytx-tags-*; colors from host tokens.
-// createTagEditor({ get, set, suggest?, compact?, chips? }) → { root, refresh, focus, close }
+// createTagEditor({ get, set, suggest?, compact?, chips?, locked?, up? }) → { root, refresh, focus, close }
+// locked() = tags inherited from the parent: shown first, no ✕, cannot be toggled here. up = popover opens upward.
 import { normTag, validTag, tagHue } from '../lib/tags.js';
 
 function h(tag, cls, text) {
@@ -29,7 +30,7 @@ export function tagChip(tag, { on = false, count, onClick, x } = {}) {
   return chip;
 }
 
-export function createTagEditor({ get, set, suggest, compact = false, chips: showChips = true }) {
+export function createTagEditor({ get, set, suggest, compact = false, chips: showChips = true, locked, up = false }) {
   const root = h('div', compact ? 'ytx-tags ytx-tags-inline' : 'ytx-tags');
   const chips = h('div', 'ytx-tags-chips');
   const input = h('input', 'ytx-tags-input');
@@ -38,8 +39,9 @@ export function createTagEditor({ get, set, suggest, compact = false, chips: sho
   input.setAttribute('aria-label', 'Find or add tag');
   input.autocomplete = 'off';
   const known = h('div', 'ytx-tags-known');
-  const panel = h('div', compact ? 'ytx-tags-pop' : 'ytx-tags-panel');
-  panel.append(input, known);
+  const panel = h('div', compact ? `ytx-tags-pop${up ? ' is-up' : ''}` : 'ytx-tags-panel');
+  const inherited = h('div', 'ytx-tags-inherited');
+  panel.append(inherited, input, known);
   let plus = null;
   if (compact) {
     plus = h('button', 'ytx-tags-plus', '+');
@@ -73,15 +75,21 @@ export function createTagEditor({ get, set, suggest, compact = false, chips: sho
   }
 
   const toggle = (t) => set(get().includes(t) ? get().filter((v) => v !== t) : [...get(), t]);
+  const lockChip = (t) => { const c = tagChip(t, { on: true }); c.classList.add('is-locked'); c.title = 'From the video: remove it there'; return c; };
   function refresh() {
+    const lk = locked?.() ?? [];
     chips.textContent = '';
-    for (const t of get()) chips.append(tagChip(t, { x: (tag) => set(get().filter((v) => v !== tag)) }));
+    for (const t of lk) chips.append(lockChip(t));
+    for (const t of get().filter((t) => !lk.includes(t))) chips.append(tagChip(t, { x: (tag) => set(get().filter((v) => v !== tag)) }));
+    inherited.textContent = '';
+    inherited.hidden = !lk.length;
+    if (lk.length) { inherited.append(h('span', 'ytx-tags-inherited-label', 'From the video')); for (const t of lk) inherited.append(lockChip(t)); }
     known.textContent = '';
     const q = normTag(input.value);
     const have = new Set(get());
-    const all = [...new Set([...(suggest?.() ?? []), ...get()])].sort();
+    const all = [...new Set([...(suggest?.() ?? []), ...get()])].filter((t) => !lk.includes(t)).sort();
     for (const t of all.filter((t) => !q || t.includes(q))) known.append(tagChip(t, { on: have.has(t), onClick: toggle }));
-    if (q && validTag(q) && !all.includes(q)) known.append(newChip(q));
+    if (q && validTag(q) && !all.includes(q) && !lk.includes(q)) known.append(newChip(q));
     if (!known.childElementCount) known.append(h('div', 'ytx-tags-empty', q ? 'Keep typing…' : 'No tags yet. Type one.'));
   }
   function newChip(q) {

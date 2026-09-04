@@ -121,6 +121,8 @@ export function createNotesView(opts) {
   const noteTagEditor = (card, after) => createTagEditor({
     compact: true,
     chips: false,
+    up: true,
+    locked: () => video.tags ?? [],
     get: () => extractTags(card.text),
     set: (tags) => {
       const cur = extractTags(card.text);
@@ -131,7 +133,7 @@ export function createNotesView(opts) {
       onChange(card);
       after();
     },
-    suggest: () => [...new Set([...(video.tags ?? []), ...video.notes.cards.flatMap((c) => extractTags(c.text))])].sort(),
+    suggest: () => [...new Set(video.notes.cards.flatMap((c) => extractTags(c.text)))].sort(),
   });
   const markSelected = () => cardEls.forEach((el, id) => el.classList.toggle('is-selected', id === selId));
   // Select a card by id (null clears). Re-applies the highlight, scrolls it into view and focuses it
