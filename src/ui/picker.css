@@ -23,11 +23,23 @@
   cursor: pointer;
 }
 
-.ytx-picker-trigger::after {
-  content: "⌄";
-  margin-left: 2px;
-  line-height: 0.6;
+.ytx-picker-caret {
+  display: inline-flex;
+  align-items: center;
+  margin-left: -2px;
   color: var(--muted);
+  transition: transform 0.2s ease;
+}
+
+.ytx-picker-caret .ytx-ico {
+  width: 13px;
+  height: 13px;
+  stroke-width: 2.5;
+}
+
+/* menu opens upward, so "open" points the chevron up */
+.ytx-picker-trigger.is-open .ytx-picker-caret {
+  transform: rotate(180deg);
 }
 
 .ytx-picker-trigger:hover {

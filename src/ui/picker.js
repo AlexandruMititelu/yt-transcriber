@@ -2,6 +2,7 @@
 // Custom because native <select> renders optgroup labels in the OS font.
 import * as db from '../lib/db.js';
 import * as llm from '../lib/llm.js';
+import { chevronDown } from './icons.js';
 
 const PROVIDER_LABEL = { anthropic: 'Anthropic', openai: 'OpenAI' };
 const EFFORT_LABEL = { off: 'Off', low: 'Low', medium: 'Medium', high: 'High' };
@@ -38,6 +39,9 @@ export function createPicker({ isLive = () => true } = {}) {
     if (!canThink()) { eff.classList.add('is-off'); eff.title = 'This model has no thinking/effort setting'; }
     trigger.append(eff);
     if (settings.webSearch) trigger.append(h('span', 'ytx-picker-web', 'Web'));
+    const caret = h('span', 'ytx-picker-caret');
+    caret.appendChild(chevronDown());
+    trigger.append(caret);
   }
   function set(patch) {
     Object.assign(settings, patch);
@@ -96,11 +100,13 @@ export function createPicker({ isLive = () => true } = {}) {
     view = 'models';
     render();
     menu.classList.add('is-open');
+    trigger.classList.add('is-open');
     document.addEventListener('click', onDoc);
     document.addEventListener('keydown', onKey);
   }
   function close() {
     menu.classList.remove('is-open');
+    trigger.classList.remove('is-open');
     document.removeEventListener('click', onDoc);
     document.removeEventListener('keydown', onKey);
   }

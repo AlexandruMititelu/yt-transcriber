@@ -228,10 +228,21 @@
   font-weight: 600;
 }
 
+#ytx-panel .ytx-follow:hover {
+  background: var(--surface-2);
+  border-color: var(--muted);
+  color: var(--text);
+}
+
 #ytx-panel .ytx-follow.is-on {
   background: var(--accent-soft);
   border-color: transparent;
   color: var(--accent);
+}
+
+#ytx-panel .ytx-follow.is-on:hover {
+  background: var(--accent);
+  color: #fff;
 }
 
 #ytx-panel .ytx-row.is-current {

@@ -43,8 +43,20 @@
 
 .ytx-chatbar-caret {
   flex: none;
+  display: inline-flex;
+  align-items: center;
   color: var(--muted);
-  line-height: 0.6;
+  transition: transform 0.2s ease;
+}
+
+.ytx-chatbar-caret .ytx-ico {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2.5;
+}
+
+.ytx-chatbar-trigger.is-open .ytx-chatbar-caret {
+  transform: rotate(180deg);
 }
 
 .ytx-chatbar-input {

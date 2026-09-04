@@ -1,6 +1,6 @@
 // Chat switcher bar + confirm box — shared by the YouTube panel and the library page.
 // Classes are unique (ytx-chatbar-*, ytx-confirm-*) so this can load unscoped on youtube.com.
-const NEW = '__new';
+import { chevronDown } from './icons.js';
 
 function h(tag, cls, text) {
   const n = document.createElement(tag);
@@ -17,7 +17,9 @@ export function createChatBar({ chats, activeId, onSelect, onNew, onRename, onDe
   trigger.type = 'button';
   trigger.title = 'Chats';
   const label = h('span', 'ytx-chatbar-label');
-  trigger.append(label, h('span', 'ytx-chatbar-caret', '⌄'));
+  const caret = h('span', 'ytx-chatbar-caret');
+  caret.appendChild(chevronDown());
+  trigger.append(label, caret);
   const menu = h('div', 'ytx-chatbar-menu');
   root.append(trigger, menu);
 
