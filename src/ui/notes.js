@@ -14,6 +14,7 @@ export const HELP = {
 };
 
 import { extractTags, chipTags } from '../lib/tags.js';
+import { tagChip } from './tags.js';
 
 function h(tag, cls, text) {
   const n = document.createElement(tag);
@@ -452,12 +453,7 @@ export function createNotesView(opts) {
     const counts = new Map();
     for (const c of all) for (const t of extractTags(c.text)) counts.set(t, (counts.get(t) || 0) + 1);
     for (const [t, n] of [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))) {
-      const chip = h('button', `ytx-tag${tagFilter === t ? ' is-on' : ''}`, `#${t} `);
-      chip.type = 'button';
-      chip.append(h('span', 'ytx-tag-n', String(n)));
-      chip.setAttribute('aria-pressed', tagFilter === t ? 'true' : 'false');
-      chip.addEventListener('click', () => { tagFilter = tagFilter === t ? null : t; refresh(); });
-      tagRow.append(chip);
+      tagRow.append(tagChip(t, { on: tagFilter === t, count: n, onClick: () => { tagFilter = tagFilter === t ? null : t; refresh(); } }));
     }
     const grid = h('div', 'ytx-notes-grid');
     const paint = () => {

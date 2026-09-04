@@ -9,7 +9,7 @@ import { createChatView } from '../src/ui/chat.js';
 import { renderMarkdown, setDark } from '../src/ui/markdown.js';
 import { createToaster } from '../src/ui/toast.js';
 import { pinIcon, chevronDown, copyIcon, gearIcon, chevronLeft, trashIcon } from '../src/ui/icons.js';
-import { createTagEditor } from '../src/ui/tags.js';
+import { createTagEditor, tagChip } from '../src/ui/tags.js';
 import { HOTKEYS, hotkeyId } from '../config/hotkeys.js';
 import { PROMPTS, promptsToText } from '../config/prompts.js';
 
@@ -187,8 +187,7 @@ async function paintLibrary(transition = 'fade') {
   const counts = new Map();
   for (const v of all) for (const t of v.tags ?? []) counts.set(t, (counts.get(t) || 0) + 1);
   libShell.tags.replaceChildren(...[...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([t, n]) =>
-    el('button', { class: `ytx-tag${libTag === t ? ' is-on' : ''}`, 'aria-pressed': String(libTag === t), onclick: () => { libTag = libTag === t ? null : t; paintLibrary('fade'); } },
-      `#${t} `, el('span', { class: 'ytx-tag-n' }, String(n)))));
+    tagChip(t, { on: libTag === t, count: n, onClick: () => { libTag = libTag === t ? null : t; paintLibrary('fade'); } })));
   if (libSort === 'title') vids = [...vids].sort((a, b) => (a.title || '').localeCompare(b.title || ''));
   else if (libSort === 'channel') vids = [...vids].sort((a, b) => (a.channel || '').localeCompare(b.channel || '') || b.updatedAt - a.updatedAt);
   const pinned = vids.filter((v) => v.pinned);
@@ -262,7 +261,7 @@ function videoCard(v) {
     el('a', { class: 'card', href: `#/video/${v.videoId}` },
       el('div', { class: 'card-title' }, v.title || v.videoId),
       el('div', { class: 'card-meta' }, [v.channel, relTime(v.updatedAt)].filter(Boolean).join(' · ')),
-      v.tags?.length ? el('div', { class: 'ytx-tag-row card-tags' }, v.tags.map((t) => el('span', { class: 'ytx-tag' }, `#${t}`))) : null,
+      v.tags?.length ? el('div', { class: 'ytx-tag-row card-tags' }, v.tags.map((t) => tagChip(t))) : null,
       el('div', { class: 'card-badges' },
         `${v.counts.segments} segments · ${v.counts.messages} messages · ${v.counts.cards} notes`)),
     el('div', { class: 'card-actions' }, pin, del));

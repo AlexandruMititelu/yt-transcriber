@@ -3,7 +3,9 @@
 const TAG_CHARS = /[^\p{L}\p{N}_/-]/gu;
 
 export const normTag = (s) => String(s ?? '').trim().replace(/^#+/, '').toLowerCase()
-  .replace(/\s+/g, '-').replace(TAG_CHARS, '').replace(/^\/+|\/+$/g, '');
+  .replace(TAG_CHARS, '').replace(/^\/+|\/+$/g, ''); // spaces are dropped, never dashed: the editor refuses them
+// Stable hue per tag (0-359) so the same tag has the same colour everywhere.
+export const tagHue = (t) => { let x = 0; for (const c of String(t)) x = (x * 31 + c.codePointAt(0)) >>> 0; return x % 360; };
 export const validTag = (t) => !!t && !/^\d+$/.test(t);
 const uniq = (arr) => [...new Set(arr.filter(validTag))];
 
@@ -38,6 +40,7 @@ export function chipTags(root, onClick) {
       frag.append(n.data.slice(i, at));
       const chip = root.ownerDocument.createElement('span');
       chip.className = 'ytx-tag';
+      chip.style.setProperty('--tag-h', tagHue(tag));
       chip.textContent = `#${m[2]}`;
       chip.dataset.tag = tag;
       if (onClick) { chip.setAttribute('role', 'button'); chip.tabIndex = 0; chip.addEventListener('click', (e) => { e.stopPropagation(); onClick(tag); }); }

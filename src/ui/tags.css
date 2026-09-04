@@ -1,28 +1,39 @@
 /* Tag chips + editor, shared by the panel, the library and rendered notes. Colors from host tokens. */
+:root, #ytx-panel { --tag-fg-l: 34%; --tag-bg-a: 0.16; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --tag-fg-l: 76%; --tag-bg-a: 0.22; } }
+:root[data-theme="dark"], #ytx-panel.ytx-dark { --tag-fg-l: 76%; --tag-bg-a: 0.22; }
+/* one stable hue per tag (--tag-h from tagHue), same everywhere */
 .ytx-tag {
-  display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; border-radius: 999px;
-  background: var(--accent-soft, rgba(0, 122, 255, 0.1)); color: var(--accent, #007aff);
+  --tag-h: 210;
+  display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; border: 0; border-radius: 999px;
+  background: hsl(var(--tag-h) 80% 55% / var(--tag-bg-a)); color: hsl(var(--tag-h) 65% var(--tag-fg-l));
   font-family: var(--font-ui); font-size: 11px; font-weight: 600; line-height: 1.5; white-space: nowrap;
   cursor: pointer; transition: background-color 0.15s ease, color 0.15s ease;
 }
-.ytx-tag:hover, .ytx-tag.is-on { background: var(--accent, #007aff); color: #fff; }
+.ytx-tag:hover, .ytx-tag.is-on { background: hsl(var(--tag-h) 70% 48%); color: #fff; }
+.ytx-tag.is-new { background: transparent; border: 1px dashed hsl(var(--tag-h) 65% var(--tag-fg-l)); }
+.ytx-tag.is-new:hover { background: hsl(var(--tag-h) 70% 48%); color: #fff; }
 .ytx-md .ytx-tag { vertical-align: baseline; }
 
 .ytx-tags { display: flex; flex-direction: column; gap: 6px; }
 .ytx-tags-chips { display: flex; flex-wrap: wrap; gap: 4px; }
 .ytx-tags-chips:empty { display: none; }
-.ytx-tag-edit { cursor: default; }
-.ytx-tag-edit:hover { background: var(--accent-soft, rgba(0, 122, 255, 0.1)); color: var(--accent, #007aff); }
+.ytx-tags-chips .ytx-tag { cursor: default; }
+.ytx-tags-chips .ytx-tag:hover { background: hsl(var(--tag-h) 80% 55% / var(--tag-bg-a)); color: hsl(var(--tag-h) 65% var(--tag-fg-l)); }
+.ytx-tags-known { display: flex; flex-wrap: wrap; gap: 4px; max-height: 140px; overflow-y: auto; scrollbar-width: thin; }
+.ytx-tags-known:empty { display: none; }
 .ytx-tag-x {
   width: 14px; height: 14px; margin-right: -3px; border: 0; border-radius: 50%; padding: 0;
   background: none; color: inherit; font: inherit; font-size: 9px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
 }
-.ytx-tag-x:hover { background: var(--accent, #007aff); color: #fff; }
+.ytx-tag-x:hover { background: hsl(var(--tag-h) 70% 48%); color: #fff; }
 .ytx-tags-input {
   height: 28px; padding: 0 10px; border: 1px solid var(--border); border-radius: 9px;
   background: var(--surface-2); color: var(--text); font: inherit; font-size: 12px; outline: none;
 }
 .ytx-tags-input:focus { border-color: var(--muted); }
+.ytx-tags-input.is-bad { border-color: #ff3b30; animation: ytx-shake 0.3s ease; }
+@keyframes ytx-shake { 25% { transform: translateX(-3px); } 75% { transform: translateX(3px); } }
 
 /* filter rows (library, notes) */
 .ytx-tag-row { display: flex; flex-wrap: wrap; gap: 4px; }

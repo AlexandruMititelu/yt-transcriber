@@ -1,9 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normTag, extractTags, parseTagList } from '../src/lib/tags.js';
+import { normTag, extractTags, parseTagList, tagHue } from '../src/lib/tags.js';
 
 test('normTag: strips #, lowercases, spaces → dashes, keeps nesting, drops junk', () => {
-  assert.equal(normTag('#Machine Learning'), 'machine-learning');
+  assert.equal(normTag('#Machine Learning'), 'machinelearning'); // spaces dropped (the editor refuses them up front)
+  assert.equal(tagHue('ml'), tagHue('ml'));
+  assert.ok(tagHue('ml') >= 0 && tagHue('ml') < 360 && tagHue('ml') !== tagHue('rust'));
   assert.equal(normTag(' ml/transformers/ '), 'ml/transformers');
   assert.equal(normTag('c++!'), 'c');
 });
