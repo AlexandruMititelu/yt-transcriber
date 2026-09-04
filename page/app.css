@@ -141,7 +141,7 @@ button:disabled { opacity: 0.5; cursor: default; }
 .chat .ytx-chatbar { max-width: 420px; }
 
 /* notes: src/ui/notes.css */
-.notes { display: flex; flex-direction: column; min-height: 50vh; }
+.notes { display: flex; flex-direction: column; min-height: calc(100vh - 200px); } /* editor reaches the bottom of the window */
 
 /* settings */
 .settings-form {

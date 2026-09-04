@@ -189,6 +189,8 @@
 
 .ytx-ed-body.is-editing {
   padding: 0;
+  display: flex; /* textarea fills the body via flex: a % height never resolves when the pane's height is only a min-height (library) */
+  flex-direction: column;
 }
 
 .ytx-ed-body [contenteditable] {
@@ -236,8 +238,9 @@
 }
 
 .ytx-ed-body .ytx-notes-ta {
-  height: 100%;
-  min-height: 100%;
+  flex: 1;
+  height: auto;
+  min-height: 0;
   padding: 10px 12px;
   overflow-y: auto;
 }
