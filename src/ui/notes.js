@@ -296,7 +296,24 @@ export function createNotesView(opts) {
 
   // Rendered markdown that turns into a textarea on click; back to rendered on blur.
   // With `wysiwyg`, the rendered HTML itself is contenteditable and is converted back to markdown.
-  function mdField(card, { cls, placeholder, max, onInput, wysiwyg, always }) {
+  // ArrowUp on the first line of a field → onUp() (the editor moves the caret to the title).
+  const upFromFirstLine = (e, field, onUp) => {
+    if (e.key !== 'ArrowUp' || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || !onUp) return false;
+    let first;
+    if (field.tagName === 'TEXTAREA') first = !field.value.slice(0, field.selectionStart).includes('\n');
+    else {
+      const sel = window.getSelection();
+      if (!sel?.rangeCount) return false;
+      const r = sel.getRangeAt(0).getBoundingClientRect();
+      const f = field.getBoundingClientRect();
+      first = r.top - f.top < 12 || (r.height === 0 && field.textContent.trim() === '');
+    }
+    if (!first) return false;
+    e.preventDefault();
+    onUp();
+    return true;
+  };
+  function mdField(card, { cls, placeholder, max, onInput, wysiwyg, always, onUp }) {
     const box = h('div', cls);
     const show = () => {
       if (always && !(wysiwyg && wysiwyg())) { edit(); return; }
@@ -311,7 +328,7 @@ export function createNotesView(opts) {
           onChange(card);
           if (onInput) onInput();
         });
-        md.addEventListener('keydown', (e) => e.stopPropagation());
+        md.addEventListener('keydown', (e) => { upFromFirstLine(e, md, onUp); e.stopPropagation(); });
         md.addEventListener('blur', show); // normalize: re-render from the markdown we stored
         box.appendChild(md);
         return;
@@ -348,7 +365,7 @@ export function createNotesView(opts) {
         onChange(card);
         if (onInput) onInput();
       });
-      ta.addEventListener('keydown', (e) => { if (!e.altKey) e.stopPropagation(); }); // keep YouTube hotkeys out, let Alt+ ones through
+      ta.addEventListener('keydown', (e) => { upFromFirstLine(e, ta, onUp); if (!e.altKey) e.stopPropagation(); }); // keep YouTube hotkeys out, let Alt+ ones through
       if (!always) ta.addEventListener('blur', show);
       // Remember the caret so switching modes and back lands where the user was.
       const remember = () => { card._caret = ta.selectionStart; };
@@ -560,7 +577,8 @@ export function createNotesView(opts) {
     });
     const ed = h('div', 'ytx-ed');
     bar.append(back, title);
-    const body = mdField(card, { cls: 'ytx-ed-body', placeholder: 'Write here…', wysiwyg: () => editorMode === 'view', always: true });
+    const body = mdField(card, { cls: 'ytx-ed-body', placeholder: 'Write here…', wysiwyg: () => editorMode === 'view', always: true,
+      onUp: () => { title.focus(); title.selectionStart = title.selectionEnd = title.value.length; } });
     const foot = h('div', 'ytx-notes-foot');
     // Mode toggle: edit = raw markdown textarea (stays a textarea, never flips on blur); view = type into the rendered note.
     const modes = h('span', 'ytx-ed-modes');

@@ -61,7 +61,8 @@ export function createTagEditor({ get, set, suggest, compact = false, chips: sho
   const onDown = (e) => { if (!root.contains(e.target)) close(); };
   const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
   // The popover is position: fixed at the "+" so scrolling containers (notes list, panel) can't clip it.
-  const onScroll = (e) => { if (!panel.contains(e.target)) close(); };
+  let openedAt = 0;
+  const onScroll = (e) => { if (Date.now() - openedAt > 400 && !panel.contains(e.target)) close(); };
   function place() {
     if (!plus) return;
     const r = plus.getBoundingClientRect();
@@ -76,6 +77,7 @@ export function createTagEditor({ get, set, suggest, compact = false, chips: sho
     input.value = '';
     refresh();
     panel.classList.add('is-open');
+    openedAt = Date.now();
     place();
     plus?.setAttribute('aria-expanded', 'true');
     window.addEventListener('pointerdown', onDown, true);
