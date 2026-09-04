@@ -4,8 +4,20 @@ const TAG_CHARS = /[^\p{L}\p{N}_/-]/gu;
 
 export const normTag = (s) => String(s ?? '').trim().replace(/^#+/, '').toLowerCase()
   .replace(TAG_CHARS, '').replace(/^\/+|\/+$/g, ''); // spaces are dropped, never dashed: the editor refuses them
-// Stable hue per tag (0-359) so the same tag has the same colour everywhere.
-export const tagHue = (t) => { let x = 0; for (const c of String(t)) x = (x * 31 + c.codePointAt(0)) >>> 0; return x % 360; };
+// Colour per tag: assigned once, kept forever (settings.tagColors). New tags walk the golden angle so
+// neighbours stay far apart. Until configured (tests, first paint) a name hash stands in.
+const hashHue = (t) => { let x = 0; for (const c of String(t)) x = (x * 31 + c.codePointAt(0)) >>> 0; return x % 360; };
+let colors = null; // { tag: hue }
+let persist = null;
+export function configureTagColors(map, save) { colors = { ...(map ?? {}) }; persist = save; }
+export function tagHue(t) {
+  if (!colors) return hashHue(t);
+  if (!(t in colors)) {
+    colors[t] = Math.round((Object.keys(colors).length * 137.508) % 360);
+    persist?.({ ...colors });
+  }
+  return colors[t];
+}
 export const validTag = (t) => !!t && !/^\d+$/.test(t);
 const uniq = (arr) => [...new Set(arr.filter(validTag))];
 
@@ -41,7 +53,7 @@ export function chipTags(root, onClick) {
       const chip = root.ownerDocument.createElement('span');
       chip.className = 'ytx-tag';
       chip.style.setProperty('--tag-h', tagHue(tag));
-      chip.textContent = `#${m[2]}`;
+      chip.textContent = m[2]; // chips show the bare name; the text keeps its #
       chip.dataset.tag = tag;
       if (onClick) { chip.setAttribute('role', 'button'); chip.tabIndex = 0; chip.addEventListener('click', (e) => { e.stopPropagation(); onClick(tag); }); }
       frag.append(chip);

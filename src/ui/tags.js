@@ -15,15 +15,15 @@ function h(tag, cls, text) {
 
 // A coloured #tag chip. opts: { on, count, onClick, x (remove handler) }
 export function tagChip(tag, { on = false, count, onClick, x } = {}) {
-  const chip = h(onClick ? 'button' : 'span', `ytx-tag${on ? ' is-on' : ''}`, `#${tag}`);
+  const chip = h(onClick ? 'button' : 'span', `ytx-tag${on ? ' is-on' : ''}`, tag); // bare name, no #
   chip.style.setProperty('--tag-h', tagHue(tag));
   if (onClick) { chip.type = 'button'; chip.setAttribute('aria-pressed', on ? 'true' : 'false'); chip.addEventListener('click', (e) => { e.stopPropagation(); onClick(tag); }); }
   if (count != null) chip.append(' ', h('span', 'ytx-tag-n', String(count)));
   if (x) {
     const b = h('button', 'ytx-tag-x', '✕');
     b.type = 'button';
-    b.title = `Remove #${tag}`;
-    b.setAttribute('aria-label', `Remove #${tag}`);
+    b.title = `Remove ${tag}`;
+    b.setAttribute('aria-label', `Remove ${tag}`);
     b.addEventListener('click', (e) => { e.stopPropagation(); x(tag); });
     chip.append(b);
   }

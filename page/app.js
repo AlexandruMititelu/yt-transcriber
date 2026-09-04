@@ -10,6 +10,7 @@ import { renderMarkdown, setDark } from '../src/ui/markdown.js';
 import { createToaster } from '../src/ui/toast.js';
 import { pinIcon, chevronDown, copyIcon, gearIcon, chevronLeft, trashIcon } from '../src/ui/icons.js';
 import { createTagEditor, tagChip } from '../src/ui/tags.js';
+import { configureTagColors } from '../src/lib/tags.js';
 import { HOTKEYS, hotkeyId } from '../config/hotkeys.js';
 import { PROMPTS, promptsToText } from '../config/prompts.js';
 
@@ -26,7 +27,7 @@ function applyTheme(pref = themePref) {
   setDark(pref === 'dark' || (pref === 'auto' && osDark.matches));
 }
 osDark.addEventListener('change', () => applyTheme());
-db.getSettings().then((s) => applyTheme(s.theme || 'auto')).catch(() => {});
+db.getSettings().then((s) => { applyTheme(s.theme || 'auto'); configureTagColors(s.tagColors, (m) => db.saveSettings({ tagColors: m }).catch(() => {})); }).catch(() => {});
 
 // ---------- helpers ----------
 
@@ -145,7 +146,7 @@ function tagMenu(onPick) {
     menu.replaceChildren(chips.length ? el('div', { class: 'ytx-tag-row lib-tag-menu' }, chips) : el('div', { class: 'lib-tag-empty' }, 'No tags yet. Tag a video from its header.'), clear);
   }, { cls: 'lib-tagdd' });
   const paint = () => {
-    m.label.textContent = libTags.size ? `Tags · ${[...libTags].map((t) => `#${t}`).join(' ')}` : 'Tags';
+    m.label.textContent = libTags.size ? `Tags · ${[...libTags].join(', ')}` : 'Tags';
     m.btn.classList.toggle('on', libTags.size > 0);
   };
   paint();
@@ -214,7 +215,7 @@ async function paintLibrary(transition = 'fade') {
   const grouped = (list, fallbackTitle) => {
     if (libGroup === 'none') return list.length ? section(fallbackTitle, list) : null;
     const by = new Map();
-    const keysOf = (v) => (libGroup === 'tag' ? (v.tags?.length ? v.tags.map((t) => `#${t}`) : ['Untagged']) : [v.channel || 'Unknown channel']);
+    const keysOf = (v) => (libGroup === 'tag' ? (v.tags?.length ? v.tags : ['Untagged']) : [v.channel || 'Unknown channel']);
     for (const v of list) for (const k of keysOf(v)) { if (!by.has(k)) by.set(k, []); by.get(k).push(v); }
     return el('div', {}, [...by.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([k, l]) => section(k, l)));
   };

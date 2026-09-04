@@ -15,6 +15,7 @@ export const DEFAULT_SETTINGS = {
   follow: false, // transcript Follow toggle, remembered across videos
   lang: 'en', // preferred caption language (BCP-47 prefix)
   prompts: undefined, // chat presets as "Label: text" lines; undefined = config/prompts.js defaults
+  tagColors: {}, // { tag: hue }, assigned once per tag (src/lib/tags.js)
 };
 
 // v1 settings were { provider, apiKey, model } — map into per-provider keys once. Notion keys dropped.

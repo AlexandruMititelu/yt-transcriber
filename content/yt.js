@@ -206,7 +206,8 @@
     tagBtn.appendChild(L.icons.tagIcon());
     tagBtn.setAttribute('aria-label', 'Tags');
     const tagPop = h('div', 'ytx-tagpop');
-    const paintTags = () => { tagBtn.classList.toggle('is-on', !!video.tags?.length); tagBtn.title = video.tags?.length ? `Tags: ${video.tags.map((t) => `#${t}`).join(' ')}` : 'Tags'; };
+    const paintTags = () => { tagBtn.classList.toggle('is-on', !!video.tags?.length); tagBtn.title = video.tags?.length ? `Tags: ${video.tags.join(', ')}` : 'Tags'; };
+    L.db.getSettings().then((s) => L.tags.configureTagColors(s.tagColors, (m) => L.db.saveSettings({ tagColors: m }).catch(() => {}))).catch(() => {});
     let allTags = [];
     const tagEd = L.tagsUi.createTagEditor({
       get: () => video.tags ?? [],
