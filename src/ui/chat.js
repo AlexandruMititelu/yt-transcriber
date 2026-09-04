@@ -112,8 +112,9 @@ export function createChatView(opts) {
     const win = llm.contextWindow(id);
     const last = [...(cur()?.messages ?? [])].reverse().find((m) => m.usage);
     const used = last ? last.usage.in + last.usage.out : Math.round(sysPrompt(id).length / llm.CHARS_PER_TOKEN);
-    ctx.textContent = `${last ? '' : '~'}${llm.fmtK(used)} / ${llm.fmtK(win)}`;
-    ctx.title = (last ? 'Context used by the last reply' : 'Estimated prompt size') + ` (${Math.round(100 * used / win)}% of the model's window)`;
+    const pct = 100 * used / win;
+    ctx.textContent = `${last ? '' : '~'}${pct < 1 ? pct.toFixed(1) : Math.round(pct)}%`;
+    ctx.title = `${last ? 'Context used by the last reply' : 'Estimated prompt size'}: ${llm.fmtK(used)} of ${llm.fmtK(win)} tokens`;
     ctx.classList.toggle('is-warn', used / win > 0.8);
   }
   pill.append(ta, tools);

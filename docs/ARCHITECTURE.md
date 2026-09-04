@@ -437,8 +437,8 @@ Bootstrap: `(async () => { ... })()`. All lib access via
   `llm.promptCoverage(segments, llm.contextCap(model)) < 1` the system prompt is built with `retrieval: true`
   (duration + chapters, no transcript) and `llm.chat` gets `tools: llm.transcriptTools(segments)`; the pending bubble
   shows "Searching transcript: q" / "Reading transcript a to b" from `onTool`. Empty chat then says the model will
-  search the transcript instead (re-rendered when the picker's `onChange` fires). Context meter `.ytx-chat-ctx` at the left of the composer tools: last reply's
-  `usage.in + usage.out` / `llm.contextWindow(model)` (an estimate `~N` from the system prompt's chars/3.5 before any
+  search the transcript instead (re-rendered when the picker's `onChange` fires). Context meter `.ytx-chat-ctx` at the left of the composer tools: percent of the window,
+  last reply's `usage.in + usage.out` / `llm.contextWindow(model)` (tokens in the tooltip) (an estimate `~N` from the system prompt's chars/3.5 before any
   reply); orange above 80%. `usage.in` is the whole prompt on both providers (Anthropic uncached + cache read + cache
   write summed in `parseResult`). Assistant content rendered via `renderMd` =
   `src/ui/markdown.js` `renderMarkdown(text, {onSeek | timeHref})`: marked → DOMPurify (img forbidden) → links
