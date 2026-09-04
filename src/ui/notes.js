@@ -3,7 +3,7 @@
 //   note   long-form markdown document with a title; opens the editor in place of the list
 // Classes are unique (ytx-notes-*, ytx-qn-*, ytx-nt-*, ytx-ed-*) so this loads unscoped on youtube.com.
 import { confirmBox } from './chatbar.js';
-import { trashIcon, chevronLeft, eyeIcon } from './icons.js';
+import { trashIcon, chevronLeft, eyeIcon, cameraIcon } from './icons.js';
 import { keysFor } from '../../config/hotkeys.js';
 import * as db from '../lib/db.js';
 
@@ -324,6 +324,38 @@ export function createNotesView(opts) {
 
   let query = '';
   let newestFirst = false;
+  // Camera: save the current frame to the vault and embed it (into `card`, or a fresh note when null).
+  function frameBtn(card) {
+    const b = h('button', 'ytx-notes-icon ytx-notes-cam');
+    b.type = 'button';
+    b.title = 'Save current frame into the knowledge base';
+    b.setAttribute('aria-label', 'Save current frame');
+    b.appendChild(cameraIcon());
+    b.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      b.disabled = true;
+      try {
+        const r = await opts.onFrame();
+        if (!r) return;
+        let target = card;
+        if (!target) {
+          target = newCard('note');
+          target.title = `Frame at ${fmtTime(r.sec)}`;
+          target.start = r.sec;
+          video.notes.cards.push(target);
+          openId = target.id;
+        }
+        target.text = `${target.text ? `${target.text}\n\n` : ''}${r.embed}\n`;
+        onChange(target);
+        flush();
+        refresh();
+      } finally {
+        b.disabled = false;
+      }
+    });
+    return b;
+  }
+
   function renderList() {
     root.textContent = '';
     const bar = h('div', 'ytx-notes-bar');
@@ -348,6 +380,7 @@ export function createNotesView(opts) {
       refresh();
     });
     bar.append(addQuick, addNote);
+    if (opts.onFrame) bar.append(frameBtn(null));
     const all = video.notes.cards;
     if (all.length > 3) {
       const search = h('input', 'ytx-notes-search');
@@ -419,7 +452,7 @@ export function createNotesView(opts) {
       modeBtn('edit', '</>', 'Edit mode: write raw markdown'),
       modeBtn('view', eyeIcon(), 'View mode: write directly into the rendered note'),
     );
-    foot.append(timeSlot(card), h('span', 'ytx-notes-spacer'), modes, delBtn(card, ed, () => refresh()));
+    foot.append(timeSlot(card), h('span', 'ytx-notes-spacer'), ...(opts.onFrame ? [frameBtn(card)] : []), modes, delBtn(card, ed, () => refresh()));
     ed.append(bar, body.box, foot);
     root.appendChild(ed);
     if (!card.title && !card.text) title.focus();

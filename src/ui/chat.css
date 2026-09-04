@@ -12,6 +12,7 @@
 .ytx-chat-empty { margin: auto 0; padding: 24px 12px; text-align: center; color: var(--muted); }
 .ytx-chat-empty-title { font-size: 13.5px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
 .ytx-chat-empty-hint { font-size: 12px; }
+.ytx-chat-empty-warn { margin-top: 8px; font-size: 11.5px; color: #ff9f0a; }
 
 .ytx-chat-new {
   position: absolute; left: 50%; bottom: 118px; transform: translateX(-50%);

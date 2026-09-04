@@ -201,6 +201,8 @@ export function createChatView(opts) {
       const empty = h('div', 'ytx-chat-empty');
       empty.append(h('div', 'ytx-chat-empty-title', 'Ask anything about this video'),
         h('div', 'ytx-chat-empty-hint', 'Answers cite timestamps you can click. Pick a preset below or type your own.'));
+      const cov = llm.promptCoverage(segments());
+      if (cov < 1) empty.append(h('div', 'ytx-chat-empty-warn', `Long video: only the first ${Math.round(cov * 100)}% of the transcript fits the prompt.`));
       list.append(empty);
     } else {
       c.messages.forEach((m, i) => list.append(bubble(m, i, c)));

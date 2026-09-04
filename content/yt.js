@@ -10,7 +10,9 @@
   let panel = null;
   let themeObserver = null;
   let resizeObserver = null;
+  let theaterObserver = null;
   let flushSave = null; // pending debounced note-save; flushed on teardown so edits survive SPA nav
+  let notesView = null; // current init's notes view (declared up front: flushSave/hotkeys reference it)
 
   const url = (p) => browser.runtime.getURL(p);
   const h = (tag, cls, text) => {
@@ -102,6 +104,7 @@
     gen++;
     if (themeObserver) { themeObserver.disconnect(); themeObserver = null; }
     if (resizeObserver) { resizeObserver.disconnect(); resizeObserver = null; }
+    if (theaterObserver) { theaterObserver.disconnect(); theaterObserver = null; }
     const old = document.getElementById('ytx-panel');
     if (old) old.remove();
     panel = null;
@@ -149,16 +152,18 @@
       toast('Changed in Obsidian: reloaded from disk');
     };
     const saveSoon = debounce(() => { if (live()) flushNotes(); }, 500);
-    flushSave = () => { if (typeof notesView !== 'undefined') notesView.flush(); flushNotes(); };
+    flushSave = () => { if (notesView) notesView.flush(); flushNotes(); };
 
     /* ---- skeleton ---- */
     panel = h('section');
     panel.id = 'ytx-panel';
 
     const header = h('div', 'ytx-header');
-    header.appendChild(h('span', 'ytx-title', 'Transcript'));
+    const titleEl = h('span', 'ytx-title', 'Transcript');
+    header.appendChild(titleEl);
     const refetchBtn = h('button', 'ytx-icon-btn', '⟳');
     refetchBtn.title = 'Refetch transcript';
+    refetchBtn.setAttribute('aria-label', 'Refetch transcript');
     const pinBtn = h('button', 'ytx-icon-btn ytx-pin');
     pinBtn.appendChild(L.icons.pinIcon());
     const paintPin = () => {
@@ -166,12 +171,15 @@
       pinBtn.title = video.pinned ? 'Pinned (in YT-transcriber/pinned). Click to unpin' : 'Pin: move this video into YT-transcriber/pinned';
     };
     paintPin();
+    pinBtn.setAttribute('aria-label', 'Pin');
     const libraryBtn = h('button', 'ytx-icon-btn', '⧉');
     libraryBtn.title = 'Open library';
+    libraryBtn.setAttribute('aria-label', 'Open library');
     header.append(refetchBtn, pinBtn, libraryBtn);
     panel.appendChild(header);
 
     const tabsBar = h('div', 'ytx-tabs');
+    tabsBar.setAttribute('role', 'tablist');
     const views = {
       transcript: h('div', 'ytx-view ytx-scroll ytx-transcript'),
       chat: h('div', 'ytx-view ytx-chat'),
@@ -180,10 +188,19 @@
     const tabBtns = {};
     const TABS = ['transcript', 'chat', 'notes'];
     let activeTab = 'transcript';
-    for (const [key, label] of [['transcript', 'Transcript'], ['chat', 'Chat'], ['notes', 'Notes']]) {
-      const b = h('button', 'ytx-tab', label);
+    const TAB_LABEL = { transcript: 'Transcript', chat: 'Chat', notes: 'Notes' };
+    for (const key of TABS) {
+      const b = h('button', 'ytx-tab', TAB_LABEL[key]);
+      b.setAttribute('role', 'tab');
       b.addEventListener('click', () => selectTab(key));
+      b.addEventListener('keydown', (e) => {
+        if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+        const i = TABS.indexOf(activeTab);
+        selectTab(TABS[(i + (e.key === 'ArrowRight' ? 1 : TABS.length - 1)) % TABS.length]);
+        tabBtns[activeTab].focus();
+      });
       tabBtns[key] = b;
+      views[key].setAttribute('role', 'tabpanel');
       tabsBar.appendChild(b);
     }
     panel.appendChild(tabsBar);
@@ -194,8 +211,10 @@
 
     function selectTab(key) {
       activeTab = key;
+      titleEl.textContent = TAB_LABEL[key];
       for (const k of Object.keys(views)) {
         tabBtns[k].classList.toggle('is-active', k === key);
+        tabBtns[k].setAttribute('aria-selected', k === key ? 'true' : 'false');
         views[k].classList.toggle('is-active', k === key);
       }
       // scrollHeight is 0 while hidden, so the chat's own scroll is a no-op — re-scroll on reveal
@@ -237,25 +256,57 @@
     function renderTranscriptError(e) {
       views.transcript.textContent = '';
       const st = h('div', 'ytx-state');
-      const msg = e && e.message === 'no-captions'
-        ? 'No captions on this video'
-        : `Couldn't load transcript: ${e && e.message}`;
-      st.appendChild(h('div', null, msg));
+      st.appendChild(h('div', null, L.transcript.explainFailure(e)));
       const retry = h('button', 'ytx-btn', 'Retry');
       retry.addEventListener('click', () => loadTranscript(true));
       st.appendChild(retry);
       views.transcript.appendChild(st);
     }
 
-    // Follow: highlight the segment the video is in and keep it centered (state survives re-renders).
+    // Toolbar: search · track/translate menu · copy all · Follow. Follow highlights the segment being
+    // played and keeps it centered; a manual scroll pauses it. State survives re-renders.
     let followOn = false;
+    L.db.getSettings().then((s) => { followOn = !!s.follow; paintFollow(); }).catch(() => {});
     let rows = []; // [{start, el}] from the last renderTranscript
     let currentRow = null;
-    const followBar = h('div', 'ytx-follow-bar');
+    let query = '';
+    const bar = h('div', 'ytx-follow-bar');
+    const search = h('input', 'ytx-tr-search');
+    search.type = 'search';
+    search.placeholder = 'Search transcript…';
+    search.setAttribute('aria-label', 'Search transcript');
+    search.addEventListener('keydown', (e) => { if (!e.altKey) e.stopPropagation(); if (e.key === 'Escape') { search.value = ''; applyFilter(); search.blur(); } });
+    search.addEventListener('input', applyFilter);
+    const trackBtn = h('button', 'ytx-tr-track');
+    trackBtn.type = 'button';
+    trackBtn.title = 'Caption track / translate';
+    const trackMenu = h('div', 'ytx-tr-menu');
+    const trackWrap = h('div', 'ytx-tr-trackwrap');
+    trackWrap.append(trackBtn, trackMenu);
+    const copyAll = h('button', 'ytx-icon-btn ytx-tr-copy', '⧉');
+    copyAll.title = 'Copy whole transcript';
+    copyAll.setAttribute('aria-label', 'Copy whole transcript');
+    copyAll.addEventListener('click', () => {
+      const text = (video.transcript?.grouped ?? []).map((g) => `[${fmtTime(g.start)}] ${g.text}`).join('\n');
+      navigator.clipboard.writeText(text).then(() => toast('Transcript copied'), () => toast('Copy failed'));
+    });
     const followBtn = h('button', 'ytx-follow', 'Follow');
     followBtn.title = 'Highlight and scroll to the part of the transcript being played';
-    followBar.appendChild(followBtn);
-    const paintFollow = () => followBtn.classList.toggle('is-on', followOn);
+    followBtn.setAttribute('aria-pressed', 'false');
+    bar.append(search, trackWrap, copyAll, followBtn);
+    function paintFollow() { followBtn.classList.toggle('is-on', followOn); followBtn.setAttribute('aria-pressed', followOn ? 'true' : 'false'); }
+    function applyFilter() {
+      query = search.value.trim().toLowerCase();
+      let n = 0;
+      for (const r of rows) {
+        const hit = !query || r.el.textContent.toLowerCase().includes(query);
+        r.el.hidden = !hit;
+        if (hit) n++;
+      }
+      for (const c of views.transcript.querySelectorAll('.ytx-chapter')) c.hidden = !!query;
+      search.classList.toggle('is-empty', !!query && n === 0);
+    }
+    let programmaticScroll = 0;
     function trackPlayback() {
       if (!followOn || !rows.length) return;
       const t = document.querySelector('video')?.currentTime ?? 0;
@@ -268,60 +319,132 @@
       currentRow = row;
       row.classList.add('is-current');
       const box = views.transcript;
+      programmaticScroll = Date.now();
       box.scrollTo({ top: row.offsetTop - box.clientHeight / 2 + row.offsetHeight / 2, behavior: 'smooth' });
     }
-    followBtn.addEventListener('click', () => {
-      followOn = !followOn;
+    const setFollow = (on) => {
+      followOn = on;
       paintFollow();
-      if (followOn) { currentRow = null; trackPlayback(); }
+      L.db.saveSettings({ follow: on }).catch(() => {});
+      if (on) { currentRow = null; trackPlayback(); }
       else if (currentRow) { currentRow.classList.remove('is-current'); currentRow = null; }
-    });
+    };
+    followBtn.addEventListener('click', () => setFollow(!followOn));
+    // A wheel / touch scroll by the user pauses Follow (the smooth scroll we trigger does not fire these).
+    const userScrolled = () => { if (followOn && Date.now() - programmaticScroll > 50) { setFollow(false); toast('Follow paused'); } };
+    views.transcript.addEventListener('wheel', userScrolled, { passive: true });
+    views.transcript.addEventListener('touchmove', userScrolled, { passive: true });
     paintFollow();
     // One listener per init; the <video> element is stable across SPA navs, so guard with live().
     document.querySelector('video')?.addEventListener('timeupdate', () => { if (live()) trackPlayback(); });
+
+    const TRANSLATE = ['en', 'ro', 'nl', 'de', 'fr', 'es', 'it', 'pt'];
+    function paintTrack() {
+      const t = video.transcript;
+      trackBtn.textContent = t ? (t.trackName || t.lang || '?') : '';
+      trackBtn.hidden = !t || ((t.tracks?.length ?? 0) < 2 && !t.translate && !t.tracks?.length);
+    }
+    function renderTrackMenu() {
+      trackMenu.textContent = '';
+      const t = video.transcript;
+      if (!t) return;
+      const item = (label, on, cb) => {
+        const b = h('button', `ytx-tr-item${on ? ' is-on' : ''}`, label);
+        b.type = 'button';
+        b.addEventListener('click', () => { closeTrackMenu(); cb(); });
+        trackMenu.append(b);
+      };
+      trackMenu.append(h('div', 'ytx-tr-group', 'Captions'));
+      for (const tr of t.tracks ?? []) {
+        item(`${tr.name}${tr.asr ? ' (auto)' : ''}`, !t.translate && tr.lang === t.track?.lang && !!tr.asr === !!t.track?.asr,
+          () => loadTranscript(true, { track: tr }));
+      }
+      trackMenu.append(h('div', 'ytx-tr-group', 'Translate to'));
+      for (const lang of TRANSLATE) item(lang.toUpperCase(), t.translate === lang, () => loadTranscript(true, { track: t.track, translate: lang }));
+    }
+    const onDocTrack = (e) => { if (!e.composedPath().includes(trackWrap)) closeTrackMenu(); };
+    function closeTrackMenu() { trackMenu.classList.remove('is-open'); window.removeEventListener('pointerdown', onDocTrack, true); }
+    trackBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (trackMenu.classList.contains('is-open')) return closeTrackMenu();
+      renderTrackMenu();
+      trackMenu.classList.add('is-open');
+      window.addEventListener('pointerdown', onDocTrack, true);
+    });
 
     function renderTranscript() {
       views.transcript.textContent = '';
       const grouped = video.transcript?.grouped ?? [];
       if (!grouped.length) return renderTranscriptError(new Error('no-captions'));
-      views.transcript.appendChild(followBar);
+      views.transcript.appendChild(bar);
+      paintTrack();
       rows = [];
       currentRow = null;
-      let clickTimer;
+      const chapters = video.transcript?.chapters ?? [];
+      let ci = 0;
       for (const seg of grouped) {
+        while (ci < chapters.length && chapters[ci].start <= seg.start) {
+          const c = chapters[ci++];
+          const head = h('div', 'ytx-chapter');
+          head.append(h('span', 'ytx-time', fmtTime(c.start)), h('span', 'ytx-chapter-title', c.title));
+          head.addEventListener('click', () => seek(c.start));
+          views.transcript.appendChild(head);
+        }
         const row = h('div', 'ytx-row');
+        row.setAttribute('role', 'button');
+        row.tabIndex = 0;
         rows.push({ start: seg.start, el: row });
-        row.append(h('span', 'ytx-time', fmtTime(seg.start)), h('div', 'ytx-text', seg.text));
-        row.addEventListener('click', () => {
-          clearTimeout(clickTimer);
-          clickTimer = setTimeout(() => seek(seg.start), 250); // defer so dblclick-copy doesn't also seek
+        const acts = h('span', 'ytx-row-acts');
+        const copy = h('button', 'ytx-row-act', '⧉');
+        copy.type = 'button';
+        copy.title = 'Copy line';
+        copy.setAttribute('aria-label', 'Copy line');
+        copy.addEventListener('click', (e) => {
+          e.stopPropagation();
+          navigator.clipboard.writeText(`[${fmtTime(seg.start)}] ${seg.text}`).then(() => toast('Copied'), () => toast('Copy failed'));
         });
-        row.addEventListener('dblclick', () => {
-          clearTimeout(clickTimer);
-          navigator.clipboard.writeText(`[${fmtTime(seg.start)}] ${seg.text}`)
-            .then(() => toast('Copied'), () => toast('Copy failed'));
+        const ask = h('button', 'ytx-row-act', '💬');
+        ask.type = 'button';
+        ask.title = 'Ask about this in Chat';
+        ask.setAttribute('aria-label', 'Ask about this in Chat');
+        ask.addEventListener('click', (e) => {
+          e.stopPropagation();
+          selectTab('chat');
+          chatView.prefill(`> [${fmtTime(seg.start)}] ${seg.text}\n\n`);
         });
+        acts.append(copy, ask);
+        row.append(h('span', 'ytx-time', fmtTime(seg.start)), h('div', 'ytx-text', seg.text), acts);
+        row.addEventListener('click', () => seek(seg.start));
+        row.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); seek(seg.start); } });
         views.transcript.appendChild(row);
       }
+      applyFilter();
     }
 
-    async function loadTranscript(force = false) {
+    async function loadTranscript(force = false, pick = {}) {
       if (video.transcript && !force) { renderTranscript(); return; }
       renderTranscriptLoading();
       try {
-        const t = await L.transcript.fetchTranscript(videoId);
+        const s = await L.db.getSettings();
+        const t = await L.transcript.fetchTranscript(videoId, { lang: s.lang || 'en', track: pick.track, translate: pick.translate });
         if (!live()) return;
         video.transcript = {
           lang: t.lang,
           trackName: t.trackName,
-          segments: t.segments,
-          grouped: L.transcript.groupSegments(t.segments),
+          track: t.track,
+          translate: t.translate,
+          tracks: t.tracks,
+          duration: t.duration,
+          chapters: t.chapters,
+          grouped: L.transcript.groupSegments(t.segments), // raw segments are not kept: grouped is all we use
         };
+        video.transcriptFile = null; // Transcript.md must be rewritten for the new track/language
         // The player response carries the authoritative title; use it when the DOM scrape came up empty.
         if (!L.vault.hasTitle(video) && L.vault.cleanTitle(t.title)) video.title = L.vault.cleanTitle(t.title);
         if (!video.channel && t.channel) video.channel = t.channel;
         await save();
         renderTranscript();
+        disk((st) => L.vault.syncTranscript(st, video));
       } catch (e) {
         if (live()) renderTranscriptError(e);
       }
@@ -372,14 +495,37 @@
         selectTab(TABS[(i + (hk === 'nextTab' ? 1 : TABS.length - 1)) % TABS.length]);
       } else if (hk === 'webSearch') {
         if (activeTab === 'chat') toggleWeb(); // only meaningful while chatting
-      } else if (typeof notesView !== 'undefined') {
+      } else if (hk === 'focusChat') {
+        selectTab('chat'); chatView.focus();
+      } else if (hk === 'findTranscript') {
+        selectTab('transcript'); search.focus();
+      } else if (hk === 'newNote') {
+        selectTab('notes'); notesView.addNote('note');
+      } else {
         selectTab('notes');
         notesView.setMode(hk === 'editMode' ? 'edit' : 'view');
       }
     }, true);
 
     /* ---- notes tab (shared view: src/ui/notes.js) ---- */
-    const notesView = L.notes.createNotesView({
+    // Frame capture: current video frame → <video>/attachments/<m-ss>.jpg in the vault, embed pasted into the note.
+    async function captureFrame() {
+      const v = document.querySelector('video');
+      if (!v || !v.videoWidth) { toast('No video frame yet'); return null; }
+      const c = document.createElement('canvas');
+      const w = Math.min(1280, v.videoWidth);
+      c.width = w;
+      c.height = Math.round(v.videoHeight * (w / v.videoWidth));
+      c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+      let dataUrl;
+      try { dataUrl = c.toDataURL('image/jpeg', 0.85); } catch { toast('Frame capture blocked by the player'); return null; }
+      const s = await L.db.getSettings();
+      if (!L.vault.enabled(s)) { toast('Set the knowledge base folder in Library › Settings to save frames'); return null; }
+      const sec = v.currentTime;
+      const embed = await L.vault.saveFrame(s, video, dataUrl, sec);
+      return { embed, sec };
+    }
+    notesView = L.notes.createNotesView({
       video,
       fmtTime,
       renderMd,
@@ -387,6 +533,11 @@
       onSeek: seek,
       onChange: (card) => { notesDirty = true; diskDirty.add(card); saveSoon(); },
       onDelete: (card) => { diskDirty.delete(card); save(); disk((s) => L.vault.removeNote(s, video, card)); },
+      onUndo: (card, idx) => toast('Deleted', { action: { label: 'Undo', onClick: () => {
+        video.notes.cards.splice(Math.min(idx, video.notes.cards.length), 0, card);
+        notesDirty = true; diskDirty.add(card); flushNotes(); notesView.refresh();
+      } } }),
+      onFrame: () => captureFrame().catch((e) => { toast(`Frame: ${e.message}`); return null; }),
     });
     views.notes.appendChild(notesView.root);
     const renderNotes = () => notesView.refresh();
@@ -408,10 +559,18 @@
     const flexy = document.querySelector('ytd-watch-flexy');
     const player = document.querySelector('#movie_player') || document.querySelector('video');
     const fitPlayer = () => {
-      if (!live() || !player || (flexy && flexy.hasAttribute('theater'))) return;
+      if (!live() || !player) return;
+      const theater = !!(flexy && flexy.hasAttribute('theater'));
+      panel.classList.toggle('is-theater', theater);
+      if (theater) { panel.style.height = ''; return; } // #secondary sits below a full-width player: cap by CSS instead
       const hgt = Math.round(player.getBoundingClientRect().height);
       if (hgt > 200) panel.style.height = `${hgt}px`;
     };
+    if (flexy && 'MutationObserver' in window) {
+      const mo = new MutationObserver(fitPlayer);
+      mo.observe(flexy, { attributes: true, attributeFilter: ['theater'] });
+      theaterObserver = mo;
+    }
     fitPlayer();
     if (player && 'ResizeObserver' in window) {
       const ro = new ResizeObserver(fitPlayer);

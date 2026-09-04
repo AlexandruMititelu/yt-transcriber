@@ -79,6 +79,8 @@ export function blankVideo(videoId, title = '', channel = '') {
     notes: { cards: [] }, // cards: [{id, kind: 'quick'|'note', title, text, start, color, ts, file?}]
     pinned: null,
     folder: null, // vault folder name, frozen on first disk write (title may change later)
+    transcriptFile: null, // vault path of Transcript.md once written
+    hubFile: null, // vault path of <video>/<video>.md once written
   };
 }
 
@@ -135,7 +137,7 @@ export async function listVideos() {
         url: v.url,
         updatedAt: v.updatedAt,
         counts: {
-          segments: v.transcript?.segments?.length ?? 0,
+          segments: v.transcript?.grouped?.length ?? v.transcript?.segments?.length ?? 0,
           messages: v.chats.reduce((n, c) => n + c.messages.length, 0),
           cards: v.notes?.cards?.length ?? 0,
         },

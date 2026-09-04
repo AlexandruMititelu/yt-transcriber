@@ -112,7 +112,7 @@ button:disabled { opacity: 0.5; cursor: default; }
 }
 
 /* transcript */
-.seg-list { max-height: 70vh; overflow-y: auto; }
+.seg-list { }
 .seg { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border-radius: var(--radius-sm); cursor: pointer; }
 .seg:hover { background: var(--surface-2); }
 .seg .chip.time { margin-top: 1px; }
@@ -146,3 +146,41 @@ kbd { font-family: var(--font-mono); font-size: 11.5px; padding: 1px 6px; border
 .field-row { display: flex; gap: 8px; }
 .field-row .input { flex: 1; }
 .field-help code { font-family: var(--font-mono); font-size: 11.5px; }
+
+/* library tools */
+.lib-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 16px; }
+.lib-tools .segmented { margin: 0; }
+.lib-search { flex: 1; min-width: 180px; width: auto; border-radius: 999px; padding: 6px 14px; }
+.lib-sort { width: auto; border-radius: 999px; padding: 6px 12px; }
+.lib-group.on { background: var(--accent-soft); border-color: transparent; color: var(--accent); }
+.lib-count { color: var(--muted); font-size: 12px; margin-left: auto; }
+.card-confirm { position: absolute; inset: 0; z-index: 3; background: var(--surface); border-radius: var(--radius); }
+
+/* transcript */
+.tr-tools { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.tr-search { flex: 1; border-radius: 999px; padding: 6px 14px; }
+.tr-meta { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.tr-chapter { display: flex; align-items: center; gap: 10px; margin: 10px 0 2px; padding: 4px 10px; color: var(--text); font-weight: 700; }
+.tr-chapter:hover { background: var(--surface-2); border-radius: var(--radius-sm); }
+.seg-wrap { position: relative; }
+.seg-wrap[hidden] { display: none; }
+.seg { color: var(--text); }
+.seg-copy { position: absolute; top: 6px; right: 6px; width: 26px; height: 26px; opacity: 0; background: var(--surface); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
+.seg-wrap:hover .seg-copy, .seg-copy:focus-visible { opacity: 1; }
+
+/* settings */
+.key-eye { flex: none; padding: 6px 12px; }
+.key-status { font-family: var(--font-mono); font-size: 11.5px; }
+.key-status.ok { color: var(--green); }
+.key-status.bad { color: #ff453a; }
+.settings-form .segmented { align-self: flex-start; margin: 0; }
+
+/* narrow viewports */
+@media (max-width: 640px) {
+  #app { padding: 16px 12px 48px; }
+  .grid { grid-template-columns: 1fr; }
+  .lib-count { display: none; }
+  .settings-form { padding: 14px; }
+  .pane { padding: 10px; }
+  .chat { max-height: none; }
+}

@@ -91,7 +91,7 @@ test('saveVideo/getVideo roundtrip, updatedAt stamped', async () => {
 test('listVideos sorts by updatedAt desc with counts and bookmarked flag', async () => {
   store.clear();
   const a = db.blankVideo('a', 'A', 'ch');
-  a.transcript = { lang: 'en', trackName: 'English', segments: [{ start: 0, dur: 1, text: 'x' }], grouped: [] };
+  a.transcript = { lang: 'en', trackName: 'English', grouped: [{ start: 0, end: 1, text: 'x' }] };
   const chat = db.newChat();
   chat.messages = [{ role: 'user', content: 'hi', ts: 1 }, { role: 'assistant', content: 'yo', ts: 2 }];
   a.chats = [chat];

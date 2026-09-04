@@ -18,7 +18,13 @@ const THINKING_BUDGET = { low: 4000, medium: 12000, high: 32000 }; // pre-4.6 mo
 const ADAPTIVE_RE = /claude-(opus|sonnet)-4-[6-9]|claude-(opus|sonnet)-5|claude-(fable|mythos)/;
 const ALWAYS_THINKS_RE = /claude-(fable|mythos)/;
 
-const PROMPT_CAP = 24000;
+export const PROMPT_CAP = 24000;
+
+// Share of the transcript that fits under PROMPT_CAP (1 = all of it).
+export function promptCoverage(segments) {
+  const total = (segments ?? []).reduce((n, s) => n + s.text.length + 10, 0);
+  return total <= PROMPT_CAP ? 1 : PROMPT_CAP / total;
+}
 
 // Thinking/reasoning support by model id. ponytail: name heuristics, extend when a model errors.
 export function supportsEffort(provider, id) {

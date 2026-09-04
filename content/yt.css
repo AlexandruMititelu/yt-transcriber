@@ -229,6 +229,7 @@
   padding: 4px 0 6px;
   background: var(--surface);
 }
+#ytx-panel .ytx-follow { flex: none; }
 
 #ytx-panel .ytx-follow {
   padding: 3px 10px;
@@ -346,3 +347,100 @@
 #ytx-panel .ytx-chat-new {
   bottom: 96px;
 }
+
+/* ---- transcript toolbar ---- */
+
+#ytx-panel .ytx-follow-bar {
+  gap: 6px;
+  align-items: center;
+}
+
+#ytx-panel .ytx-tr-search {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+
+#ytx-panel .ytx-tr-search.is-empty { border-color: #ff9f0a; }
+
+#ytx-panel .ytx-tr-trackwrap { position: relative; flex: none; }
+
+#ytx-panel .ytx-tr-track {
+  max-width: 120px;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#ytx-panel .ytx-tr-track:hover { color: var(--text); border-color: var(--muted); }
+#ytx-panel .ytx-tr-track[hidden] { display: none; }
+
+#ytx-panel .ytx-tr-menu {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 5;
+  min-width: 180px;
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 12px 32px rgba(0, 0, 0, 0.18);
+}
+
+#ytx-panel .ytx-tr-menu.is-open { display: block; }
+#ytx-panel .ytx-tr-group { padding: 6px 8px 2px; color: var(--muted); font-size: 11px; font-weight: 600; }
+#ytx-panel .ytx-tr-item { display: block; width: 100%; padding: 6px 8px; border-radius: 7px; text-align: left; font-size: 12.5px; }
+#ytx-panel .ytx-tr-item:hover { background: var(--accent); color: #fff; }
+#ytx-panel .ytx-tr-item.is-on { font-weight: 600; color: var(--accent); }
+#ytx-panel .ytx-tr-item.is-on:hover { color: #fff; }
+#ytx-panel .ytx-tr-copy { width: 26px; height: 26px; }
+
+#ytx-panel .ytx-chapter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 2px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+#ytx-panel .ytx-chapter:hover { background: var(--surface-2); }
+#ytx-panel .ytx-chapter-title { font-weight: 700; font-size: 12.5px; }
+
+#ytx-panel .ytx-row { position: relative; }
+#ytx-panel .ytx-row[hidden] { display: none; }
+#ytx-panel .ytx-row-acts {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  display: none;
+  gap: 2px;
+  padding: 1px;
+  border-radius: 7px;
+  background: var(--surface);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+#ytx-panel .ytx-row:hover .ytx-row-acts, #ytx-panel .ytx-row:focus-within .ytx-row-acts { display: inline-flex; }
+#ytx-panel .ytx-row-act { width: 22px; height: 20px; border-radius: 6px; color: var(--muted); font-size: 12px; line-height: 1; }
+#ytx-panel .ytx-row-act:hover { background: var(--surface-2); color: var(--text); }
+
+/* theater mode: #secondary sits below a full-width player; keep the panel readable */
+#ytx-panel.is-theater { max-height: 80vh; max-width: 720px; }

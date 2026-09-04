@@ -2,12 +2,12 @@
 
 Firefox MV2 extension. Transcript, chat, and notes panel next to any YouTube video — bring your own LLM key.
 
-- Fetches the video's caption track and shows it as timestamped segments
-- Click a segment to seek, double-click to copy `[m:ss] text`
-- Chat with the video (Anthropic or OpenAI, your API key), markdown answers with mermaid diagrams and clickable timestamps. Multiple chats per video, auto-titled, switchable
-- Quick notes (≤280 chars, color-coded cards, always fully visible) and long-form notes (title + markdown editor), both render markdown when you click away, optional time stamps
-- Knowledge base folder (your Obsidian vault): notes, chats and pinned videos are written as markdown files, and those files are the source of truth
-- Library page with all saved videos, full detail view, settings, JSON export
+- Fetches the video's caption track and shows it as timestamped segments, with chapters, search, other caption tracks and translation
+- Click a segment to seek; hover for copy / "ask about this"
+- Chat with the video (Anthropic or OpenAI, your API key): streamed markdown answers with mermaid diagrams, code copy buttons and clickable timestamps. Stop, retry, edit & resend, one-click presets, token/cost per reply, optional web search. Multiple chats per video, auto-titled, switchable
+- Quick notes (≤280 chars, color-coded cards, always fully visible) and long-form notes (title + markdown editor), both render markdown when you click away, optional time stamps, frame captures
+- Knowledge base folder (your Obsidian vault): every video gets a hub note, Transcript.md, notes and chats as markdown files, an Index.md at the root, and those files are the source of truth (edits in Obsidian win)
+- Library page with search, sort, channel grouping, full detail view, settings, JSON export/import
 - Local-first: no server, no build step
 
 ## Install in Zen / Firefox
@@ -33,7 +33,7 @@ Temporary add-ons vanish on browser restart. Permanent options:
 4. Optional: **About me** and **Tone of voice** — both go into every chat system prompt
 5. **Save**, then **Test Anthropic key** / **Test OpenAI key** to verify
 
-Model and thinking effort are picked in the chat composer (two dropdowns above the input),
+Model and thinking effort are picked in the chat composer (the picker in the input pill),
 not in Settings. The model list comes from each provider's `/v1/models`, cached 24h; Save in
 Settings refreshes it. Effort off = no thinking; low/medium/high = Anthropic extended thinking
 budget / OpenAI `reasoning_effort`.
@@ -53,31 +53,38 @@ Layout inside the vault:
 
 ```
 <vault>/YT-transcriber/
-  <video title>/              created only once a note or chat exists
-    notes/<first line>.md     quick note (front matter: kind, time, color)
-    notes/<title>.md          note (front matter: kind, title)
-    chats/<chat title>.md     one file per chat
-  pinned/<video title>/       the same tree while pinned, plus <video title>.md (title, link, transcript)
+  Index.md                    links to every video (pinned first), rebuilt automatically
+  <video title>/              created once a note or chat exists
+    <video title>.md          hub note: link, channel, length, chapters, [[Transcript]], a Notes section for you
+    Transcript.md             timestamped transcript with chapter headings
+    attachments/<m-ss>.jpg    frame captures
+    notes/<first line>.md     quick note (front matter: kind, time, link, color)
+    notes/<title>.md          note (front matter: kind, title, link)
+    chats/<chat title>.md     one file per chat (Obsidian callouts per message)
+  pinned/<video title>/       the same tree while pinned (hub note gets `pinned:`)
 ```
 
 Files win: when you open a video, the extension re-reads these folders. Edit a note in Obsidian and the
 panel shows it; delete a file and the note/chat is gone; rename a chat or note file and it is renamed.
+Tags, aliases or any other front-matter keys you add in Obsidian are kept. If a file changes on disk while
+the panel is open, the panel reloads it instead of overwriting (toast "Changed in Obsidian").
 A markdown file you write by hand in `notes/` becomes a note titled by its filename. Move a video folder
-into or out of `pinned/` and the pin state follows.
+into or out of `pinned/` and the pin state follows. The hub note's body is yours: pin/unpin only touch its
+front matter.
 Notes and chats you had before setting the folder are written out the first time each video is opened.
 
 ## Where data lives
 
-Transcripts and settings live in the browser profile's `storage.local` — on the **Windows side** if the browser runs on Windows, **not** in WSL. Deleting the (temporary) add-on can drop it. Notes and chats also live there, but once a knowledge base folder is set the markdown files are the truth. Use **Export data** in Settings for a JSON backup (`yt-transcriber-export.json`).
+Transcripts and settings live in the browser profile's `storage.local` — on the **Windows side** if the browser runs on Windows, **not** in WSL. Deleting the (temporary) add-on can drop it. Notes and chats also live there, but once a knowledge base folder is set the markdown files are the truth. Use **Export data** in Settings for a JSON backup (`yt-transcriber-export.json`, API keys left out) and **Import data** to restore it.
 
 ## Usage
 
 - On any watch page a panel appears in the sidebar with three tabs: **Transcript | Chat | Notes**
-- **Transcript**: click a row to seek, double-click to copy the timestamped line; ⟳ refetches
-- **Chat**: the dropdown at the top switches chats or starts a new one; ⋯ renames or deletes (with confirmation). A new chat gets a title from the model after the first reply. Pick model + effort above the input; Enter sends, Shift+Enter for a newline; answers render markdown, ```mermaid blocks become diagrams, `[12:34]` timestamps are clickable seek chips
-- **Notes**: "+ quick note" (≤280 chars, shown in full) or "+ note" (green; opens a title + markdown editor, "‹ All notes" goes back). Markdown renders when you click away; click text to edit. "@ time" stamps the current video time, color dot cycles 5 Keep colors, ✕ clears the stamp, 🗑 asks, then deletes
+- **Transcript**: search box filters rows; the track button switches caption tracks or translates; ⧉ copies everything; **Follow** highlights and scrolls to what is playing (a manual scroll pauses it). Click a row to seek; hover a row for copy or "ask about this" (quotes it into Chat); chapters from the description appear as headings; ⟳ refetches
+- **Chat**: the dropdown at the top switches chats or starts a new one, renames or deletes (with confirmation). A new chat gets a title from the model after the first reply. Presets (Summarize, Key takeaways, …) show while a chat is empty. Pick model + effort in the pill; Enter sends, Shift+Enter for a newline; replies stream in, the send button becomes Stop (Esc too), errors offer Retry; hover a message for copy, edit & resend, and token usage; answers render markdown, ```mermaid blocks become diagrams, code blocks have a copy button, `[12:34]` timestamps are clickable seek chips
+- **Notes**: "+ quick note" (≤280 chars, shown in full) or "+ note" (green; opens a title + markdown editor, "‹ Notes" goes back). Markdown renders when you click away; click text to edit. "@ time" stamps the current video time, the color dot opens a swatch picker, ✕ clears the stamp, the camera saves the current frame into the vault and embeds it, 🗑 asks, then deletes (Undo in the toast). Filter + sort appear once you have a few notes
 - **Web search**: globe button next to Send. The model runs its own searches (Anthropic server-side tool or OpenAI built-in search), answers with a "Sources" list, links open in a new tab
-- **Shortcuts** (toggle in Settings): Alt+↑ / Alt+↓ switch tabs, Alt+E / Alt+V switch the note editor between raw markdown and rendered view, Alt+W toggles web search
+- **Shortcuts** (toggle in Settings): Alt+↑ / Alt+↓ switch tabs, Alt+E / Alt+V switch the note editor between raw markdown and rendered view, Alt+W toggles web search, Alt+C focuses the chat box, Alt+N starts a new note, Alt+F focuses transcript search
 - **Pin** (top right) moves the video's folder into `YT-transcriber/pinned/` and turns yellow; press again to unpin. The Library has an All | Pinned filter and a pin on every card
 - **⧉** opens the Library: browse saved videos, reopen transcript/chat/notes, delete, settings
 
@@ -105,7 +112,7 @@ File map:
 
 ```
 manifest.json          MV2 manifest
-background.js          HTTP proxy (CORS-free API calls) + library tab opener
+background.js          HTTP proxy (CORS-free API calls, SSE streaming port) + native host bridge + library tab opener
 src/lib/format.js      fmtTime, clampText, chunkText (pure)
 src/lib/transcript.js  player-response extraction, track pick, json3 parse, grouping
 src/lib/bus.js         runtime message helpers (call, http)
@@ -115,6 +122,11 @@ src/lib/vault.js       knowledge base folder: markdown builders/parsers + disk s
 src/ui/tokens.css      design tokens
 src/ui/picker.js|css   model + effort popover (shared by panel and library)
 src/ui/chatbar.js|css  chat switcher + confirm box (shared)
+src/ui/chat.js|css     chat tab: streaming, stop/retry, presets, usage (shared)
+src/ui/notes.js|css    notes tab (shared)
+src/ui/markdown.js|css markdown rendering, time chips, code copy, mermaid (shared)
+src/ui/toast.js|css    toasts (shared)
+config/hotkeys.js      keyboard shortcuts; config/prompts.js chat presets
 native/host.mjs        Node native-messaging host (fs ops + folder dialog); install.ps1 / install.sh register it
 content/yt.js|css      YouTube panel (classic script, styles scoped to #ytx-panel)
 page/app.html|js|css   Library page (hash routes #/, #/video/<id>, #/settings)
@@ -124,7 +136,7 @@ docs/ARCHITECTURE.md   binding contract
 
 ## Limitations (v1)
 
-- No streaming responses
-- No Whisper/audio fallback — videos without captions show "No captions on this video"
-- Disk is re-read when a video is opened, not watched live; on conflict the file wins
+- No Whisper/audio fallback — videos without captions say so (age-gated / members-only / live videos explain why)
+- Disk is re-read when a video is opened and checked before each write; on conflict the file wins (no merge)
+- No Shorts or embedded players, no playlist context
 - Single user, no i18n, no build tooling

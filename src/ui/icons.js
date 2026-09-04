@@ -22,3 +22,5 @@ export const chevronDown = () => svg('<path d="M6 9l6 6 6-6"/>', 'ytx-ico ytx-ic
 export const chevronLeft = () => svg('<path d="M15 5l-7 7 7 7"/>', 'ytx-ico ytx-ico-chevron');
 export const globeIcon = () => svg('<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18z"/>', 'ytx-ico ytx-ico-globe');
 export const eyeIcon = () => svg('<path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/>', 'ytx-ico ytx-ico-eye');
+export const cameraIcon = () => svg('<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>', 'ytx-ico ytx-ico-camera');
+export const searchIcon = () => svg('<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>', 'ytx-ico ytx-ico-search');

@@ -2,6 +2,7 @@ import { fmtTime } from '../src/lib/format.js';
 import * as db from '../src/lib/db.js';
 import * as llm from '../src/lib/llm.js';
 import * as vault from '../src/lib/vault.js';
+import * as transcriptLib from '../src/lib/transcript.js';
 import { confirmBox } from '../src/ui/chatbar.js';
 import { createNotesView } from '../src/ui/notes.js';
 import { createChatView } from '../src/ui/chat.js';
@@ -12,6 +13,18 @@ import { HOTKEYS, hotkeyId } from '../config/hotkeys.js';
 
 const $app = document.getElementById('app');
 const toast = createToaster(document.body, { fixed: true });
+
+// ---------- theme (Settings: auto | light | dark) ----------
+const osDark = matchMedia('(prefers-color-scheme: dark)');
+let themePref = 'auto';
+function applyTheme(pref = themePref) {
+  themePref = pref;
+  if (pref === 'light' || pref === 'dark') document.documentElement.dataset.theme = pref;
+  else delete document.documentElement.dataset.theme;
+  setDark(pref === 'dark' || (pref === 'auto' && osDark.matches));
+}
+osDark.addEventListener('change', () => applyTheme());
+db.getSettings().then((s) => applyTheme(s.theme || 'auto')).catch(() => {});
 
 // ---------- helpers ----------
 
@@ -53,33 +66,60 @@ const renderMdFor = (video) => (text) => renderMarkdown(text, { timeHref: (sec) 
 // ---------- library ----------
 
 let libFilter = 'all'; // 'all' | 'pinned' (session-scoped)
+let libQuery = '';
+let libSort = 'recent'; // 'recent' | 'title' | 'channel'
+let libGroup = false; // group by channel
 
 async function renderLibrary() {
-  const vids = await db.listVideos();
+  $app.replaceChildren(el('div', { class: 'empty' }, 'Loading…'));
+  const all = await db.listVideos();
+  const q = libQuery.trim().toLowerCase();
+  let vids = all.filter((v) => !q || `${v.title} ${v.channel}`.toLowerCase().includes(q));
+  if (libSort === 'title') vids = [...vids].sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+  else if (libSort === 'channel') vids = [...vids].sort((a, b) => (a.channel || '').localeCompare(b.channel || '') || b.updatedAt - a.updatedAt);
   const pinned = vids.filter((v) => v.pinned);
   const rest = vids.filter((v) => !v.pinned);
   const header = el('header', { class: 'topbar' },
     el('h1', {}, 'YT Transcriber'),
-    el('a', { class: 'icon-btn', href: '#/settings', title: 'Settings' }, '⚙'));
-  const seg = el('div', { class: 'segmented' }, [['all', 'All'], ['pinned', 'Pinned']].map(([key, label]) =>
-    el('button', { class: `seg-btn${libFilter === key ? ' active' : ''}`, onclick: () => { libFilter = key; renderLibrary(); } }, label)));
+    el('a', { class: 'icon-btn', href: '#/settings', title: 'Settings', 'aria-label': 'Settings' }, '⚙'));
+  const seg = el('div', { class: 'segmented', role: 'tablist' }, [['all', 'All'], ['pinned', 'Pinned']].map(([key, label]) =>
+    el('button', { class: `seg-btn${libFilter === key ? ' active' : ''}`, role: 'tab', 'aria-selected': libFilter === key ? 'true' : 'false', onclick: () => { libFilter = key; renderLibrary(); } }, label)));
+  const search = el('input', { class: 'input lib-search', type: 'search', placeholder: 'Search title or channel…', 'aria-label': 'Search videos' });
+  search.value = libQuery;
+  let t;
+  search.oninput = () => { libQuery = search.value; clearTimeout(t); t = setTimeout(renderLibrary, 150); };
+  const sort = el('select', { class: 'input lib-sort', 'aria-label': 'Sort' },
+    [['recent', 'Recent'], ['title', 'Title'], ['channel', 'Channel']].map(([v, l]) => el('option', { value: v }, l)));
+  sort.value = libSort;
+  sort.onchange = () => { libSort = sort.value; renderLibrary(); };
+  const group = el('button', { class: `btn lib-group${libGroup ? ' on' : ''}`, 'aria-pressed': libGroup ? 'true' : 'false', onclick: () => { libGroup = !libGroup; renderLibrary(); } }, 'By channel');
+  const tools = el('div', { class: 'lib-tools' }, seg, search, sort, group, el('span', { class: 'lib-count' }, `${all.length} videos`));
   const section = (title, list) => el('section', { class: 'lib-section' },
     title ? el('h2', { class: 'lib-title' }, title) : null,
     el('div', { class: 'grid' }, list.map(videoCard)));
+  const grouped = (list, fallbackTitle) => {
+    if (!libGroup) return list.length ? section(fallbackTitle, list) : null;
+    const by = new Map();
+    for (const v of list) { const k = v.channel || 'Unknown channel'; if (!by.has(k)) by.set(k, []); by.get(k).push(v); }
+    return el('div', {}, [...by.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([k, l]) => section(k, l)));
+  };
   let body;
-  if (!vids.length) {
+  if (!all.length) {
     body = el('div', { class: 'empty' },
       el('p', {}, 'No videos yet.'),
       el('p', { class: 'hint' }, 'Open a YouTube video — the transcript panel saves everything here.'));
+  } else if (!vids.length) {
+    body = el('div', { class: 'empty' }, el('p', {}, 'Nothing matches.'));
   } else if (libFilter === 'pinned') {
-    body = pinned.length ? section(null, pinned)
+    body = pinned.length ? grouped(pinned, null)
       : el('div', { class: 'empty' }, el('p', {}, 'Nothing pinned.'), el('p', { class: 'hint' }, 'Hover a video and click the pin.'));
   } else {
     body = el('div', {},
       pinned.length ? section('Pinned', pinned) : null,
-      rest.length ? section(pinned.length ? 'Everything else' : null, rest) : null);
+      grouped(rest, pinned.length ? 'Everything else' : null));
   }
-  $app.replaceChildren(header, seg, body);
+  $app.replaceChildren(header, tools, body);
+  if (document.activeElement === document.body && libQuery) search.focus();
 }
 
 async function togglePin(videoId) {
@@ -92,22 +132,24 @@ async function togglePin(videoId) {
   toast(video.pinned ? 'Pinned' : 'Unpinned');
 }
 
+// Card = link + an action row that lives outside the <a> (no nested interactives).
 function videoCard(v) {
+  const wrap = el('div', { class: 'card-wrap' });
   const del = el('button', {
-    class: 'card-del icon-btn', title: 'Delete',
-    onclick: async (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (!confirm(`Delete "${v.title || v.videoId}"?`)) return;
-      await db.deleteVideo(v.videoId);
-      renderLibrary();
+    class: 'card-del icon-btn', title: 'Delete', 'aria-label': `Delete ${v.title || v.videoId}`,
+    onclick: () => {
+      const box = confirmBox({
+        text: `Delete "${v.title || v.videoId}" from the library? Files in the knowledge base stay.`,
+        onCancel: () => box.remove(),
+        onConfirm: async () => { await db.deleteVideo(v.videoId); renderLibrary(); },
+      });
+      box.classList.add('card-confirm');
+      wrap.append(box);
     },
   }, '⌫');
   const pin = el('button', {
-    class: `card-pin icon-btn pin${v.pinned ? ' on' : ''}`, title: v.pinned ? 'Unpin' : 'Pin',
-    onclick: async (e) => {
-      e.preventDefault();
-      e.stopPropagation();
+    class: `card-pin icon-btn pin${v.pinned ? ' on' : ''}`, title: v.pinned ? 'Unpin' : 'Pin', 'aria-label': v.pinned ? 'Unpin' : 'Pin', 'aria-pressed': v.pinned ? 'true' : 'false',
+    onclick: async () => {
       pin.disabled = true;
       try {
         await togglePin(v.videoId);
@@ -120,12 +162,14 @@ function videoCard(v) {
       }
     },
   }, pinIcon());
-  return el('a', { class: 'card', href: `#/video/${v.videoId}` },
-    el('div', { class: 'card-title' }, v.title || v.videoId),
-    el('div', { class: 'card-meta' }, [v.channel, relTime(v.updatedAt)].filter(Boolean).join(' · ')),
-    el('div', { class: 'card-badges' },
-      `${v.counts.segments} segments · ${v.counts.messages} messages · ${v.counts.cards} notes`),
+  wrap.append(
+    el('a', { class: 'card', href: `#/video/${v.videoId}` },
+      el('div', { class: 'card-title' }, v.title || v.videoId),
+      el('div', { class: 'card-meta' }, [v.channel, relTime(v.updatedAt)].filter(Boolean).join(' · ')),
+      el('div', { class: 'card-badges' },
+        `${v.counts.segments} segments · ${v.counts.messages} messages · ${v.counts.cards} notes`)),
     el('div', { class: 'card-actions' }, pin, del));
+  return wrap;
 }
 
 // ---------- video detail ----------
@@ -184,11 +228,11 @@ async function renderDetail(videoId) {
 
   const pane = el('div', { class: 'pane' });
   const panes = { Transcript: transcriptPane, Chat: chatPane, Notes: notesPane };
-  const seg = el('div', { class: 'segmented' }, Object.keys(panes).map((name) =>
-    el('button', { class: 'seg-btn', dataset: { tab: name } }, name)));
+  const seg = el('div', { class: 'segmented', role: 'tablist' }, Object.keys(panes).map((name) =>
+    el('button', { class: 'seg-btn', role: 'tab', dataset: { tab: name } }, name)));
   const built = {}; // cache pane instances so chat busy-state and in-flight requests survive tab switches
   function show(name) {
-    for (const b of seg.children) b.classList.toggle('active', b.dataset.tab === name);
+    for (const b of seg.children) { b.classList.toggle('active', b.dataset.tab === name); b.setAttribute('aria-selected', b.dataset.tab === name ? 'true' : 'false'); }
     pane.replaceChildren(built[name] ??= panes[name](video, disk));
     // scrollHeight is 0 while detached, so renderMsgs' scroll is a no-op — re-scroll on reveal
     const list = pane.querySelector('.ytx-chat-list');
@@ -216,8 +260,15 @@ async function renderDetail(videoId) {
       show(names[(i + (hk === 'nextTab' ? 1 : names.length - 1)) % names.length]);
     } else if (hk === 'webSearch') {
       if (cur === 'Chat') built.Chat?.__toggleWeb?.();
-    } else if (built.Notes?.__view) {
-      built.Notes.__view.setMode(hk === 'editMode' ? 'edit' : 'view');
+    } else if (hk === 'focusChat') {
+      show('Chat'); built.Chat?.__focus?.();
+    } else if (hk === 'findTranscript') {
+      show('Transcript'); built.Transcript?.querySelector?.('.tr-search')?.focus();
+    } else if (hk === 'newNote') {
+      show('Notes'); built.Notes?.__view?.addNote('note');
+    } else {
+      show('Notes');
+      built.Notes?.__view?.setMode(hk === 'editMode' ? 'edit' : 'view');
     }
   };
   // Hydrate after first paint so a slow or missing host never blocks the page; rebuild panes on arrival.
@@ -233,25 +284,66 @@ async function renderDetail(videoId) {
   })().catch(warn);
 }
 
-function transcriptPane(video) {
+function transcriptPane(video, disk) {
   const grouped = video.transcript?.grouped ?? [];
-  if (!grouped.length) return el('div', { class: 'empty' }, 'No transcript saved for this video.');
-  let clickTimer;
-  return el('div', { class: 'seg-list' }, grouped.map((seg) =>
-    el('div', {
-      class: 'seg',
-      onclick: () => {
-        clearTimeout(clickTimer);
-        clickTimer = setTimeout(() => window.open(atTimeUrl(video.url, seg.start), '_blank'), 250);
-      },
-      ondblclick: () => {
-        clearTimeout(clickTimer);
-        navigator.clipboard.writeText(`[${fmtTime(seg.start)}] ${seg.text}`)
-          .then(() => toast('Copied'), () => toast('Copy failed'));
-      },
-    },
+  const root = el('div', { class: 'tr' });
+  if (!grouped.length) {
+    const fetchBtn = el('button', { class: 'btn primary' }, 'Fetch transcript');
+    fetchBtn.onclick = async () => {
+      fetchBtn.disabled = true;
+      fetchBtn.textContent = 'Fetching…';
+      try {
+        const s = await db.getSettings();
+        const t = await transcriptLib.fetchTranscript(video.videoId, { lang: s.lang || 'en' });
+        video.transcript = { lang: t.lang, trackName: t.trackName, track: t.track, translate: null, tracks: t.tracks, duration: t.duration, chapters: t.chapters, grouped: transcriptLib.groupSegments(t.segments) };
+        if (!vault.hasTitle(video) && vault.cleanTitle(t.title)) video.title = vault.cleanTitle(t.title);
+        if (!video.channel && t.channel) video.channel = t.channel;
+        await db.saveVideo(video);
+        disk((st) => vault.syncTranscript(st, video));
+        root.replaceWith(transcriptPane(video, disk));
+      } catch (err) {
+        toast(transcriptLib.explainFailure(err));
+        fetchBtn.disabled = false;
+        fetchBtn.textContent = 'Fetch transcript';
+      }
+    };
+    root.append(el('div', { class: 'empty' }, el('p', {}, 'No transcript saved for this video.'), fetchBtn));
+    return root;
+  }
+  const rows = [];
+  const search = el('input', { class: 'input tr-search', type: 'search', placeholder: 'Search transcript…', 'aria-label': 'Search transcript' });
+  search.oninput = () => {
+    const q = search.value.trim().toLowerCase();
+    for (const r of rows) r.el.hidden = !!q && !r.el.textContent.toLowerCase().includes(q);
+    for (const c of root.querySelectorAll('.tr-chapter')) c.hidden = !!q;
+  };
+  search.onkeydown = (e) => { if (!e.altKey) e.stopPropagation(); };
+  const copyAll = el('button', { class: 'btn', onclick: () => {
+    navigator.clipboard.writeText(grouped.map((g) => `[${fmtTime(g.start)}] ${g.text}`).join('\n')).then(() => toast('Transcript copied'), () => toast('Copy failed'));
+  } }, 'Copy all');
+  const meta = el('span', { class: 'tr-meta' }, [video.transcript.trackName, video.transcript.duration ? fmtTime(video.transcript.duration) : null].filter(Boolean).join(' · '));
+  root.append(el('div', { class: 'tr-tools' }, search, meta, copyAll));
+  const list = el('div', { class: 'seg-list' });
+  const chapters = video.transcript.chapters ?? [];
+  let ci = 0;
+  for (const seg of grouped) {
+    while (ci < chapters.length && chapters[ci].start <= seg.start) {
+      const c = chapters[ci++];
+      list.append(el('a', { class: 'tr-chapter', href: atTimeUrl(video.url, c.start), target: '_blank' }, el('span', { class: 'chip time' }, fmtTime(c.start)), el('span', { class: 'tr-chapter-title' }, c.title)));
+    }
+    const copy = el('button', { class: 'seg-copy icon-btn', title: 'Copy line', 'aria-label': 'Copy line', onclick: (e) => {
+      e.preventDefault(); e.stopPropagation();
+      navigator.clipboard.writeText(`[${fmtTime(seg.start)}] ${seg.text}`).then(() => toast('Copied'), () => toast('Copy failed'));
+    } }, '⧉');
+    const row = el('a', { class: 'seg', href: atTimeUrl(video.url, seg.start), target: '_blank' },
       el('span', { class: 'chip time' }, fmtTime(seg.start)),
-      el('span', { class: 'seg-text' }, seg.text))));
+      el('span', { class: 'seg-text' }, seg.text));
+    const wrap = el('div', { class: 'seg-wrap' }, row, copy);
+    rows.push({ el: wrap });
+    list.append(wrap);
+  }
+  root.append(list);
+  return root;
 }
 
 function chatPane(video, disk) {
@@ -286,6 +378,10 @@ function notesPane(video, disk) {
     timeHref: (sec) => atTimeUrl(video.url, sec),
     onChange: (card) => { dirty.add(card); saveSoon(); },
     onDelete: (card) => { dirty.delete(card); db.saveVideo(video); disk((s) => vault.removeNote(s, video, card)); },
+    onUndo: (card, idx) => toast('Deleted', { action: { label: 'Undo', onClick: () => {
+      video.notes.cards.splice(Math.min(idx, video.notes.cards.length), 0, card);
+      dirty.add(card); flush(); view.refresh();
+    } } }),
   });
   // ponytail: no "@ time" stamp button here — the library page has no playing video to read time from.
   const root = el('div', { class: 'notes' }, view.root);
@@ -298,10 +394,30 @@ function notesPane(video, disk) {
 async function renderSettings() {
   const s = await db.getSettings();
 
-  const anthropicKey = el('input', { class: 'input', type: 'password', autocomplete: 'off' });
-  anthropicKey.value = s.anthropicKey;
-  const openaiKey = el('input', { class: 'input', type: 'password', autocomplete: 'off' });
-  openaiKey.value = s.openaiKey;
+  const keyField = (value) => {
+    const input = el('input', { class: 'input', type: 'password', autocomplete: 'off', spellcheck: 'false' });
+    input.value = value;
+    const eye = el('button', { class: 'btn key-eye', type: 'button', 'aria-label': 'Show key', onclick: () => {
+      input.type = input.type === 'password' ? 'text' : 'password';
+      eye.textContent = input.type === 'password' ? 'Show' : 'Hide';
+    } }, 'Show');
+    const status = el('span', { class: 'key-status' }, value ? '● key set' : '○ no key');
+    input.addEventListener('input', () => { status.textContent = input.value.trim() ? '● key set' : '○ no key'; status.classList.remove('ok', 'bad'); });
+    return { input, row: el('div', { class: 'field-row' }, input, eye), status };
+  };
+  const ak = keyField(s.anthropicKey);
+  const ok = keyField(s.openaiKey);
+  const anthropicKey = ak.input;
+  const openaiKey = ok.input;
+  const theme = el('div', { class: 'segmented' }, [['auto', 'Auto'], ['light', 'Light'], ['dark', 'Dark']].map(([v, l]) =>
+    el('button', { class: `seg-btn${(s.theme || 'auto') === v ? ' active' : ''}`, type: 'button', dataset: { v }, onclick: () => {
+      for (const b of theme.children) b.classList.toggle('active', b.dataset.v === v);
+      applyTheme(v);
+      syncSave();
+    } }, l)));
+  const themeValue = () => theme.querySelector('.active')?.dataset.v || 'auto';
+  const lang = el('input', { class: 'input', placeholder: 'en', maxlength: '5' });
+  lang.value = s.lang || 'en';
   const aboutMe = el('textarea', { class: 'input', rows: 4,
     placeholder: 'e.g. Backend dev, Romanian, learning ML. Prefers concrete examples.' });
   aboutMe.value = s.aboutMe;
@@ -334,6 +450,8 @@ async function renderSettings() {
     tone: tone.value,
     vaultDir: vaultDir.value.trim().replace(/[\\/]+$/, ''),
     hotkeys: hotkeys.checked,
+    theme: themeValue(),
+    lang: lang.value.trim().toLowerCase() || 'en',
   });
 
   // Save is blue only while the form differs from what is stored.
@@ -348,10 +466,13 @@ async function renderSettings() {
       toast('Settings saved');
     },
   }, 'Save');
-  const syncSave = () => { saveBtn.disabled = JSON.stringify(formValues()) === saved; };
-  for (const f of [anthropicKey, openaiKey, aboutMe, tone, vaultDir]) f.addEventListener('input', syncSave);
+  const isDirty = () => JSON.stringify(formValues()) !== saved;
+  const syncSave = () => { saveBtn.disabled = !isDirty(); };
+  for (const f of [anthropicKey, openaiKey, aboutMe, tone, vaultDir, lang]) f.addEventListener('input', syncSave);
   hotkeys.addEventListener('change', syncSave);
   syncSave();
+  // Leaving with unsaved edits saves them (nothing here is dangerous to persist).
+  leaveSettings = async () => { if (isDirty()) { await db.saveSettings(formValues()); await db.clearCachedModels(); toast('Settings saved'); } };
 
   const testBtn = (provider, label) => {
     const b = el('button', { class: 'btn' }, `Test ${label} key`);
@@ -365,8 +486,12 @@ async function renderSettings() {
           maxTokens: 8,
         });
         toast(`${label} key works`);
+        const st = provider === 'anthropic' ? ak.status : ok.status;
+        st.textContent = '✓ key works'; st.classList.add('ok');
       } catch (err) {
         toast(`Test failed: ${err.message}`);
+        const st = provider === 'anthropic' ? ak.status : ok.status;
+        st.textContent = `✗ ${err.message}`; st.classList.add('bad');
       } finally {
         b.disabled = false;
       }
@@ -433,8 +558,10 @@ async function renderSettings() {
       el('a', { class: 'icon-btn', href: '#/', title: 'Library' }, '‹'),
       el('h1', {}, 'Settings')),
     el('div', { class: 'settings-form' },
-      field('Anthropic API key', anthropicKey, 'Model and thinking effort are picked in the chat composer.'),
-      field('OpenAI API key', openaiKey),
+      field('Anthropic API key', ak.row, el('span', {}, ak.status, ' · Model and thinking effort are picked in the chat composer.')),
+      field('OpenAI API key', ok.row, ok.status),
+      field('Appearance', theme, 'Library page theme. The YouTube panel follows YouTube.'),
+      field('Caption language', lang, 'Preferred transcript language (e.g. en, ro, nl). Other tracks and translations are in the transcript toolbar.'),
       field('About me', aboutMe, 'Added to every chat system prompt so answers fit you.'),
       field('Tone of voice', tone, 'How the assistant should talk.'),
       field('Knowledge base folder', el('div', { class: 'field-row' }, vaultDir, chooseBtn),
@@ -452,15 +579,19 @@ async function renderSettings() {
 // ---------- router ----------
 
 let detailKeys = null; // installed by renderDetail, cleared on route change
+let leaveSettings = null; // installed by renderSettings: flushes unsaved edits on navigation
 document.addEventListener('keydown', (e) => { if (detailKeys) detailKeys(e); });
 
-function route() {
+async function route() {
   detailKeys = null;
+  if (leaveSettings) { const f = leaveSettings; leaveSettings = null; await f().catch(() => {}); }
   const hash = location.hash || '#/';
   const p = hash.startsWith('#/video/') ? renderDetail(hash.slice('#/video/'.length))
     : hash === '#/settings' ? renderSettings()
     : renderLibrary();
-  p.catch((err) => $app.replaceChildren(el('div', { class: 'empty' }, `Error: ${err.message}`)));
+  p.catch((err) => $app.replaceChildren(el('div', { class: 'empty' },
+    el('p', {}, `Error: ${err.message}`),
+    el('button', { class: 'btn', onclick: route }, 'Retry'))));
 }
 
 window.addEventListener('hashchange', route);
