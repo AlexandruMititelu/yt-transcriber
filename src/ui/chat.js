@@ -98,7 +98,7 @@ export function createChatView(opts) {
   tools.append(ctx, h('span', 'ytx-chat-spacer'), createPicker({
     isLive: live,
     onChange: (s) => { lastSettings = s; if (!cur()?.messages.length) refresh(); else paintCtx(); },
-  }), webBtn, sendBtn);
+  }), ...(opts.onFrame ? [camBtn] : []), webBtn, sendBtn);
   const modelId = () => (lastSettings ? llm.parseModel(lastSettings.model).id : '');
   // Transcript past the model's cap → left out of the prompt, model searches it with llm.transcriptTools.
   const retrieval = (id) => llm.promptCoverage(segments(), llm.contextCap(id)) < 1;
