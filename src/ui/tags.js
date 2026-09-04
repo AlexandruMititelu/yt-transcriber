@@ -87,10 +87,11 @@ export function createTagEditor({ get, set, suggest, compact = false, chips: sho
     known.textContent = '';
     const q = normTag(input.value);
     const have = new Set(get());
-    const all = [...new Set([...(suggest?.() ?? []), ...get()])].filter((t) => !lk.includes(t)).sort();
-    for (const t of all.filter((t) => !q || t.includes(q))) known.append(tagChip(t, { on: have.has(t), onClick: toggle }));
-    if (q && validTag(q) && !all.includes(q) && !lk.includes(q)) known.append(newChip(q));
-    if (!known.childElementCount) known.append(h('div', 'ytx-tags-empty', q ? 'Keep typing…' : 'No tags yet. Type one.'));
+    // Below the input: only tags not yet on this item (the selected ones sit above with ✕).
+    const all = [...new Set(suggest?.() ?? [])].filter((t) => !lk.includes(t)).sort();
+    for (const t of all.filter((t) => !have.has(t) && (!q || t.includes(q)))) known.append(tagChip(t, { onClick: toggle }));
+    if (q && validTag(q) && !all.includes(q) && !lk.includes(q) && !have.has(q)) known.append(newChip(q));
+    if (!known.childElementCount) known.append(h('div', 'ytx-tags-empty', q ? (have.has(q) ? 'Already added.' : 'Keep typing…') : (all.length ? 'All known tags are on it.' : 'No tags yet. Type one.')));
   }
   function newChip(q) {
     const c = tagChip(q, { onClick: () => add() });
