@@ -279,59 +279,39 @@ function videoCard(v) {
     el('a', { class: 'card-link', href: `#/video/${v.videoId}` },
       el('div', { class: 'card-title' }, v.title || v.videoId),
       el('div', { class: 'card-meta' }, [v.channel, relTime(v.updatedAt)].filter(Boolean).join(' · '))),
-    cardTags(v, wrap),
+    videoTagEditor(v).root,
     el('div', { class: 'card-badges' },
       `${v.counts.segments} segments · ${v.counts.messages} messages · ${v.counts.cards} notes`),
     el('div', { class: 'card-actions' }, pin, del));
   return wrap;
 }
 
-// Tag row on a card: chips + a "+" that opens the tag editor in a popover (no page repaint, no flicker).
-let openTagPop = null;
-function cardTags(v, wrap) {
-  const row = el('div', { class: 'ytx-tag-row card-tags' });
-  const add = el('button', { class: 'card-tag-add', type: 'button', title: 'Add tag', 'aria-label': 'Add tag' }, '+');
-  const paint = () => row.replaceChildren(...(v.tags ?? []).map((t) => tagChip(t)), add);
-  add.onclick = async (e) => {
-    e.stopPropagation();
-    if (openTagPop?.wrap === wrap) return openTagPop.close();
-    openTagPop?.close();
-    const all = [...new Set((await db.listVideos()).flatMap((x) => x.tags ?? []))].sort();
-    const pop = el('div', { class: 'card-tagpop' });
-    const ed = createTagEditor({
-      get: () => v.tags ?? [],
-      set: async (tags) => {
-        v.tags = tags;
-        paint();
-        ed.refresh();
-        const video = await db.getVideo(v.videoId);
-        if (!video) return;
-        video.tags = tags;
-        video.kept = true;
-        await db.saveVideo(video);
-        db.getSettings().then((st) => vault.syncTags(st, video)).catch((err) => toast(`Knowledge base: ${err.message}`));
-        tagCounts = new Map();
-        for (const x of await db.listVideos()) for (const t of x.tags ?? []) tagCounts.set(t, (tagCounts.get(t) || 0) + 1);
-      },
-      suggest: () => all,
-    });
-    pop.append(ed.root);
-    const onDown = (ev) => { if (!pop.contains(ev.target) && ev.target !== add) close(); };
-    const onKey = (ev) => { if (ev.key === 'Escape') { ev.stopPropagation(); close(); } };
-    function close() {
-      pop.remove();
-      window.removeEventListener('pointerdown', onDown, true);
-      window.removeEventListener('keydown', onKey, true);
-      if (openTagPop?.wrap === wrap) openTagPop = null;
-    }
-    wrap.append(pop);
-    window.addEventListener('pointerdown', onDown, true);
-    window.addEventListener('keydown', onKey, true);
-    openTagPop = { wrap, close };
-    ed.focus();
-  };
-  paint();
-  return row;
+// Tag row on a card (and the detail head): chips + "+" → compact editor popover; saves in place, no repaint.
+let allTagsCache = null;
+const allTags = async () => (allTagsCache ??= [...new Set((await db.listVideos()).flatMap((x) => x.tags ?? []))].sort());
+function videoTagEditor(v) {
+  const ed = createTagEditor({
+    compact: true,
+    get: () => v.tags ?? [],
+    set: async (tags) => {
+      v.tags = tags;
+      ed.refresh();
+      allTagsCache = null;
+      const video = v.chats ? v : await db.getVideo(v.videoId); // a full record (detail) or a listVideos row (card)
+      if (!video) return;
+      video.tags = tags;
+      video.kept = true;
+      await db.saveVideo(video);
+      db.getSettings().then((st) => vault.syncTags(st, video)).catch((err) => toast(`Knowledge base: ${err.message}`));
+      tagCounts = new Map();
+      for (const x of await db.listVideos()) for (const t of x.tags ?? []) tagCounts.set(t, (tagCounts.get(t) || 0) + 1);
+      allTags().then(() => ed.refresh()).catch(() => {});
+    },
+    suggest: () => allTagsCache ?? [],
+  });
+  allTags().then(() => ed.refresh()).catch(() => {});
+  ed.root.classList.add('card-tags');
+  return ed;
 }
 
 // ---------- video detail ----------
@@ -357,19 +337,7 @@ async function renderDetail(videoId) {
     toast('Changed in Obsidian: reloaded from disk');
   }).catch(warn);
 
-  let allTags = [];
-  db.listVideos().then((vs) => { allTags = [...new Set(vs.flatMap((v) => v.tags ?? []))].sort(); tagEditor.refresh(); }).catch(() => {});
-  const tagEditor = createTagEditor({
-    get: () => video.tags ?? [],
-    set: async (tags) => {
-      video.tags = tags;
-      video.kept = true;
-      tagEditor.refresh();
-      await db.saveVideo(video);
-      disk((s) => vault.syncTags(s, video));
-    },
-    suggest: () => allTags,
-  });
+  const tagEditor = videoTagEditor(video);
   const pinBtn = el('button', { class: 'icon-btn pin' }, pinIcon());
   const paintPin = () => {
     pinBtn.classList.toggle('on', !!video.pinned);

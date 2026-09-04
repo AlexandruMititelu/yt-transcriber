@@ -14,7 +14,7 @@ export const HELP = {
 };
 
 import { extractTags, chipTags } from '../lib/tags.js';
-import { tagChip } from './tags.js';
+import { tagChip, createTagEditor } from './tags.js';
 
 function h(tag, cls, text) {
   const n = document.createElement(tag);
@@ -117,6 +117,22 @@ export function createNotesView(opts) {
     if (newestFirst) cards = [...cards].reverse();
     return cards;
   };
+  // Per-note tags = inline #tags in the text. The footer "+" adds ` #tag` at the end / strips a removed one.
+  const noteTagEditor = (card, after) => createTagEditor({
+    compact: true,
+    chips: false,
+    get: () => extractTags(card.text),
+    set: (tags) => {
+      const cur = extractTags(card.text);
+      let text = card.text || '';
+      for (const t of cur.filter((t) => !tags.includes(t))) text = text.replace(new RegExp(`(^|\\s)#${t.replace(/[/-]/g, '\\$&')}(?![\\p{L}\\p{N}_/-])`, 'gu'), '$1').replace(/[ \t]+$/gm, '');
+      for (const t of tags.filter((t) => !cur.includes(t))) text = `${text.replace(/\s+$/, '')}${text.trim() ? ' ' : ''}#${t}`;
+      card.text = text;
+      onChange(card);
+      after();
+    },
+    suggest: () => [...new Set([...(video.tags ?? []), ...video.notes.cards.flatMap((c) => extractTags(c.text))])].sort(),
+  });
   const markSelected = () => cardEls.forEach((el, id) => el.classList.toggle('is-selected', id === selId));
   // Select a card by id (null clears). Re-applies the highlight, scrolls it into view and focuses it
   // (unless focus is already inside it, e.g. its own textarea was just clicked into).
@@ -366,7 +382,7 @@ export function createNotesView(opts) {
     dot.addEventListener('click', (e) => { e.stopPropagation(); swatches.classList.toggle('is-open'); });
     const colorWrap = h('span', 'ytx-notes-color');
     colorWrap.append(dot, swatches);
-    foot.append(timeSlot(card), colorWrap, delBtn(card, el, () => el.replaceWith(quickCard(card))));
+    foot.append(timeSlot(card), colorWrap, noteTagEditor(card, () => el.replaceWith(quickCard(card))).root, delBtn(card, el, () => el.replaceWith(quickCard(card))));
     el.append(box, foot);
     return el;
   }
@@ -377,7 +393,7 @@ export function createNotesView(opts) {
     el.title = 'Open in editor';
     el.append(h('div', 'ytx-nt-title', card.title || 'Untitled'), h('div', 'ytx-nt-excerpt', excerpt(card.text) || 'Empty note'));
     const foot = h('div', 'ytx-notes-foot');
-    foot.append(timeSlot(card), h('span', 'ytx-notes-spacer'), delBtn(card, el, () => el.replaceWith(noteCard(card))));
+    foot.append(timeSlot(card), h('span', 'ytx-notes-spacer'), noteTagEditor(card, () => el.replaceWith(noteCard(card))).root, delBtn(card, el, () => el.replaceWith(noteCard(card))));
     el.appendChild(foot);
     el.addEventListener('click', (e) => {
       if (e.target.closest('button, a, .ytx-confirm')) return;
@@ -516,7 +532,7 @@ export function createNotesView(opts) {
       modeBtn('edit', '</>', 'Edit mode: write raw markdown'),
       modeBtn('view', eyeIcon(), 'View mode: write directly into the rendered note'),
     );
-    foot.append(timeSlot(card), h('span', 'ytx-notes-spacer'), ...(opts.onFrame ? [frameBtn(card)] : []), modes, delBtn(card, ed, () => refresh()));
+    foot.append(timeSlot(card), h('span', 'ytx-notes-spacer'), noteTagEditor(card, () => refresh()).root, ...(opts.onFrame ? [frameBtn(card)] : []), modes, delBtn(card, ed, () => refresh()));
     ed.append(bar, body.box, foot);
     root.appendChild(ed);
     if (!card.title && !card.text) title.focus();

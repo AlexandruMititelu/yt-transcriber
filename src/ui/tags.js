@@ -1,7 +1,8 @@
-// Tag editor: selected tags as chips with ✕, an input that both filters the known tags and creates new
-// ones (Enter / comma), and the known tags as toggle chips. Spaces are refused (Obsidian tags have none).
-// Shared by the panel header popover and the library detail. Classes ytx-tags-*; colors from host tokens.
-// createTagEditor({ get: () => string[], set: (string[]) => void, suggest?: () => string[] }) → { root, refresh, focus }
+// Tag editor. Full form (panel popover): selected chips with ✕, an input that filters the known tags and
+// creates new ones (Enter / comma), the known tags as toggle chips. Compact form (library cards + detail,
+// note footers): a chip row + a "+" that expands into that same input + list in a small popover.
+// Spaces are refused (Obsidian tags have none). Classes ytx-tags-*; colors from host tokens.
+// createTagEditor({ get, set, suggest?, compact?, chips? }) → { root, refresh, focus, close }
 import { normTag, validTag, tagHue } from '../lib/tags.js';
 
 function h(tag, cls, text) {
@@ -28,8 +29,8 @@ export function tagChip(tag, { on = false, count, onClick, x } = {}) {
   return chip;
 }
 
-export function createTagEditor({ get, set, suggest }) {
-  const root = h('div', 'ytx-tags');
+export function createTagEditor({ get, set, suggest, compact = false, chips: showChips = true }) {
+  const root = h('div', compact ? 'ytx-tags ytx-tags-inline' : 'ytx-tags');
   const chips = h('div', 'ytx-tags-chips');
   const input = h('input', 'ytx-tags-input');
   input.type = 'text';
@@ -37,7 +38,39 @@ export function createTagEditor({ get, set, suggest }) {
   input.setAttribute('aria-label', 'Find or add tag');
   input.autocomplete = 'off';
   const known = h('div', 'ytx-tags-known');
-  root.append(chips, input, known);
+  const panel = h('div', compact ? 'ytx-tags-pop' : 'ytx-tags-panel');
+  panel.append(input, known);
+  let plus = null;
+  if (compact) {
+    plus = h('button', 'ytx-tags-plus', '+');
+    plus.type = 'button';
+    plus.title = 'Add tag';
+    plus.setAttribute('aria-label', 'Add tag');
+    plus.setAttribute('aria-expanded', 'false');
+    plus.addEventListener('click', (e) => { e.stopPropagation(); e.preventDefault(); panel.classList.contains('is-open') ? close() : open(); });
+    root.append(...(showChips ? [chips] : []), plus, panel);
+  } else {
+    root.append(chips, panel);
+  }
+
+  const onDown = (e) => { if (!root.contains(e.target)) close(); };
+  const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+  function open() {
+    input.value = '';
+    refresh();
+    panel.classList.add('is-open');
+    plus?.setAttribute('aria-expanded', 'true');
+    window.addEventListener('pointerdown', onDown, true);
+    window.addEventListener('keydown', onKey, true);
+    input.focus();
+  }
+  function close() {
+    if (!compact) return;
+    panel.classList.remove('is-open');
+    plus?.setAttribute('aria-expanded', 'false');
+    window.removeEventListener('pointerdown', onDown, true);
+    window.removeEventListener('keydown', onKey, true);
+  }
 
   const toggle = (t) => set(get().includes(t) ? get().filter((v) => v !== t) : [...get(), t]);
   function refresh() {
@@ -49,6 +82,7 @@ export function createTagEditor({ get, set, suggest }) {
     const all = [...new Set([...(suggest?.() ?? []), ...get()])].sort();
     for (const t of all.filter((t) => !q || t.includes(q))) known.append(tagChip(t, { on: have.has(t), onClick: toggle }));
     if (q && validTag(q) && !all.includes(q)) known.append(newChip(q));
+    if (!known.childElementCount) known.append(h('div', 'ytx-tags-empty', q ? 'Keep typing…' : 'No tags yet. Type one.'));
   }
   function newChip(q) {
     const c = tagChip(q, { onClick: () => add() });
@@ -78,5 +112,5 @@ export function createTagEditor({ get, set, suggest }) {
   });
   input.addEventListener('input', () => { if (/\s/.test(input.value)) { input.value = input.value.replace(/\s+/g, ''); flag(); } refresh(); });
   refresh();
-  return { root, refresh, focus: () => input.focus() };
+  return { root, refresh, focus: () => input.focus(), close };
 }
