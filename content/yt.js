@@ -239,7 +239,7 @@
     });
     document.addEventListener('click', (e) => { if (!tagWrap.contains(e.target)) tagPop.classList.remove('is-open'); }, true);
     paintTags();
-    header.append(addBtn, refetchBtn, tagWrap, pinBtn, libraryBtn);
+    header.append(addBtn, tagWrap, refetchBtn, pinBtn, libraryBtn);
     panel.appendChild(header);
 
     const tabsBar = h('div', 'ytx-tabs');
