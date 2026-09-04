@@ -27,8 +27,8 @@
 }
 
 .ytx-notes-btn.is-note {
-  background: rgba(52, 199, 89, 0.14);
-  color: #248a3d;
+  background: var(--green-soft, rgba(52, 199, 89, 0.14));
+  color: var(--green, #248a3d);
 }
 
 .ytx-notes-grid {
@@ -227,12 +227,6 @@
   overflow-y: auto;
 }
 
-/* library page has no #ytx-panel heading rules */
-.ytx-notes .ytx-md h1 { font-size: 18px; margin: 10px 0 6px; }
-.ytx-notes .ytx-md h2 { font-size: 15.5px; margin: 10px 0 6px; }
-.ytx-notes .ytx-md h3 { font-size: 14px; margin: 10px 0 6px; }
-.ytx-notes .ytx-md h4, .ytx-notes .ytx-md h5, .ytx-notes .ytx-md h6 { font-size: 13px; margin: 10px 0 6px; color: var(--muted); }
-
 /* shared */
 .ytx-notes-ta {
   display: block;
@@ -253,9 +247,11 @@
   margin-top: 4px;
   color: var(--muted);
   font-family: var(--font-ui);
-  font-size: 10.5px;
+  font-size: 12px;
   text-align: right;
 }
+.ytx-notes-count.is-near { color: #ff9f0a; }
+.ytx-notes-count.is-full { color: #ff453a; font-weight: 600; }
 
 .ytx-notes-placeholder {
   color: var(--muted);
@@ -363,6 +359,36 @@
   background: rgba(255, 69, 58, 0.12);
 }
 
-/* rendered markdown inside cards (panel has .ytx-md rules; the library gets these) */
-.ytx-notes .ytx-md > :first-child { margin-top: 0; }
-.ytx-notes .ytx-md > :last-child { margin-bottom: 0; }
+
+
+/* filter + sort (shown once the list is long enough to need them) */
+.ytx-notes-search {
+  width: 130px; height: 28px; padding: 0 10px; border: 1px solid var(--border); border-radius: 999px;
+  background: var(--surface-2); color: var(--text); font: inherit; font-size: 12px;
+}
+.ytx-notes-sort {
+  height: 28px; padding: 0 10px; border: 1px solid var(--border); border-radius: 999px; background: none;
+  color: var(--muted); font: inherit; font-size: 11.5px; font-weight: 600; cursor: pointer;
+}
+.ytx-notes-sort:hover { color: var(--text); border-color: var(--muted); }
+
+.ytx-notes-empty { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 6px; padding: 18px 12px; color: var(--muted); font-size: 12px; text-align: center; }
+.ytx-notes-empty-title { font-size: 13px; font-weight: 600; color: var(--text); }
+
+/* color popover */
+.ytx-notes-color { position: relative; display: inline-flex; margin-left: auto; }
+.ytx-notes-color .ytx-notes-dot { margin-left: 0; }
+.ytx-notes-swatches {
+  display: none; position: absolute; right: 0; bottom: calc(100% + 6px); z-index: 5; gap: 6px; padding: 6px;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--surface); box-shadow: var(--shadow);
+}
+.ytx-notes-swatches.is-open { display: flex; }
+.ytx-notes-swatch { width: 18px; height: 18px; padding: 0; border: 1px solid var(--border); border-radius: 50%; cursor: pointer; background: var(--keep-0, var(--surface)); }
+.ytx-notes-swatch.ytx-c1 { background: var(--keep-1); }
+.ytx-notes-swatch.ytx-c2 { background: var(--keep-2); }
+.ytx-notes-swatch.ytx-c3 { background: var(--keep-3); }
+.ytx-notes-swatch.ytx-c4 { background: var(--keep-4); }
+.ytx-notes-swatch.is-on { box-shadow: 0 0 0 2px var(--accent); }
+
+/* delete confirm sits on top of the card instead of replacing it */
+.ytx-notes-overlay { position: absolute; inset: 0; z-index: 4; background: var(--surface); border-radius: inherit; }

@@ -2,14 +2,16 @@ import { fmtTime } from '../src/lib/format.js';
 import * as db from '../src/lib/db.js';
 import * as llm from '../src/lib/llm.js';
 import * as vault from '../src/lib/vault.js';
-import { createPicker } from '../src/ui/picker.js';
-import { createChatBar, confirmBox } from '../src/ui/chatbar.js';
+import { confirmBox } from '../src/ui/chatbar.js';
 import { createNotesView } from '../src/ui/notes.js';
-import { pinIcon, globeIcon } from '../src/ui/icons.js';
-import { HOTKEYS, hotkeyId, keysFor } from '../config/hotkeys.js';
+import { createChatView } from '../src/ui/chat.js';
+import { renderMarkdown, setDark } from '../src/ui/markdown.js';
+import { createToaster } from '../src/ui/toast.js';
+import { pinIcon } from '../src/ui/icons.js';
+import { HOTKEYS, hotkeyId } from '../config/hotkeys.js';
 
 const $app = document.getElementById('app');
-const TS_RE = /(?:\[(?:\d+:)?\d{1,2}:\d{2}\]|@(?:\d+:)?\d{1,2}:\d{2})/g;
+const toast = createToaster(document.body, { fixed: true });
 
 // ---------- helpers ----------
 
@@ -31,19 +33,6 @@ function debounce(fn, ms) {
   return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
 }
 
-let toastTimer;
-function toast(content) {
-  const t = document.getElementById('toast');
-  t.replaceChildren(content);
-  t.hidden = false;
-  t.classList.remove('fade');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => {
-    t.classList.add('fade');
-    setTimeout(() => { t.hidden = true; }, 300);
-  }, 1600);
-}
-
 function relTime(ms) {
   const mins = Math.floor((Date.now() - ms) / 60000);
   if (mins < 1) return 'just now';
@@ -59,66 +48,7 @@ function atTimeUrl(url, sec) {
   return `${url}&t=${Math.floor(sec)}s`;
 }
 
-function tsToSeconds(ts) {
-  return ts.replace(/[[\]]/g, '').split(':').map(Number).reduce((a, n) => a * 60 + n, 0);
-}
-
-// Turn [12:34] in assistant text nodes into links to the video at that time.
-function linkTimestamps(root, url) {
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-  const hits = [];
-  while (walker.nextNode()) {
-    const node = walker.currentNode;
-    if (node.parentElement?.closest('a, code, pre')) continue;
-    if (node.nodeValue.match(TS_RE)) hits.push(node);
-  }
-  for (const node of hits) {
-    const frag = document.createDocumentFragment();
-    let last = 0;
-    for (const m of node.nodeValue.matchAll(TS_RE)) {
-      frag.append(node.nodeValue.slice(last, m.index));
-      const stamp = m[0].replace(/^[[@]|\]$/g, '');
-      frag.append(el('a', {
-        class: 'chip time', target: '_blank',
-        href: atTimeUrl(url, tsToSeconds(stamp)),
-      }, stamp));
-      last = m.index + m[0].length;
-    }
-    frag.append(node.nodeValue.slice(last));
-    node.replaceWith(frag);
-  }
-}
-
-let mermaidReady;
-let mermaidSeq = 0;
-function ensureMermaid() {
-  mermaidReady ??= import('../vendor/mermaid.min.js').then(() => {
-    globalThis.mermaid.initialize({
-      startOnLoad: false,
-      securityLevel: 'strict',
-      theme: matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'neutral',
-    });
-  }).catch((e) => { mermaidReady = undefined; throw e; }); // don't cache a transient load failure
-  return mermaidReady;
-}
-
-async function renderMermaidIn(root) {
-  const blocks = root.querySelectorAll('pre code.language-mermaid');
-  if (!blocks.length) return;
-  try {
-    await ensureMermaid();
-  } catch {
-    return; // mermaid failed to load: leave fenced blocks as-is (call sites are fire-and-forget)
-  }
-  for (const code of blocks) {
-    try {
-      const { svg } = await globalThis.mermaid.render(`ytx-mmd-${++mermaidSeq}`, code.textContent);
-      const box = el('div', { class: 'mermaid-box' });
-      box.innerHTML = svg;
-      code.closest('pre').replaceWith(box);
-    } catch { /* leave the fenced block as-is */ }
-  }
-}
+const renderMdFor = (video) => (text) => renderMarkdown(text, { timeHref: (sec) => atTimeUrl(video.url, sec) });
 
 // ---------- library ----------
 
@@ -261,7 +191,7 @@ async function renderDetail(videoId) {
     for (const b of seg.children) b.classList.toggle('active', b.dataset.tab === name);
     pane.replaceChildren(built[name] ??= panes[name](video, disk));
     // scrollHeight is 0 while detached, so renderMsgs' scroll is a no-op — re-scroll on reveal
-    const list = pane.querySelector('.chat-list');
+    const list = pane.querySelector('.ytx-chat-list');
     if (list) list.scrollTop = list.scrollHeight;
   }
   seg.onclick = (e) => {
@@ -325,187 +255,19 @@ function transcriptPane(video) {
 }
 
 function chatPane(video, disk) {
-  const list = el('div', { class: 'chat-list' });
-  const input = el('textarea', {
-    class: 'composer-input mono', rows: 2,
-    placeholder: 'Ask about this video… (Enter to send, Shift+Enter for newline)',
+  const view = createChatView({
+    video,
+    save: () => db.saveVideo(video),
+    disk,
+    renderMd: renderMdFor(video),
+    toast,
+    segments: () => video.transcript?.grouped ?? [],
+    settingsAction: () => el('a', { href: '#/settings' }, 'Open Settings'),
   });
-  const sendBtn = el('button', { class: 'btn primary' }, 'Send');
-  let busy = false;
-  let gen = 0; // bumped by cancel; a reply for an older gen is dropped
-  let cancel = null;
-
-  const picker = createPicker();
-  const cur = () => video.chats.find((c) => c.id === video.activeChatId) ?? null;
-  function ensureChat() {
-    let c = cur();
-    if (!c) { c = db.newChat(); video.chats.push(c); video.activeChatId = c.id; }
-    return c;
-  }
-  function switchTo(id) {
-    if (cancel) cancel();
-    video.chats = video.chats.filter((c) => c.messages.length || c.id === id); // drop the empty chat we leave
-    video.activeChatId = id;
-    db.saveVideo(video);
-    renderMsgs();
-  }
-  const bar = createChatBar({
-    chats: () => video.chats,
-    activeId: () => video.activeChatId,
-    onSelect: switchTo,
-    onNew: () => {
-      if (cur() && !cur().messages.length) return;
-      const c = db.newChat();
-      video.chats.push(c);
-      switchTo(c.id);
-      input.focus();
-    },
-    onRename: (title) => {
-      const c = cur();
-      if (!c) return;
-      c.title = title;
-      c.updatedAt = Date.now();
-      db.saveVideo(video);
-      disk((s) => vault.syncChat(s, video, c));
-    },
-    onDelete: () => {
-      const c = cur();
-      if (!c) return;
-      list.replaceChildren(confirmBox({
-        text: `Delete "${c.title}"? This removes it from the knowledge base too.`,
-        onCancel: renderMsgs,
-        onConfirm: () => {
-          if (cancel) cancel();
-          video.chats = video.chats.filter((x) => x.id !== c.id);
-          video.activeChatId = video.chats.at(-1)?.id ?? null;
-          db.saveVideo(video);
-          disk((s) => vault.removeChat(s, video, c));
-          renderMsgs();
-        },
-      }));
-    },
-  });
-
-  function bubble(m) {
-    const b = el('div', { class: `msg ${m.role}` });
-    if (m.role === 'assistant') {
-      // FORBID_TAGS img: a prompt-injected transcript could make the LLM emit an image URL that exfiltrates chat content on fetch
-      b.innerHTML = DOMPurify.sanitize(marked.parse(m.content), { FORBID_TAGS: ['img'] });
-      for (const a of b.querySelectorAll('a[href]')) { a.target = '_blank'; a.rel = 'noreferrer noopener'; }
-      linkTimestamps(b, video.url);
-      renderMermaidIn(b);
-      const c = el('button', { class: 'copy-btn', title: 'Copy message' }, '⧉');
-      c.addEventListener('click', () => {
-        navigator.clipboard.writeText(m.content).then(() => {
-          c.textContent = '✓';
-          setTimeout(() => { c.textContent = '⧉'; }, 1200);
-        }).catch(() => {});
-      });
-      b.appendChild(c);
-    } else {
-      b.textContent = m.content;
-    }
-    return b;
-  }
-
-  function renderMsgs() {
-    bar.refresh();
-    list.replaceChildren(...(cur()?.messages ?? []).map(bubble));
-    list.scrollTop = list.scrollHeight;
-  }
-
-  function autoTitle(chat, settings) {
-    if (chat.title !== db.NEW_CHAT_TITLE || chat.messages.length !== 2) return;
-    llm.titleChat({ settings, messages: chat.messages }).then((t) => {
-      if (!t || chat.title !== db.NEW_CHAT_TITLE) return;
-      chat.title = t;
-      chat.updatedAt = Date.now();
-      db.saveVideo(video);
-      bar.refresh();
-      disk((s) => vault.syncChat(s, video, chat));
-    }).catch((e) => console.warn('title', e));
-  }
-
-  async function send() {
-    const text = input.value.trim();
-    if (!text || busy) return;
-    busy = true;
-    const myGen = ++gen;
-    input.value = '';
-    input.disabled = sendBtn.disabled = true;
-    const chat = ensureChat();
-    chat.messages.push({ role: 'user', content: text, ts: Date.now() });
-    chat.updatedAt = Date.now();
-    // catch: a failed write must not skip the try/finally below and wedge `busy`
-    await db.saveVideo(video).catch((e) => console.warn('save failed', e));
-    renderMsgs();
-    const pending = el('div', { class: 'msg assistant pending' }, 'Thinking…');
-    list.append(pending);
-    list.scrollTop = list.scrollHeight;
-    const done = () => { busy = false; input.disabled = sendBtn.disabled = false; input.focus(); };
-    cancel = () => { gen++; pending.remove(); done(); cancel = null; };
-    try {
-      const settings = await db.getSettings();
-      if (settings.webSearch) pending.textContent = 'Thinking… (web search on)';
-      const reply = await llm.chat({
-        settings,
-        system: llm.buildSystemPrompt({
-          title: video.title,
-          channel: video.channel,
-          segments: video.transcript?.grouped ?? [],
-          aboutMe: settings.aboutMe,
-          tone: settings.tone,
-          webSearch: !!settings.webSearch,
-        }),
-        messages: chat.messages.map(({ role, content }) => ({ role, content })),
-      });
-      if (myGen !== gen) return;
-      chat.messages.push({ role: 'assistant', content: reply, ts: Date.now() });
-      chat.updatedAt = Date.now();
-      await db.saveVideo(video);
-      disk((s) => vault.syncChat(s, video, chat));
-      autoTitle(chat, settings);
-      if (cur() === chat) renderMsgs();
-    } catch (err) {
-      if (myGen !== gen) return;
-      pending.remove();
-      list.append(el('div', { class: 'msg system' },
-        err.message === 'no-api-key'
-          ? el('span', {}, 'Add your API key in ', el('a', { href: '#/settings' }, 'Settings'), '.')
-          : `Error: ${err.message}`));
-      list.scrollTop = list.scrollHeight;
-    } finally {
-      if (myGen === gen) { cancel = null; done(); }
-    }
-  }
-
-  input.onkeydown = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      send();
-    }
-  };
-  sendBtn.onclick = send;
-  const webBtn = el('button', { class: 'web-btn' }, globeIcon());
-  const paintWeb = (on) => {
-    webBtn.classList.toggle('on', !!on);
-    webBtn.title = (on ? 'Web search on' : 'Web search off') + ` (${keysFor('webSearch')})`;
-  };
-  db.getSettings().then((s) => paintWeb(s.webSearch));
-  const toggleWeb = async () => {
-    const s = await db.getSettings();
-    await db.saveSettings({ webSearch: !s.webSearch });
-    paintWeb(!s.webSearch);
-    toast(!s.webSearch ? 'Web search on' : 'Web search off');
-  };
-  webBtn.onclick = toggleWeb;
-  renderMsgs();
-  const root = el('div', { class: 'chat' }, bar.root, list,
-    el('div', { class: 'composer' },
-      el('div', { class: 'input-pill' }, input,
-        el('div', { class: 'tool-row' }, el('span', { class: 'spacer' }), picker, webBtn, sendBtn))));
-  root.__toggleWeb = toggleWeb;
-  root.__cancel = () => { if (cancel) cancel(); };
+  const root = el('div', { class: 'chat' }, view.root);
+  root.__toggleWeb = view.toggleWeb;
+  root.__cancel = view.cancel;
+  root.__focus = view.focus;
   return root;
 }
 
@@ -520,13 +282,7 @@ function notesPane(video, disk) {
   const view = createNotesView({
     video,
     fmtTime,
-    renderMd: (text) => {
-      const box = el('div', { class: 'ytx-md' });
-      // FORBID_TAGS img: same reasoning as chat bubbles
-      box.innerHTML = DOMPurify.sanitize(marked.parse(text), { FORBID_TAGS: ['img'] });
-      linkTimestamps(box, video.url);
-      return box;
-    },
+    renderMd: renderMdFor(video),
     timeHref: (sec) => atTimeUrl(video.url, sec),
     onChange: (card) => { dirty.add(card); saveSoon(); },
     onDelete: (card) => { dirty.delete(card); db.saveVideo(video); disk((s) => vault.removeNote(s, video, card)); },

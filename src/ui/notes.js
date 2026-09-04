@@ -5,6 +5,7 @@
 import { confirmBox } from './chatbar.js';
 import { trashIcon, chevronLeft, eyeIcon } from './icons.js';
 import { keysFor } from '../../config/hotkeys.js';
+import * as db from '../lib/db.js';
 
 export const QUICK_MAX = 280;
 export const HELP = {
@@ -20,7 +21,9 @@ function h(tag, cls, text) {
 }
 const autosize = (ta) => { ta.style.height = 'auto'; ta.style.height = `${ta.scrollHeight}px`; };
 
-let editorMode = 'edit'; // 'edit' (raw markdown) | 'view' (rendered, type directly) — session-scoped
+let editorMode = 'edit'; // 'edit' (raw markdown) | 'view' (rendered, type directly); persisted in settings.noteMode
+db.getSettings().then((s) => { if (s.noteMode === 'view' || s.noteMode === 'edit') editorMode = s.noteMode; }).catch(() => {});
+const COLOR_NAMES = ['None', 'Yellow', 'Green', 'Blue', 'Pink'];
 
 // Rendered HTML (contenteditable) → markdown. Covers what marked produces for everyday notes.
 // ponytail: headings, emphasis, code, lists, quotes, links, hr; anything exotic degrades to text.
@@ -104,13 +107,17 @@ export function createNotesView(opts) {
     const draw = () => {
       wrap.textContent = '';
       if (card.start == null) {
-        if (!opts.currentTime) return;
         const at = h('button', 'ytx-notes-chip-btn', '@ time');
         at.type = 'button';
-        at.title = 'Stamp current video time';
+        at.title = opts.currentTime ? 'Stamp current video time' : 'Set a timestamp (m:ss)';
         at.addEventListener('click', (e) => {
           e.stopPropagation();
-          card.start = opts.currentTime() ?? 0;
+          if (opts.currentTime) card.start = opts.currentTime() ?? 0;
+          else {
+            const v = window.prompt('Timestamp (m:ss or h:mm:ss)', '');
+            if (!v || !/^\d{1,3}(:[0-5]?\d){1,2}$/.test(v.trim())) return;
+            card.start = v.trim().split(':').reduce((a, p) => a * 60 + Number(p), 0);
+          }
           onChange(card);
           draw();
           if (onRerender) onRerender();
@@ -146,16 +153,22 @@ export function createNotesView(opts) {
     b.title = card.kind === 'note' ? 'Delete note' : 'Delete quick note';
     b.addEventListener('click', (e) => {
       e.stopPropagation();
-      host.replaceChildren(confirmBox({
+      // Overlay on the card (content stays visible behind it) rather than replacing it.
+      const box = confirmBox({
         text: card.kind === 'note' ? `Delete "${card.title || 'Untitled'}"?` : 'Delete this quick note?',
-        onCancel: restore,
+        onCancel: () => box.remove(),
         onConfirm: () => {
+          const idx = video.notes.cards.indexOf(card);
           video.notes.cards = video.notes.cards.filter((c) => c.id !== card.id);
           if (openId === card.id) openId = null;
           onDelete(card);
           refresh();
+          if (opts.onUndo) opts.onUndo(card, idx);
         },
-      }));
+      });
+      box.classList.add('ytx-notes-overlay');
+      host.style.position = 'relative';
+      host.append(box);
     });
     return b;
   }
@@ -193,7 +206,14 @@ export function createNotesView(opts) {
       ta.value = card.text;
       if (max) ta.maxLength = max;
       const counter = max ? h('div', 'ytx-notes-count') : null;
-      const tick = () => { if (counter) counter.textContent = `${ta.value.length}/${max}`; if (!always) autosize(ta); };
+      const tick = () => {
+        if (counter) {
+          counter.textContent = `${ta.value.length}/${max}`;
+          counter.classList.toggle('is-near', ta.value.length >= max * 0.9 && ta.value.length < max);
+          counter.classList.toggle('is-full', ta.value.length >= max);
+        }
+        if (!always) autosize(ta);
+      };
       ta.addEventListener('input', () => {
         const before = ta.value;
         const fixed = normalizeStamps(before, opts.currentTime ? opts.currentTime() : null);
@@ -262,13 +282,27 @@ export function createNotesView(opts) {
     const foot = h('div', 'ytx-notes-foot');
     const dot = h('button', 'ytx-notes-dot');
     dot.type = 'button';
-    dot.title = 'Cycle color';
-    dot.addEventListener('click', () => {
-      card.color = ((card.color || 0) + 1) % 5;
-      el.className = `ytx-qn ytx-c${card.color}`;
-      onChange(card);
-    });
-    foot.append(timeSlot(card), dot, delBtn(card, el, () => el.replaceWith(quickCard(card))));
+    dot.title = 'Color';
+    dot.setAttribute('aria-label', 'Card color');
+    const swatches = h('div', 'ytx-notes-swatches');
+    for (let i = 0; i < 5; i++) {
+      const sw = h('button', `ytx-notes-swatch ytx-c${i}${(card.color || 0) === i ? ' is-on' : ''}`);
+      sw.type = 'button';
+      sw.title = COLOR_NAMES[i];
+      sw.addEventListener('click', (e) => {
+        e.stopPropagation();
+        card.color = i;
+        el.className = `ytx-qn ytx-c${i}`;
+        swatches.querySelectorAll('.ytx-notes-swatch').forEach((x, j) => x.classList.toggle('is-on', j === i));
+        swatches.classList.remove('is-open');
+        onChange(card);
+      });
+      swatches.append(sw);
+    }
+    dot.addEventListener('click', (e) => { e.stopPropagation(); swatches.classList.toggle('is-open'); });
+    const colorWrap = h('span', 'ytx-notes-color');
+    colorWrap.append(dot, swatches);
+    foot.append(timeSlot(card), colorWrap, delBtn(card, el, () => el.replaceWith(quickCard(card))));
     el.append(box, foot);
     return el;
   }
@@ -288,6 +322,8 @@ export function createNotesView(opts) {
     return el;
   }
 
+  let query = '';
+  let newestFirst = false;
   function renderList() {
     root.textContent = '';
     const bar = h('div', 'ytx-notes-bar');
@@ -312,8 +348,36 @@ export function createNotesView(opts) {
       refresh();
     });
     bar.append(addQuick, addNote);
+    const all = video.notes.cards;
+    if (all.length > 3) {
+      const search = h('input', 'ytx-notes-search');
+      search.type = 'search';
+      search.placeholder = 'Filter…';
+      search.setAttribute('aria-label', 'Filter notes');
+      search.value = query;
+      search.addEventListener('input', () => { query = search.value; paint(); });
+      search.addEventListener('keydown', (e) => { if (!e.altKey) e.stopPropagation(); });
+      const sort = h('button', 'ytx-notes-sort', newestFirst ? 'Newest' : 'Oldest');
+      sort.type = 'button';
+      sort.title = 'Sort order';
+      sort.addEventListener('click', () => { newestFirst = !newestFirst; sort.textContent = newestFirst ? 'Newest' : 'Oldest'; paint(); });
+      bar.append(h('span', 'ytx-notes-spacer'), search, sort);
+    }
     const grid = h('div', 'ytx-notes-grid');
-    for (const card of video.notes.cards) grid.appendChild(card.kind === 'note' ? noteCard(card) : quickCard(card));
+    const paint = () => {
+      grid.textContent = '';
+      const q = query.trim().toLowerCase();
+      let cards = all.filter((c) => !q || `${c.title || ''}\n${c.text || ''}`.toLowerCase().includes(q));
+      if (newestFirst) cards = [...cards].reverse();
+      for (const card of cards) grid.appendChild(card.kind === 'note' ? noteCard(card) : quickCard(card));
+      if (!all.length) {
+        const empty = h('div', 'ytx-notes-empty');
+        empty.append(h('div', 'ytx-notes-empty-title', 'No notes yet'),
+          h('div', null, HELP.quick), h('div', null, HELP.note));
+        grid.append(empty);
+      } else if (!cards.length) grid.append(h('div', 'ytx-notes-empty', 'Nothing matches.'));
+    };
+    paint();
     root.append(bar, grid);
   }
 
@@ -372,6 +436,7 @@ export function createNotesView(opts) {
     if (mode !== editorMode) {
       flush();
       editorMode = mode;
+      db.saveSettings({ noteMode: mode }).catch(() => {});
       if (openId) refresh();
     }
     const body = root.querySelector('.ytx-ed-body');
@@ -384,6 +449,15 @@ export function createNotesView(opts) {
     if (ta) ta.blur();
   }
 
+  function addNote(kind = 'note') {
+    const c = newCard(kind);
+    video.notes.cards.push(c);
+    onChange(c);
+    if (kind === 'note') openId = c.id;
+    refresh();
+    if (kind === 'quick') root.querySelector('.ytx-qn:last-child .ytx-qn-body')?.click();
+  }
+
   refresh();
-  return { root, refresh, flush, setMode, isEditing: () => !!openId };
+  return { root, refresh, flush, setMode, addNote, isEditing: () => !!openId };
 }

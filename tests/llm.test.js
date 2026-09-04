@@ -19,7 +19,7 @@ test('buildRequest anthropic shape', () => {
   assert.equal(r.headers['anthropic-version'], '2023-06-01');
   assert.equal(r.body.model, 'claude-x');
   assert.equal(r.body.max_tokens, 99);
-  assert.equal(r.body.system, 'sys'); // system stays top-level
+  assert.deepEqual(r.body.system, [{ type: 'text', text: 'sys', cache_control: { type: 'ephemeral' } }]); // cached system block
   assert.deepEqual(r.body.messages, [{ role: 'user', content: 'hi' }]);
 });
 
@@ -113,7 +113,7 @@ test('chat POSTs via bus and parses the response', async () => {
     system: 'sys',
     messages: [{ role: 'user', content: 'q' }],
   });
-  assert.equal(out, 'answer');
+  assert.equal(out.text, 'answer');
   assert.equal(sent.length, 1);
   assert.equal(sent[0].type, 'http');
   assert.equal(sent[0].method, 'POST');
@@ -250,9 +250,44 @@ test('chat resumes pause_turn by re-sending the partial assistant turn, bounded'
     return { ok: true, data: { stop_reason: 'end_turn', content: [{ type: 'text', text: 'done' }] } };
   };
   const out = await llm.chat({ settings: { anthropicKey: 'k', model: 'anthropic:claude-sonnet-5', effort: 'off', webSearch: true }, system: 's', messages: [{ role: 'user', content: 'hi' }] });
-  assert.equal(out, 'done');
+  assert.equal(out.text, 'done');
   assert.equal(sent.length, 2);
   assert.equal(sent[1].body.messages.length, 2);
   assert.equal(sent[1].body.messages[1].role, 'assistant');
   assert.equal(sent[1].body.messages[1].content[0].type, 'server_tool_use');
+});
+
+test('assembleAnthropic rebuilds the non-streaming shape (text, citations, usage, stop_reason)', () => {
+  const got = [];
+  const json = llm.assembleAnthropic([
+    { type: 'message_start', message: { usage: { input_tokens: 100, cache_read_input_tokens: 80 } } },
+    { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } },
+    { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'Hel' } },
+    { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'lo' } },
+    { type: 'content_block_delta', index: 0, delta: { type: 'citations_delta', citation: { url: 'https://a.io', title: 'A' } } },
+    { type: 'message_delta', delta: { stop_reason: 'max_tokens' }, usage: { output_tokens: 7 } },
+  ], (t) => got.push(t));
+  assert.equal(got.join(''), 'Hello');
+  const r = llm.parseResult('anthropic', json);
+  assert.equal(r.text, 'Hello\n\nSources:\n- [A](https://a.io)\n\n*[Reply cut off: hit the length limit]*');
+  assert.deepEqual(r.usage, { in: 100, out: 7, cacheRead: 80 });
+  assert.equal(r.truncated, true);
+  const o = llm.parseResult('openai', llm.assembleOpenai([
+    { choices: [{ delta: { content: 'a' } }] }, { choices: [{ delta: { content: 'b' }, finish_reason: 'stop' }] }, { choices: [], usage: { prompt_tokens: 5, completion_tokens: 2 } },
+  ]));
+  assert.equal(o.text, 'ab');
+  assert.deepEqual(o.usage, { in: 5, out: 2, cacheRead: 0 });
+});
+
+test('fmtUsage shows tokens, and a $ estimate only for priced models', () => {
+  assert.equal(llm.fmtUsage('claude-sonnet-4-6', { in: 12000, out: 300, cacheRead: 0 }), '12k in · 300 out · $0.041');
+  assert.equal(llm.fmtUsage('claude-sonnet-5', { in: 1200, out: 30 }), '1.2k in · 30 out');
+});
+
+test('chat retries once on 429 then succeeds', async () => {
+  let n = 0;
+  globalThis.browser.runtime.sendMessage = async () => (++n === 1 ? { ok: false, status: 429, error: 'rate' } : { ok: true, data: { content: [{ type: 'text', text: 'ok' }] } });
+  const r = await llm.chat({ settings: { anthropicKey: 'k', model: 'anthropic:claude-x' }, system: 's', messages: [] });
+  assert.equal(r.text, 'ok');
+  assert.equal(n, 2);
 });

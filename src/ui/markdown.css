@@ -1,0 +1,36 @@
+/* Rendered markdown + time chips — shared by the panel (#ytx-panel) and the library page. */
+.ytx-md { overflow-wrap: anywhere; }
+.ytx-md p { margin: 0 0 8px; }
+.ytx-md h1, .ytx-md h2, .ytx-md h3, .ytx-md h4, .ytx-md h5, .ytx-md h6 { margin: 10px 0 6px; font-weight: 700; line-height: 1.3; }
+.ytx-md h1 { font-size: 18px; letter-spacing: -0.2px; }
+.ytx-md h2 { font-size: 15.5px; }
+.ytx-md h3 { font-size: 14px; }
+.ytx-md h4, .ytx-md h5, .ytx-md h6 { font-size: 13px; color: var(--muted); }
+.ytx-md ul, .ytx-md ol { margin: 0 0 8px; padding-left: 18px; }
+.ytx-md li { margin: 2px 0; }
+.ytx-md code { font-family: var(--font-mono); font-size: 11.5px; padding: 1px 4px; border-radius: 4px; background: var(--code-bg); }
+.ytx-md pre { position: relative; margin: 0 0 8px; padding: 8px 10px; border-radius: var(--radius-sm); background: var(--code-bg); overflow-x: auto; }
+.ytx-md pre code { padding: 0; background: none; }
+.ytx-md pre.ytx-pre { padding-top: 26px; }
+.ytx-md blockquote { margin: 0 0 8px; padding-left: 10px; border-left: 2px solid var(--border); color: var(--muted); }
+.ytx-md table { border-collapse: collapse; margin: 0 0 8px; font-size: 12.5px; }
+.ytx-md th, .ytx-md td { padding: 3px 8px; border: 1px solid var(--border); text-align: left; }
+.ytx-md hr { border: 0; border-top: 1px solid var(--border); margin: 10px 0; }
+.ytx-md > :first-child { margin-top: 0; }
+.ytx-md > :last-child { margin-bottom: 0; }
+
+.ytx-code-bar { position: absolute; top: 4px; right: 6px; display: flex; align-items: center; gap: 6px; font-family: var(--font-ui); }
+.ytx-code-lang { color: var(--muted); font-size: 10.5px; text-transform: lowercase; }
+.ytx-code-copy { padding: 1px 7px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--muted); font: inherit; font-size: 10.5px; font-weight: 600; cursor: pointer; opacity: 0.7; }
+.ytx-code-copy:hover { opacity: 1; color: var(--text); }
+
+.ytx-mermaid { margin: 0 0 8px; overflow-x: auto; background: var(--surface-2); border-radius: var(--radius-sm); padding: 8px; }
+.ytx-mermaid svg { max-width: 100%; height: auto; }
+
+/* time chip: <button> on the watch page (seeks), <a> in the library (opens at &t=) */
+.ytx-ts {
+  display: inline-block; padding: 0 5px; margin: 0 1px; border: 0; border-radius: 5px;
+  font-family: var(--font-mono); font-size: 11px; font-weight: 600; line-height: 1.5;
+  color: var(--accent); background: var(--accent-soft); text-decoration: none; cursor: pointer; vertical-align: baseline;
+}
+.ytx-ts:hover { text-decoration: underline; }

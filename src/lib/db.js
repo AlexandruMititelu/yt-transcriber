@@ -10,6 +10,10 @@ export const DEFAULT_SETTINGS = {
   vaultDir: '', // knowledge base folder (e.g. Obsidian vault); '' = local storage only
   hotkeys: true, // keyboard shortcuts on/off (list in config/hotkeys.js)
   webSearch: false, // let the model search the web (server-side tool); toggled in the chat composer
+  theme: 'auto', // library page: 'auto' (OS) | 'light' | 'dark'
+  noteMode: 'edit', // note editor default: 'edit' (raw markdown) | 'view' (rendered)
+  follow: false, // transcript Follow toggle, remembered across videos
+  lang: 'en', // preferred caption language (BCP-47 prefix)
 };
 
 // v1 settings were { provider, apiKey, model } — map into per-provider keys once. Notion keys dropped.

@@ -7,7 +7,10 @@ import {
   parseJson3,
   groupSegments,
   fetchTranscript,
+  parseChapters,
+  explainFailure,
 } from '../src/lib/transcript.js';
+const transcript = { parseChapters, explainFailure };
 
 const PR = {
   videoDetails: { title: 'brace } inside "quoted { string" \\ test' },
@@ -124,13 +127,18 @@ test('fetchTranscript with injected fetchFn', async () => {
   assert.equal(JSON.parse(calls[0].opts.body).videoId, 'abc123');
   assert.equal(JSON.parse(calls[0].opts.body).context.client.clientName, 'ANDROID');
   assert.equal(calls[1].url, 'https://yt/api/timedtext?lang=en&fmt=json3');
-  assert.deepEqual(r, {
-    lang: 'en',
-    trackName: 'English (auto)',
-    segments: [{ start: 0, dur: 1, text: 'hi' }],
-    title: 'brace } inside "quoted { string" \\ test', // videoDetails.title from the player response
-    channel: '',
-  });
+  assert.equal(r.lang, 'en');
+  assert.equal(r.trackName, 'English (auto)');
+  assert.deepEqual(r.track, { lang: 'en', asr: true });
+  assert.deepEqual(r.segments, [{ start: 0, dur: 1, text: 'hi' }]);
+  assert.equal(r.title, 'brace } inside "quoted { string" \\ test'); // videoDetails.title from the player response
+  assert.equal(r.channel, '');
+  assert.ok(Array.isArray(r.tracks) && r.tracks.length >= 1);
+  assert.deepEqual(r.chapters, []);
+  // translation and explicit track go through the query string
+  const r2 = await fetchTranscript('abc123', { fetchFn, translate: 'ro', track: { lang: 'en', asr: true } });
+  assert.match(calls.at(-1).url, /tlang=ro/);
+  assert.equal(r2.lang, 'ro');
 });
 
 test('fetchTranscript overrides existing fmt param', async () => {
@@ -156,4 +164,18 @@ test('fetchTranscript throws no-captions on empty caption body', async () => {
   const fetchFn = async (url) =>
     url.startsWith('https://www.youtube.com/youtubei') ? { json: async () => PR } : { text: async () => '' };
   await assert.rejects(fetchTranscript('abc', { fetchFn }), { message: 'no-captions' });
+});
+
+test('parseChapters reads description timestamps (needs two or more, increasing)', () => {
+  const ch = transcript.parseChapters('Intro\n0:00 Welcome\n1:30 - Setup\n(12:05) Demo time\n1:00:00 Outro\nthanks');
+  assert.deepEqual(ch, [
+    { start: 0, title: 'Welcome' }, { start: 90, title: 'Setup' }, { start: 725, title: 'Demo time' }, { start: 3600, title: 'Outro' },
+  ]);
+  assert.deepEqual(transcript.parseChapters('0:00 only one'), []);
+});
+
+test('explainFailure maps error codes to readable reasons', () => {
+  assert.equal(transcript.explainFailure(new Error('no-captions')), 'No captions on this video');
+  assert.match(transcript.explainFailure(new Error('unplayable: Sign in to confirm your age')), /age/);
+  assert.match(transcript.explainFailure(new Error('live')), /Live/);
 });

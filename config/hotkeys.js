@@ -6,9 +6,12 @@ export const HOTKEYS = [
   { id: 'prevTab', keys: 'Alt+↑', desc: 'Previous tab (Transcript · Chat · Notes)' },
   { id: 'nextTab', keys: 'Alt+↓', desc: 'Next tab' },
   { id: 'webSearch', keys: 'Alt+W', desc: 'Toggle web search (Chat tab only)' },
+  { id: 'focusChat', keys: 'Alt+C', desc: 'Go to Chat and focus the message box' },
+  { id: 'newNote', keys: 'Alt+N', desc: 'Go to Notes and start a new note' },
+  { id: 'findTranscript', keys: 'Alt+F', desc: 'Go to Transcript and focus the search box' },
 ];
 
-const BY_KEY = { e: 'editMode', v: 'viewMode', w: 'webSearch', ArrowUp: 'prevTab', ArrowDown: 'nextTab' };
+const BY_KEY = { e: 'editMode', v: 'viewMode', w: 'webSearch', c: 'focusChat', n: 'newNote', f: 'findTranscript', ArrowUp: 'prevTab', ArrowDown: 'nextTab' };
 
 // KeyboardEvent → hotkey id, or null. All shortcuts are Alt + key with no Ctrl/Meta/Shift.
 export function hotkeyId(e) {

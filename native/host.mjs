@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Native messaging host for YT Transcriber: the extension's only way to touch the filesystem.
 // Protocol: 4-byte LE length + JSON, both directions. Request {id, op, ...} → reply {id, ok, ...}.
-// Ops: ping | pick-folder | list {path} | read {path} | stat {path} | write {path, content} | delete {path} | rename {from, to} | mkdir {path}
+// Ops: ping | pick-folder | list {path} | read {path} | stat {path} | write {path, content} | write-b64 {path, data} | delete {path} | rename {from, to} | mkdir {path}
 // File ops carry `root` (the vault's YT-transcriber dir); any path outside it is refused.
 import fs from 'node:fs';
 import os from 'node:os';
@@ -143,6 +143,12 @@ async function handle(msg) {
     await fs.promises.mkdir(path.dirname(p), { recursive: true });
     await fs.promises.writeFile(p, String(msg.content ?? ''), 'utf8');
     return { mtime: await mtimeOf(p) };
+  }
+  if (op === 'write-b64') {
+    const p = at(msg.path);
+    await fs.promises.mkdir(path.dirname(p), { recursive: true });
+    await fs.promises.writeFile(p, Buffer.from(String(msg.data ?? ''), 'base64'));
+    return {};
   }
   if (op === 'mkdir') {
     await fs.promises.mkdir(at(msg.path), { recursive: true });

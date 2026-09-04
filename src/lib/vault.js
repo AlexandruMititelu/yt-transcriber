@@ -89,7 +89,7 @@ export function parseFrontmatter(md) {
 
 // Raw lines of every key not in `own`, joined: what we carry across a rewrite.
 const extraOf = (raw, own) => Object.keys(raw).filter((k) => !own.has(k)).map((k) => raw[k]).join('\n');
-const NOTE_KEYS = new Set(['ytx', 'id', 'kind', 'title', 'video', 'time', 'start', 'color', 'created']);
+const NOTE_KEYS = new Set(['ytx', 'id', 'kind', 'title', 'video', 'time', 'start', 'link', 'color', 'created']);
 const CHAT_KEYS = new Set(['ytx', 'id', 'title', 'video', 'created', 'updated']);
 
 export function noteToMd(video, card) {
@@ -101,6 +101,7 @@ export function noteToMd(video, card) {
     video: video.url,
     time: card.start == null ? undefined : fmtTime(card.start),
     start: card.start == null ? undefined : Math.floor(card.start),
+    link: card.start == null ? undefined : `${video.url}&t=${Math.floor(card.start)}s`,
     color: card.color || 0,
     created: iso(card.ts),
   }, card.fm) + (card.text || '');
@@ -192,22 +193,54 @@ export function parseChat(md) {
   return out;
 }
 
-export function pinToMd(video) {
-  const head = frontmatter({
-    ytx: 'video',
-    id: video.videoId,
-    url: video.url,
-    channel: video.channel,
-    pinned: iso(Date.now()),
-  });
+const HUB_KEYS = new Set(['ytx', 'id', 'url', 'title', 'channel', 'duration', 'length', 'lang', 'saved', 'pinned']);
+const hubMeta = (video, pinnedAt) => ({
+  ytx: 'video',
+  id: video.videoId,
+  url: video.url,
+  title: video.title || video.videoId,
+  channel: video.channel,
+  duration: video.transcript?.duration || undefined, // seconds, Dataview-friendly
+  length: video.transcript?.duration ? fmtTime(video.transcript.duration) : undefined,
+  lang: video.transcript?.lang,
+  saved: iso(video.savedAt),
+  pinned: pinnedAt ? iso(pinnedAt) : undefined,
+});
+
+// <video>/<video>.md — the hub note every video gets: title, link, chapters, link to Transcript.md.
+// Body is the user's after the first write; pin/unpin only touch the front matter.
+export function videoToMd(video, { pinnedAt = video.pinned?.at } = {}) {
   const lines = [`# ${video.title || video.videoId}`, '', `[Watch on YouTube](${video.url})`];
   if (video.channel) lines.push(`Channel: ${video.channel}`);
-  const grouped = video.transcript?.grouped ?? [];
-  if (grouped.length) {
-    lines.push('', '## Transcript', '');
-    for (const s of grouped) lines.push(`- [${fmtTime(s.start)}](${video.url}&t=${Math.floor(s.start)}s) ${s.text}`);
+  if (video.transcript?.duration) lines.push(`Length: ${fmtTime(video.transcript.duration)}`);
+  lines.push('', '[[Transcript]]');
+  const chapters = video.transcript?.chapters ?? [];
+  if (chapters.length) {
+    lines.push('', '## Chapters', '');
+    for (const c of chapters) lines.push(`- [${fmtTime(c.start)}](${video.url}&t=${Math.floor(c.start)}s) ${c.title}`);
   }
-  return head + lines.join('\n') + '\n';
+  lines.push('', '## Notes', '');
+  return frontmatter(hubMeta(video, pinnedAt)) + lines.join('\n') + '\n';
+}
+
+// Re-stamp our front matter on an existing hub note, keeping the body and any user keys verbatim.
+export function restampHub(md, video, { pinnedAt } = {}) {
+  const { body, raw } = parseFrontmatter(md);
+  return frontmatter(hubMeta(video, pinnedAt), extraOf(raw, HUB_KEYS)) + body;
+}
+
+// Legacy name kept for callers/tests: the pin summary is now the hub note with `pinned:` set.
+export const pinToMd = (video) => videoToMd(video, { pinnedAt: Date.now() });
+
+// YT-transcriber/Index.md: one line per video folder, pinned first. Built from what is on disk.
+export function indexToMd(entries) {
+  const row = (e) => `- [[${e.pinned ? `${PINNED_DIR}/` : ''}${e.folder}/${e.folder}|${e.title || e.folder}]]${e.channel ? ` · ${e.channel}` : ''}`;
+  const pinned = entries.filter((e) => e.pinned);
+  const rest = entries.filter((e) => !e.pinned);
+  const lines = ['# YT Transcriber', ''];
+  if (pinned.length) lines.push('## Pinned', '', ...pinned.map(row), '');
+  lines.push(rest.length && pinned.length ? '## All' : '', ...(rest.length && pinned.length ? [''] : []), ...rest.map(row));
+  return frontmatter({ ytx: 'index', updated: iso(Date.now()) }) + lines.filter((l, i, arr) => !(l === '' && arr[i - 1] === '')).join('\n') + '\n';
 }
 
 /* ---------- paths ---------- */
@@ -235,7 +268,8 @@ const videoDirAt = (settings, video, pinned) =>
 export const videoDir = (settings, video) => videoDirAt(settings, video, !!video.pinned);
 const notesDir = (settings, video) => join(videoDir(settings, video), 'notes');
 const chatsDir = (settings, video) => join(videoDir(settings, video), 'chats');
-const summaryPath = (settings, video) => join(videoDir(settings, video), `${videoFolder(video)}.md`);
+const hubPath = (settings, video) => join(videoDir(settings, video), `${videoFolder(video)}.md`);
+const indexPath = (settings) => join(rootDir(settings), 'Index.md');
 
 /* ---------- async ops (native host) ---------- */
 
@@ -255,13 +289,65 @@ async function ensureDirs(settings, video) {
   await io(settings, { op: 'mkdir', path: notesDir(settings, video) });
   await io(settings, { op: 'mkdir', path: chatsDir(settings, video) });
   await syncTranscript(settings, video);
+  await ensureHub(settings, video);
+}
+
+// Hub note written once per folder location (video.hubFile remembers it); Index.md refreshed after.
+async function ensureHub(settings, video) {
+  const path = hubPath(settings, video);
+  if (video.hubFile === path) return;
+  const { content } = await io(settings, { op: 'read', path });
+  if (content == null) {
+    await io(settings, { op: 'write', path, content: videoToMd(video) });
+    await refreshIndex(settings).catch(() => {}); // best effort
+  }
+  video.hubFile = path;
+}
+
+// Scan root + pinned/ for hub notes and rewrite Index.md.
+export async function refreshIndex(settings) {
+  if (!enabled(settings)) return;
+  const entries = [];
+  for (const pinned of [true, false]) {
+    const base = pinned ? join(rootDir(settings), PINNED_DIR) : rootDir(settings);
+    const { entries: ents } = await io(settings, { op: 'list', path: base });
+    for (const e of ents) {
+      if (!e.dir || (!pinned && e.name === PINNED_DIR)) continue;
+      const { content } = await io(settings, { op: 'read', path: join(base, e.name, `${e.name}.md`) });
+      if (content == null) continue;
+      const { meta } = parseFrontmatter(content);
+      entries.push({ folder: e.name, pinned, title: meta.title || e.name, channel: meta.channel || '' });
+    }
+  }
+  entries.sort((a, b) => String(a.title).localeCompare(String(b.title)));
+  await io(settings, { op: 'write', path: indexPath(settings), content: indexToMd(entries) });
+}
+
+// A video frame (data: URL from a canvas) → <video>/attachments/<m-ss>.jpg; returns the Obsidian embed.
+export async function saveFrame(settings, video, dataUrl, sec) {
+  if (!enabled(settings)) throw new Error('no-vault');
+  await ensureDirs(settings, video);
+  const name = `${fmtTime(sec).replace(/:/g, '-')}.jpg`;
+  const path = join(videoDir(settings, video), 'attachments', name);
+  const data = String(dataUrl).replace(/^data:[^,]*,/, '');
+  await io(settings, { op: 'write-b64', path, data });
+  return `![[attachments/${name}]]`;
 }
 
 export function transcriptToMd(video) {
   const grouped = video.transcript?.grouped ?? [];
-  const lines = grouped.map((s) => `- [${fmtTime(s.start)}](${video.url}&t=${Math.floor(s.start)}s) ${s.text}`);
-  return frontmatter({ ytx: 'transcript', id: video.videoId, url: video.url, lang: video.transcript?.lang }) +
-    `# ${video.title || video.videoId}\n\n${lines.join('\n')}\n`;
+  const t = video.transcript ?? {};
+  const chapters = t.chapters ?? [];
+  const body = [];
+  let ci = 0;
+  for (const s of grouped) {
+    while (ci < chapters.length && chapters[ci].start <= s.start) { body.push('', `## ${chapters[ci].title}`, ''); ci++; }
+    body.push(`- [${fmtTime(s.start)}](${video.url}&t=${Math.floor(s.start)}s) ${s.text}`);
+  }
+  return frontmatter({
+    ytx: 'transcript', id: video.videoId, url: video.url, title: video.title || video.videoId, channel: video.channel,
+    lang: t.lang, track: t.trackName, duration: t.duration || undefined,
+  }) + `# ${video.title || video.videoId}\n${body.join('\n').replace(/^\n+/, '\n')}\n`;
 }
 
 // <video>/Transcript.md, written once the transcript exists (video.transcriptFile remembers the location).
@@ -340,19 +426,30 @@ export async function pin(settings, video) {
   if (await dirExists(settings, from)) await io(settings, { op: 'rename', from, to });
   video.pinned = { at: Date.now(), dir: to };
   video.transcriptFile = null; // moved with the folder; re-stamp under the new path
+  video.hubFile = null;
   await ensureDirs(settings, video);
-  await io(settings, { op: 'write', path: summaryPath(settings, video), content: pinToMd(video) });
+  await stampHub(settings, video, video.pinned.at);
+  await refreshIndex(settings).catch(() => {});
   return to;
+}
+
+async function stampHub(settings, video, pinnedAt) {
+  const path = hubPath(settings, video);
+  const { content } = await io(settings, { op: 'read', path });
+  await io(settings, { op: 'write', path, content: content == null ? videoToMd(video, { pinnedAt }) : restampHub(content, video, { pinnedAt }) });
+  video.hubFile = path;
 }
 
 export async function unpin(settings, video) {
   if (!enabled(settings)) throw new Error('no-vault');
   const from = videoDirAt(settings, video, true);
   const to = videoDirAt(settings, video, false);
-  await io(settings, { op: 'delete', path: join(from, `${videoFolder(video)}.md`) });
   if (await dirExists(settings, from)) await io(settings, { op: 'rename', from, to });
   video.pinned = null;
   video.transcriptFile = null;
+  video.hubFile = null;
+  await stampHub(settings, video, null);
+  await refreshIndex(settings).catch(() => {});
   return to;
 }
 
@@ -368,6 +465,7 @@ export async function hydrate(settings, video) {
   const nDir = notesDir(settings, video);
   const cDir = chatsDir(settings, video);
   const [noteFiles, chatFiles] = await Promise.all([listMd(settings, nDir), listMd(settings, cDir)]);
+  if (video.hubFile && video.hubFile !== hubPath(settings, video)) video.hubFile = null; // folder moved
   const summary = videoFolder(video);
 
   // notes

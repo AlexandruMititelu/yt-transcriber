@@ -82,7 +82,31 @@ export function groupSegments(segs, { window = 20, maxChars = 300 } = {}) {
   return groups;
 }
 
-export async function fetchTranscript(videoId, { fetchFn = fetch } = {}) {
+// Chapters from the description: lines starting with (or containing) a timestamp followed by a title.
+export function parseChapters(description) {
+  const out = [];
+  for (const raw of String(description || '').split('\n')) {
+    const m = /^\s*(?:[-•*]\s*)?(?:\(|\[)?((?:\d{1,2}:)?\d{1,2}:\d{2})(?:\)|\])?\s*[-–—:|]?\s*(.+?)\s*$/.exec(raw);
+    if (!m) continue;
+    const start = m[1].split(':').reduce((a, p) => a * 60 + Number(p), 0);
+    if (out.length && start <= out[out.length - 1].start) continue; // must be increasing
+    out.push({ start, title: m[2].replace(/^[-–—:|]\s*/, '') });
+  }
+  return out.length >= 2 ? out : [];
+}
+
+// Human reason for a video with no usable transcript.
+export function explainFailure(err) {
+  const m = String(err?.message || '');
+  if (m === 'no-captions') return 'No captions on this video';
+  if (m === 'live') return 'Live streams have no transcript until the stream ends';
+  if (m.startsWith('unplayable:')) return `YouTube blocks the transcript: ${m.slice(11).trim() || 'unavailable'}`;
+  if (m === 'bad-response') return "Couldn't reach YouTube (offline? captive portal?)";
+  return `Couldn't load transcript: ${m}`;
+}
+
+// { lang: preferred language prefix, track?: {lang, asr} exact pick, translate?: target language }
+export async function fetchTranscript(videoId, { fetchFn = fetch, lang = 'en', track: want, translate } = {}) {
   // Caption baseUrls from the watch-page player response return an empty body since 2025
   // (need a PO token). The InnerTube player endpoint with the ANDROID client still hands out
   // URLs that work without one.
@@ -94,18 +118,35 @@ export async function fetchTranscript(videoId, { fetchFn = fetch } = {}) {
       videoId,
     }),
   });
-  const pr = await res.json();
-  const track = pickTrack(extractTracks(pr));
+  let pr;
+  try { pr = await res.json(); } catch { throw new Error('bad-response'); }
+  const status = pr?.playabilityStatus;
+  if (status && status.status && status.status !== 'OK' && !pr?.captions) {
+    throw new Error(`unplayable: ${status.reason || status.status}`);
+  }
+  if (pr?.videoDetails?.isLive || pr?.videoDetails?.isLiveContent && !pr?.captions) throw new Error('live');
+  const tracks = extractTracks(pr);
+  const track = (want && tracks.find((t) => t.lang === want.lang && !!t.asr === !!want.asr)) || pickTrack(tracks, [lang, 'en']);
   if (!track) throw new Error('no-captions');
   const u = new URL(track.baseUrl);
   u.searchParams.set('fmt', 'json3');
-  const text = await (await fetchFn(u.toString())).text();
+  if (translate) u.searchParams.set('tlang', translate);
+  let text;
+  try { text = await (await fetchFn(u.toString())).text(); } catch { throw new Error('bad-response'); }
   if (!text) throw new Error('no-captions');
+  let json;
+  try { json = JSON.parse(text); } catch { throw new Error('bad-response'); }
+  const d = pr?.videoDetails ?? {};
   return {
-    lang: track.lang,
-    trackName: track.name,
-    segments: parseJson3(JSON.parse(text)),
-    title: pr?.videoDetails?.title ?? '',
-    channel: pr?.videoDetails?.author ?? '',
+    lang: translate || track.lang,
+    trackName: translate ? `${track.name} → ${translate}` : track.name,
+    track: { lang: track.lang, asr: !!track.asr },
+    translate: translate || null,
+    tracks: tracks.map(({ lang: l, name, asr }) => ({ lang: l, name, asr: !!asr })),
+    segments: parseJson3(json),
+    title: d.title ?? '',
+    channel: d.author ?? '',
+    duration: Number(d.lengthSeconds) || 0,
+    chapters: parseChapters(d.shortDescription),
   };
 }

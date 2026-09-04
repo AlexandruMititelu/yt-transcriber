@@ -12,7 +12,7 @@ globalThis.browser = {
     async sendMessage(msg) {
       if (msg.type !== 'native') return { ok: false, error: 'unexpected' };
       const { op } = msg;
-      if (['list', 'read', 'stat', 'write', 'delete', 'rename', 'mkdir'].includes(op) && !msg.root) return { ok: false, error: 'missing root' };
+      if (['list', 'read', 'stat', 'write', 'write-b64', 'delete', 'rename', 'mkdir'].includes(op) && !msg.root) return { ok: false, error: 'missing root' };
       if (op === 'stat') return { ok: true, mtime: mtimes.get(msg.path) ?? null };
       if (op === 'list') {
         const prefix = msg.path.replace(/\/+$/, '') + '/';
@@ -28,6 +28,7 @@ globalThis.browser = {
       if (op === 'mkdir') { dirs.add(msg.path); return { ok: true }; }
       if (op === 'read') return { ok: true, content: files.has(msg.path) ? files.get(msg.path) : null, mtime: mtimes.get(msg.path) ?? null };
       if (op === 'write') { writeDisk(msg.path, msg.content); return { ok: true, mtime: mtimes.get(msg.path) }; }
+      if (op === 'write-b64') { writeDisk(msg.path, `<b64:${msg.data.length}>`); return { ok: true }; }
       if (op === 'delete') { files.delete(msg.path); return { ok: true }; }
       if (op === 'rename') {
         if (files.has(msg.from)) { files.set(msg.to, files.get(msg.from)); files.delete(msg.from); return { ok: true }; }
@@ -108,13 +109,16 @@ test('chat markdown = Obsidian callouts; roundtrips headings/rules/quotes/blank 
   assert.deepEqual(vault.parseChat(legacy).messages, [{ role: 'user', ts: 1, content: 'hi' }, { role: 'assistant', ts: 2, content: 'yo' }]);
 });
 
-test('pinToMd has title, link and timestamped transcript lines', () => {
+test('videoToMd (hub note) has title, link, chapters, Transcript link; pinToMd adds pinned:', () => {
   const v = db.blankVideo('abc', 'My Video', 'Chan');
-  v.transcript = { grouped: [{ start: 65, end: 70, text: 'hello' }] };
-  const md = vault.pinToMd(v);
+  v.transcript = { grouped: [{ start: 65, end: 70, text: 'hello' }], chapters: [{ start: 65, title: 'Hello part' }] };
+  const md = vault.videoToMd(v);
   assert.ok(md.includes('# My Video'));
-  assert.ok(md.includes('- [1:05](https://www.youtube.com/watch?v=abc&t=65s) hello'));
+  assert.ok(md.includes('- [1:05](https://www.youtube.com/watch?v=abc&t=65s) Hello part'));
+  assert.ok(md.includes('[[Transcript]]'));
   assert.ok(md.includes('ytx: "video"'));
+  assert.ok(!md.includes('pinned:'));
+  assert.ok(vault.pinToMd(v).includes('pinned: "'));
 });
 
 test('sync writes files under <vault>/YT-transcriber/<video>/{notes,chats}, renames on title change, deletes', async () => {
@@ -130,16 +134,17 @@ test('sync writes files under <vault>/YT-transcriber/<video>/{notes,chats}, rena
   assert.ok(!files.has('C:\\Vault/YT-transcriber/AB Title/notes/Idea one.md'));
   assert.ok(files.has('C:\\Vault/YT-transcriber/AB Title/notes/Idea two.md'));
   await vault.removeNote(settings, v, card);
-  assert.equal(files.size, 0);
+  const base = ['C:\\Vault/YT-transcriber/AB Title/AB Title.md', 'C:\\Vault/YT-transcriber/Index.md']; // hub note + Index.md exist from the first write on
+  assert.deepEqual([...files.keys()].sort(), base);
 
   const blank = { id: 'n2', kind: 'quick', text: '   ', start: null, color: 0, ts: 1 };
   await vault.syncNote(settings, v, blank);
-  assert.equal(files.size, 0, 'blank cards do not create files');
+  assert.deepEqual([...files.keys()].sort(), base, 'blank cards do not create files');
 
   const chat = db.newChat();
   v.chats.push(chat);
   await vault.syncChat(settings, v, chat);
-  assert.equal(files.size, 0, 'empty chats do not create files');
+  assert.deepEqual([...files.keys()].sort(), base, 'empty chats do not create files');
   v.transcript = { lang: 'en', grouped: [{ start: 65, end: 70, text: 'hello' }] };
   chat.messages.push({ role: 'user', content: 'hi', ts: 1 });
   await vault.syncChat(settings, v, chat);
@@ -148,21 +153,23 @@ test('sync writes files under <vault>/YT-transcriber/<video>/{notes,chats}, rena
   assert.ok(dirs.has('C:\\Vault/YT-transcriber/AB Title/notes') && dirs.has('C:\\Vault/YT-transcriber/AB Title/chats'), 'both subfolders created');
   chat.title = 'Greetings';
   await vault.syncChat(settings, v, chat);
-  assert.deepEqual([...files.keys()].sort(), ['C:\\Vault/YT-transcriber/AB Title/Transcript.md', 'C:\\Vault/YT-transcriber/AB Title/chats/Greetings.md']);
+  assert.deepEqual([...files.keys()].sort(), ['C:\\Vault/YT-transcriber/AB Title/AB Title.md', 'C:\\Vault/YT-transcriber/AB Title/Transcript.md', 'C:\\Vault/YT-transcriber/AB Title/chats/Greetings.md', 'C:\\Vault/YT-transcriber/Index.md']);
 
   await vault.pin(settings, v);
   assert.ok(v.pinned);
   assert.deepEqual([...files.keys()].sort(), [
+    'C:\\Vault/YT-transcriber/Index.md',
     'C:\\Vault/YT-transcriber/pinned/AB Title/AB Title.md',
     'C:\\Vault/YT-transcriber/pinned/AB Title/Transcript.md',
     'C:\\Vault/YT-transcriber/pinned/AB Title/chats/Greetings.md',
-  ], 'whole video folder moved under pinned/, summary added');
+  ], 'whole video folder moved under pinned/, hub note stamped');
   chat.messages.push({ role: 'assistant', content: 'yo', ts: 2 });
   await vault.syncChat(settings, v, chat);
   assert.ok(files.has('C:\\Vault/YT-transcriber/pinned/AB Title/chats/Greetings.md'), 'writes follow the pinned location');
   await vault.unpin(settings, v);
   assert.equal(v.pinned, null);
-  assert.deepEqual([...files.keys()].sort(), ['C:\\Vault/YT-transcriber/AB Title/Transcript.md', 'C:\\Vault/YT-transcriber/AB Title/chats/Greetings.md'], 'moved back, summary removed');
+  assert.deepEqual([...files.keys()].sort(), ['C:\\Vault/YT-transcriber/AB Title/AB Title.md', 'C:\\Vault/YT-transcriber/AB Title/Transcript.md', 'C:\\Vault/YT-transcriber/AB Title/chats/Greetings.md', 'C:\\Vault/YT-transcriber/Index.md'], 'moved back, hub kept without pinned:');
+  assert.doesNotMatch(files.get('C:\\Vault/YT-transcriber/AB Title/AB Title.md'), /pinned:/);
 });
 
 test('hydrate: disk wins for files, local items without files get written, missing files drop items', async () => {
@@ -304,4 +311,39 @@ test('every file op carries the vault root', async () => {
   await vault.syncChat(settings, video, chat); // fake host rejects root-less ops
   await vault.pin(settings, video);
   await vault.hydrate(settings, video);
+});
+
+test('hub note + Index.md: written once per video, pin/unpin only restamp front matter and keep the body', async () => {
+  files.clear(); mtimes.clear();
+  const video = db.blankVideo('hub1', 'Hub video');
+  video.channel = 'Chan';
+  video.transcript = { lang: 'en', duration: 125, grouped: [{ start: 0, end: 5, text: 'hi' }], chapters: [{ start: 0, title: 'Intro' }, { start: 60, title: 'Main' }] };
+  const card = { id: 'c1', kind: 'quick', title: '', text: 'x', start: 61, color: 0, ts: 1 };
+  video.notes.cards.push(card);
+  await vault.syncNote(settings, video, card);
+  const hub = 'C:\\Vault/YT-transcriber/Hub video/Hub video.md';
+  assert.ok(files.has(hub), 'hub note exists');
+  assert.match(files.get(hub), /duration: 125/);
+  assert.match(files.get(hub), /## Chapters\n\n- \[0:00\]/);
+  assert.match(files.get(hub), /\[\[Transcript\]\]/);
+  assert.match(files.get('C:\\Vault/YT-transcriber/Index.md'), /\[\[Hub video\/Hub video\|Hub video\]\] · Chan/);
+  // note carries a deep link
+  assert.match(files.get('C:\\Vault/YT-transcriber/Hub video/notes/x.md'), /link: "https:\/\/www.youtube.com\/watch\?v=hub1&t=61s"/);
+  // user edits the hub body, adds a tag → pin keeps both
+  writeDisk(hub, files.get(hub).replace('---\nytx', '---\ntags:\n  - talk\nytx').replace('## Notes\n', '## Notes\n\nmy thoughts\n'));
+  await vault.pin(settings, video);
+  const pinnedHub = 'C:\\Vault/YT-transcriber/pinned/Hub video/Hub video.md';
+  assert.ok(files.has(pinnedHub));
+  assert.match(files.get(pinnedHub), /pinned: "\d{4}/);
+  assert.match(files.get(pinnedHub), /tags:\n  - talk/);
+  assert.match(files.get(pinnedHub), /my thoughts/);
+  assert.match(files.get('C:\\Vault/YT-transcriber/Index.md'), /## Pinned\n\n- \[\[pinned\/Hub video\/Hub video\|Hub video\]\]/);
+  await vault.unpin(settings, video);
+  assert.ok(files.has(hub));
+  assert.doesNotMatch(files.get(hub), /pinned:/);
+  assert.match(files.get(hub), /my thoughts/);
+  // frame capture → attachments + embed
+  const embed = await vault.saveFrame(settings, video, 'data:image/jpeg;base64,AAAA', 61);
+  assert.equal(embed, '![[attachments/1-01.jpg]]');
+  assert.ok(files.has('C:\\Vault/YT-transcriber/Hub video/attachments/1-01.jpg'));
 });

@@ -10,8 +10,6 @@
   let panel = null;
   let themeObserver = null;
   let resizeObserver = null;
-  let mermaidP = null;
-  let mermaidSeq = 0;
   let flushSave = null; // pending debounced note-save; flushed on teardown so edits survive SPA nav
 
   const url = (p) => browser.runtime.getURL(p);
@@ -33,8 +31,8 @@
 
   async function loadLibs() {
     if (L) return L;
-    const names = ['format', 'transcript', 'bus', 'db', 'llm', 'vault', 'picker', 'chatbar', 'notes', 'icons', 'hotkeys'];
-    const UI = new Set(['picker', 'chatbar', 'notes', 'icons']);
+    const names = ['format', 'transcript', 'bus', 'db', 'llm', 'vault', 'picker', 'chatbar', 'notes', 'icons', 'hotkeys', 'markdown', 'toast', 'chat'];
+    const UI = new Set(['picker', 'chatbar', 'notes', 'icons', 'markdown', 'toast', 'chat']);
     const pathFor = (n) => (n === 'hotkeys' ? 'config/hotkeys.js' : UI.has(n) ? `src/ui/${n}.js` : `src/lib/${n}.js`);
     const mods = await Promise.all(names.map((n) => import(url(pathFor(n)))));
     // UMD vendors set globalThis.marked / globalThis.DOMPurify; mermaid loads lazily.
@@ -48,7 +46,7 @@
     const style = h('style');
     style.id = 'ytx-fonts';
     // <link> to a moz-extension: stylesheet gets blocked on youtube.com; inline the text instead.
-    for (const name of ['picker', 'chatbar', 'notes']) {
+    for (const name of ['picker', 'chatbar', 'notes', 'markdown', 'toast', 'chat']) {
       fetch(url(`src/ui/${name}.css`)).then((r) => r.text()).then((css) => {
         const s = h('style');
         s.id = `ytx-${name}-css`;
@@ -67,67 +65,7 @@
     document.head.appendChild(style);
   }
 
-  function ensureMermaid() {
-    if (!mermaidP) {
-      mermaidP = import(url('vendor/mermaid.min.js')).then(() => {
-        globalThis.mermaid.initialize({
-          startOnLoad: false,
-          securityLevel: 'strict',
-          theme: isDark() ? 'dark' : 'neutral',
-        });
-        return globalThis.mermaid;
-      }).catch((e) => { mermaidP = null; throw e; }); // don't cache a transient load failure
-    }
-    return mermaidP;
-  }
-
-  async function renderMermaidIn(root) {
-    const blocks = root.querySelectorAll('pre > code.language-mermaid');
-    if (!blocks.length) return;
-    try {
-      const mermaid = await ensureMermaid();
-      for (const code of blocks) {
-        try {
-          let res = mermaid.render(`ytx-mmd-${++mermaidSeq}`, code.textContent);
-          if (res && typeof res.then === 'function') res = await res;
-          const svg = typeof res === 'string' ? res : res.svg;
-          const wrap = h('div', 'ytx-mermaid');
-          wrap.innerHTML = svg; // mermaid output, securityLevel 'strict'
-          code.parentElement.replaceWith(wrap);
-        } catch { /* invalid diagram: leave the fenced block visible */ }
-      }
-    } catch { /* mermaid failed to load: fenced blocks stay as code */ }
-  }
-
-  // [12:34] (assistant citations) and @12:34 (typed in notes) both become seek chips.
-  const TS_RE = /(?:\[(\d{1,3}(?::[0-5]?\d){1,2})\]|@(\d{1,3}(?::[0-5]?\d){1,2}))/g;
-  function linkifyTimestamps(root) {
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-    const nodes = [];
-    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
-      if (n.parentElement && n.parentElement.closest('pre, code, a, button')) continue;
-      TS_RE.lastIndex = 0;
-      if (TS_RE.test(n.nodeValue)) nodes.push(n);
-    }
-    TS_RE.lastIndex = 0; // matchAll clones the regex INCLUDING lastIndex; reset the stale offset from .test()
-    for (const node of nodes) {
-      const s = node.nodeValue;
-      const frag = document.createDocumentFragment();
-      let last = 0;
-      for (const m of s.matchAll(TS_RE)) {
-        frag.append(s.slice(last, m.index));
-        const stamp = m[1] || m[2];
-        const sec = stamp.split(':').reduce((acc, p) => acc * 60 + Number(p), 0);
-        const chip = h('button', 'ytx-ts', stamp);
-        chip.type = 'button';
-        chip.addEventListener('click', () => seek(sec));
-        frag.append(chip);
-        last = m.index + m[0].length;
-      }
-      frag.append(s.slice(last));
-      node.replaceWith(frag);
-    }
-  }
+  const renderMd = (text) => L.markdown.renderMarkdown(text, { onSeek: seek });
 
   function scrapeMeta() {
     const title = L.vault.cleanTitle(
@@ -260,24 +198,11 @@
         tabBtns[k].classList.toggle('is-active', k === key);
         views[k].classList.toggle('is-active', k === key);
       }
-      // scrollHeight is 0 while hidden, so renderChat's scroll is a no-op — re-scroll on reveal
-      if (key === 'chat') chatList.scrollTop = chatList.scrollHeight;
+      // scrollHeight is 0 while hidden, so the chat's own scroll is a no-op — re-scroll on reveal
+      if (key === 'chat') { const l = views.chat.querySelector('.ytx-chat-list'); if (l) l.scrollTop = l.scrollHeight; }
     }
 
-    function toast(msg, linkUrl) {
-      panel.querySelectorAll('.ytx-toast').forEach((t) => t.remove());
-      const t = h('div', 'ytx-toast');
-      t.appendChild(h('span', null, msg));
-      if (linkUrl) {
-        const a = h('a', null, 'Open');
-        a.href = linkUrl;
-        a.target = '_blank';
-        a.rel = 'noreferrer';
-        t.appendChild(a);
-      }
-      panel.appendChild(t);
-      setTimeout(() => t.remove(), 1700); // css fade runs 1.6s
-    }
+    const toast = L.toast.createToaster(panel);
 
     /* ---- header actions ---- */
     refetchBtn.addEventListener('click', () => loadTranscript(true));
@@ -410,224 +335,33 @@
       if (live() && !vaultWarned) { vaultWarned = true; toast(`Knowledge base: ${e.message}`); }
     });
 
-    /* ---- chat tab ---- */
-    const chatList = h('div', 'ytx-chat-list');
-    const composer = h('div', 'ytx-composer');
-    const chatTa = h('textarea');
-    chatTa.placeholder = 'Ask about this video…';
-    chatTa.rows = 1;
-    const sendBtn = h('button', 'ytx-send', '↑');
-    sendBtn.title = 'Send';
-    // Web search toggle lives inside the input pill (quiet icon; tinted when on). Alt+W toggles it too.
-    const webBtn = h('button', 'ytx-web');
-    webBtn.appendChild(L.icons.globeIcon());
-    const webKeys = L.hotkeys.keysFor('webSearch');
-    const paintWeb = (on) => {
-      webBtn.classList.toggle('is-on', !!on);
-      webBtn.title = (on ? 'Web search on' : 'Web search off') + ` (${webKeys})`;
-    };
-    L.db.getSettings().then((s) => paintWeb(s.webSearch)).catch(() => {});
-    const toggleWeb = async () => {
-      const s = await L.db.getSettings();
-      const on = !s.webSearch;
-      await L.db.saveSettings({ webSearch: on });
-      if (!live()) return;
-      paintWeb(on);
-      toast(on ? 'Web search on' : 'Web search off');
-    };
-    webBtn.addEventListener('click', toggleWeb);
-    // Claude.ai-style composer: textarea on top, tool row below (globe · model picker · send), all in one pill.
-    const pill = h('div', 'ytx-input-pill');
-    const toolRow = h('div', 'ytx-tool-row');
-    toolRow.append(h('span', 'ytx-tool-spacer'), L.picker.createPicker({ isLive: live }), webBtn, sendBtn);
-    pill.append(chatTa, toolRow);
-    composer.append(pill);
-
-    const cur = () => video.chats.find((c) => c.id === video.activeChatId) ?? null;
-    function ensureChat() {
-      let c = cur();
-      if (!c) { c = L.db.newChat(); video.chats.push(c); video.activeChatId = c.id; }
-      return c;
-    }
-    // Switching drops the empty, never-sent chat the user is leaving.
-    function switchTo(id) {
-      if (cancelChat) cancelChat();
-      video.chats = video.chats.filter((c) => c.messages.length || c.id === id);
-      video.activeChatId = id;
-      save();
-      renderChat();
-    }
-    const chatBar = L.chatbar.createChatBar({
-      chats: () => video.chats,
-      activeId: () => video.activeChatId,
-      onSelect: switchTo,
-      onNew: () => {
-        if (cur() && !cur().messages.length) return;
-        const c = L.db.newChat();
-        video.chats.push(c);
-        switchTo(c.id);
-        chatTa.focus();
-      },
-      onRename: (title) => {
-        const c = cur();
-        if (!c) return;
-        c.title = title;
-        c.updatedAt = Date.now();
-        save();
-        disk((s) => L.vault.syncChat(s, video, c).then(onSynced));
-      },
-      onDelete: () => {
-        const c = cur();
-        if (!c) return;
-        chatList.replaceChildren(L.chatbar.confirmBox({
-          text: `Delete "${c.title}"? This removes it from the knowledge base too.`,
-          onCancel: renderChat,
-          onConfirm: () => {
-            if (cancelChat) cancelChat();
-            video.chats = video.chats.filter((x) => x.id !== c.id);
-            video.activeChatId = video.chats.at(-1)?.id ?? null;
-            save();
-            disk((s) => L.vault.removeChat(s, video, c));
-            renderChat();
-          },
-        }));
-      },
-    });
-    views.chat.append(chatBar.root, chatList, composer);
-
-    let chatBusy = false;
-    function setChatBusy(b) {
-      chatBusy = b;
-      chatTa.disabled = b;
-      sendBtn.disabled = b;
-      sendBtn.textContent = b ? '…' : '↑';
-    }
-
-    function renderAssistant(content) {
-      const md = h('div', 'ytx-md');
-      // FORBID_TAGS img: a prompt-injected transcript could make the LLM emit an image URL that exfiltrates chat content on fetch
-      md.innerHTML = globalThis.DOMPurify.sanitize(globalThis.marked.parse(content), { FORBID_TAGS: ['img'] });
-      for (const a of md.querySelectorAll('a[href]')) { a.target = '_blank'; a.rel = 'noreferrer noopener'; }
-      linkifyTimestamps(md);
-      renderMermaidIn(md);
-      return md;
-    }
-
-    function copyBtn(text) {
-      const b = h('button', 'ytx-copy', '⧉');
-      b.title = 'Copy message';
-      b.addEventListener('click', () => {
-        navigator.clipboard.writeText(text).then(() => {
-          b.textContent = '✓';
-          setTimeout(() => { b.textContent = '⧉'; }, 1200);
-        }).catch(() => toast('Copy failed'));
-      });
-      return b;
-    }
-
-    function renderChat() {
-      chatBar.refresh();
-      chatList.textContent = '';
-      for (const m of cur()?.messages ?? []) {
-        const bubble = h('div', `ytx-msg ytx-msg-${m.role}`);
-        if (m.role === 'assistant') bubble.append(renderAssistant(m.content), copyBtn(m.content));
-        else bubble.textContent = m.content;
-        chatList.appendChild(bubble);
-      }
-      chatList.scrollTop = chatList.scrollHeight;
-    }
-
-    function chatErrorBubble(e) {
-      const bubble = h('div', 'ytx-msg ytx-msg-system');
-      if (e && e.message === 'no-api-key') {
-        bubble.append('Add your API key in Settings. ');
+    /* ---- chat tab (shared view: src/ui/chat.js) ---- */
+    const chatView = L.chat.createChatView({
+      video,
+      save,
+      disk,
+      renderMd,
+      toast,
+      isLive: live,
+      onSynced,
+      segments: () => video.transcript?.grouped ?? [],
+      settingsAction: () => {
         const b = h('button', 'ytx-btn', 'Open library');
         b.addEventListener('click', () => L.bus.call({ type: 'open-library' }).catch(() => {}));
-        bubble.appendChild(b);
-      } else {
-        bubble.textContent = (e && e.message) || 'Something went wrong';
-      }
-      chatList.appendChild(bubble);
-      chatList.scrollTop = chatList.scrollHeight;
-    }
-
-    // First reply in a "New chat" → ask the model for a short title (best effort, never blocks).
-    function autoTitle(chat, settings) {
-      if (chat.title !== L.db.NEW_CHAT_TITLE || chat.messages.length !== 2) return;
-      L.llm.titleChat({ settings, messages: chat.messages }).then((t) => {
-        if (!t || chat.title !== L.db.NEW_CHAT_TITLE) return;
-        chat.title = t;
-        chat.updatedAt = Date.now();
-        save();
-        if (live()) chatBar.refresh();
-        disk((s) => L.vault.syncChat(s, video, chat));
-      }).catch((e) => console.warn('[ytx] title', e));
-    }
-
-    let chatGen = 0; // bumped by cancelChat; a reply for an older gen is dropped
-    let cancelChat = null;
-    async function sendChat() {
-      const text = chatTa.value.trim();
-      if (!text || chatBusy) return;
-      setChatBusy(true); // synchronously, before any await, so a second Enter can't start a concurrent request
-      const gen = ++chatGen;
-      chatTa.value = '';
-      const chat = ensureChat();
-      chat.messages.push({ role: 'user', content: text, ts: Date.now() });
-      chat.updatedAt = Date.now();
-      await save();
-      if (!live()) return;
-      renderChat();
-      const pending = h('div', 'ytx-msg ytx-msg-assistant ytx-pending', 'Thinking…');
-      chatList.appendChild(pending);
-      chatList.scrollTop = chatList.scrollHeight;
-      // ponytail: background fetch still completes; we just drop the reply. Abort via port if it matters.
-      cancelChat = () => { chatGen++; pending.remove(); setChatBusy(false); cancelChat = null; };
-      try {
-        const settings = await L.db.getSettings();
-        if (settings.webSearch) pending.textContent = 'Thinking… (web search on)';
-        const system = L.llm.buildSystemPrompt({
-          title: video.title,
-          channel: video.channel,
-          segments: video.transcript?.grouped ?? [],
-          aboutMe: settings.aboutMe,
-          tone: settings.tone,
-          webSearch: !!settings.webSearch,
-        });
-        const reply = await L.llm.chat({
-          settings,
-          system,
-          messages: chat.messages.map(({ role, content }) => ({ role, content })),
-        });
-        if (!live() || gen !== chatGen) return;
-        chat.messages.push({ role: 'assistant', content: reply, ts: Date.now() });
-        chat.updatedAt = Date.now();
-        await save();
-        disk((s) => L.vault.syncChat(s, video, chat).then(onSynced));
-        autoTitle(chat, settings);
-        if (cur() === chat) renderChat();
-      } catch (e) {
-        if (live() && gen === chatGen) chatErrorBubble(e);
-      } finally {
-        if (gen === chatGen) {
-          cancelChat = null;
-          pending.remove(); // no-op if renderChat already wiped the list on success
-          if (live()) setChatBusy(false);
-        }
-      }
-    }
-    sendBtn.addEventListener('click', sendChat);
+        return b;
+      },
+    });
+    views.chat.appendChild(chatView.root);
+    const renderChat = () => chatView.refresh();
+    const toggleWeb = () => chatView.toggleWeb();
     // Window capture: fires before YouTube's own document-level key handlers, which can swallow
-    // Enter/Escape. Escape is checked regardless of target: the textarea is disabled while busy,
-    // so focus leaves the panel. ponytail: one dead listener per SPA nav, guarded by live().
+    // Escape. ponytail: one dead listener per SPA nav, guarded by live().
     let hotkeysOn = true;
     L.db.getSettings().then((s) => { hotkeysOn = s.hotkeys !== false; }).catch(() => {});
     window.addEventListener('keydown', (e) => {
       if (!live()) return;
-      if (e.key === 'Enter' && !e.shiftKey && e.target === chatTa) {
-        e.preventDefault(); e.stopPropagation(); sendChat();
-      } else if (e.key === 'Escape' && cancelChat) {
-        e.preventDefault(); e.stopPropagation(); cancelChat();
+      if (e.key === 'Escape' && chatView.isBusy()) {
+        e.preventDefault(); e.stopPropagation(); chatView.cancel();
       }
       if (!hotkeysOn) return;
       const hk = L.hotkeys.hotkeyId(e);
@@ -648,7 +382,7 @@
     const notesView = L.notes.createNotesView({
       video,
       fmtTime,
-      renderMd: renderAssistant,
+      renderMd,
       currentTime: () => document.querySelector('video')?.currentTime ?? 0,
       onSeek: seek,
       onChange: (card) => { notesDirty = true; diskDirty.add(card); saveSoon(); },
@@ -660,14 +394,7 @@
     /* ---- theme (follows YouTube's own dark attribute on <html>) ---- */
     const applyTheme = () => {
       panel.classList.toggle('ytx-dark', isDark());
-      // keep future mermaid renders in sync with the theme (already-rendered SVGs keep theirs)
-      if (mermaidP) {
-        mermaidP.then((m) => m.initialize({
-          startOnLoad: false,
-          securityLevel: 'strict',
-          theme: isDark() ? 'dark' : 'neutral',
-        })).catch(() => {});
-      }
+      L.markdown.setDark(isDark()); // future mermaid renders follow the theme
     };
     applyTheme();
     themeObserver = new MutationObserver(applyTheme);

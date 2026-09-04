@@ -35,8 +35,13 @@
   --text: #1d1d1f;
   --muted: #6e6e73;
   --accent: #007aff;
+  --accent-soft: rgba(0, 122, 255, 0.1);
   --border: rgba(0, 0, 0, 0.08);
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 8px 24px rgba(0, 0, 0, 0.06);
+  --thumb: #ffffff;
+  --code-bg: rgba(0, 0, 0, 0.05);
+  --green: #248a3d;
+  --green-soft: rgba(52, 199, 89, 0.14);
 
   --keep-0: var(--surface);
   --keep-1: #fff8d6;
@@ -45,20 +50,55 @@
   --keep-4: #fde7ef;
 }
 
+/* Theme: OS by default; Settings can force it via <html data-theme="light|dark">. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #161617;
     --surface: #1e1e20;
     --surface-2: #2a2a2d;
     --text: #f5f5f7;
     --muted: #98989d;
     --accent: #0a84ff;
+    --accent-soft: rgba(10, 132, 255, 0.16);
     --border: rgba(255, 255, 255, 0.1);
     --shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.4);
+    --thumb: #48484a;
+    --code-bg: rgba(255, 255, 255, 0.07);
+    --green: #4cd964;
+    --green-soft: rgba(52, 199, 89, 0.18);
 
     --keep-1: #4a4526;
     --keep-2: #2a4030;
     --keep-3: #243b52;
     --keep-4: #4a2c38;
   }
+}
+
+:root[data-theme="dark"] {
+  --bg: #161617;
+  --surface: #1e1e20;
+  --surface-2: #2a2a2d;
+  --text: #f5f5f7;
+  --muted: #98989d;
+  --accent: #0a84ff;
+  --accent-soft: rgba(10, 132, 255, 0.16);
+  --border: rgba(255, 255, 255, 0.1);
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.4);
+  --thumb: #48484a;
+  --code-bg: rgba(255, 255, 255, 0.07);
+  --green: #4cd964;
+  --green-soft: rgba(52, 199, 89, 0.18);
+
+  --keep-1: #4a4526;
+  --keep-2: #2a4030;
+  --keep-3: #243b52;
+  --keep-4: #4a2c38;
+}
+
+/* Keyboard focus must be visible; mouse focus stays quiet. */
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+:focus:not(:focus-visible) { outline: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
