@@ -524,24 +524,54 @@
   flex: 1;
   min-width: 0;
   display: flex;
-  align-items: flex-end;
-  gap: 2px;
-  padding: 0 4px 0 6px;
-  border-radius: 18px;
+  flex-direction: column;
+  padding: 4px 6px 6px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
   background: var(--surface-2);
+  transition: border-color 0.15s ease;
+}
+
+#ytx-panel .ytx-input-pill:focus-within {
+  border-color: var(--muted);
 }
 
 #ytx-panel .ytx-composer textarea {
-  flex: 1;
-  min-width: 0;
+  width: 100%;
   min-height: 34px;
-  max-height: 96px;
-  padding: 8px 8px 8px 4px;
+  max-height: 120px;
+  padding: 8px 8px 4px;
   background: none;
   font-family: var(--font-mono);
   font-size: 12.5px;
   line-height: 1.4;
   overflow-y: auto;
+}
+
+#ytx-panel .ytx-tool-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#ytx-panel .ytx-tool-spacer {
+  flex: 1;
+}
+
+#ytx-panel .ytx-tool-row .ytx-picker {
+  padding: 0;
+}
+
+#ytx-panel .ytx-tool-row .ytx-picker-trigger {
+  height: 26px;
+  padding: 0 8px;
+  border-color: transparent;
+  background: none;
+}
+
+#ytx-panel .ytx-tool-row .ytx-picker-trigger:hover,
+#ytx-panel .ytx-tool-row .ytx-picker-trigger.is-open {
+  background: var(--surface);
 }
 
 #ytx-panel .ytx-composer textarea::placeholder {
@@ -550,9 +580,8 @@
 
 #ytx-panel .ytx-send {
   flex: none;
-  width: 30px;
-  height: 30px;
-  margin-bottom: 2px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
   display: inline-flex;
   align-items: center;
@@ -567,7 +596,6 @@
   flex: none;
   width: 26px;
   height: 26px;
-  margin-bottom: 4px;
   border-radius: 8px;
   display: inline-flex;
   align-items: center;

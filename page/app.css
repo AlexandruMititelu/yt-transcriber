@@ -33,10 +33,16 @@ button:disabled { opacity: 0.5; cursor: default; }
 .icon-btn:hover { background: var(--surface-2); color: var(--text); }
 .icon-btn.on { color: var(--accent); }
 .icon-btn.pin.on { color: #ffcc00; }
-.input-pill { flex: 1; display: flex; align-items: flex-end; gap: 4px; padding: 0 4px 0 6px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); }
-.input-pill textarea { background: none; border: 0; }
+.input-pill { flex: 1; display: flex; flex-direction: column; padding: 4px 8px 8px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); }
+.input-pill:focus-within { border-color: var(--muted); }
+.input-pill textarea { background: none; border: 0; padding: 8px 6px 4px; }
 .input-pill textarea:focus { border: 0; }
-.web-btn { width: 28px; height: 28px; margin-bottom: 6px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); }
+.tool-row { display: flex; align-items: center; gap: 8px; }
+.tool-row .ytx-picker { margin: 0; }
+.tool-row .ytx-picker-trigger { border-color: transparent; background: none; }
+.tool-row .ytx-picker-trigger:hover, .tool-row .ytx-picker-trigger.is-open { background: var(--surface); }
+.tool-row .btn.primary { padding: 5px 14px; }
+.web-btn { width: 28px; height: 28px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); }
 .web-btn:hover { color: var(--text); }
 .web-btn.on { color: var(--accent); background: rgba(0, 122, 255, 0.12); }
 .icon-btn.pin.on .ytx-ico-pin { fill: currentColor; }
@@ -155,7 +161,7 @@ button:disabled { opacity: 0.5; cursor: default; }
 .mermaid-box { background: var(--surface-2); border-radius: var(--radius-sm); padding: 8px; overflow-x: auto; }
 .mermaid-box svg { max-width: 100%; height: auto; }
 
-.chat .ytx-picker { margin-top: 6px; }
+
 .chat .ytx-chatbar { margin-bottom: 10px; max-width: 420px; }
 .chat-list .ytx-confirm { align-self: stretch; }
 .note-card .ytx-confirm { flex: 1; border: 0; padding: 8px; }

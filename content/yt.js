@@ -428,9 +428,12 @@
       toast(on ? 'Web search on' : 'Web search off');
     };
     webBtn.addEventListener('click', toggleWeb);
+    // Claude.ai-style composer: textarea on top, tool row below (globe · model picker · send), all in one pill.
     const pill = h('div', 'ytx-input-pill');
-    pill.append(webBtn, chatTa);
-    composer.append(pill, sendBtn);
+    const toolRow = h('div', 'ytx-tool-row');
+    toolRow.append(webBtn, h('span', 'ytx-tool-spacer'), L.picker.createPicker({ isLive: live }), sendBtn);
+    pill.append(chatTa, toolRow);
+    composer.append(pill);
 
     const cur = () => video.chats.find((c) => c.id === video.activeChatId) ?? null;
     function ensureChat() {
@@ -482,7 +485,7 @@
         }));
       },
     });
-    views.chat.append(chatBar.root, chatList, composer, L.picker.createPicker({ isLive: live }));
+    views.chat.append(chatBar.root, chatList, composer);
 
     let chatBusy = false;
     function setChatBusy(b) {
