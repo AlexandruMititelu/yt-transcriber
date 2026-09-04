@@ -329,8 +329,8 @@ Bootstrap: `(async () => { ... })()`. All lib access via
 - **Chat tab**: chat bar (`src/ui/chatbar.js`: a macOS-style pop-up button showing the current chat title;
   its popover lists the chats with a checkmark, then "+ New chat", then Rename / Delete chat (red);
   double-click the trigger also renames) + message list + composer (textarea; Enter sends, Shift+Enter
-  newline). Composer = one pill: textarea on top, tool row below with the web-search globe on the
-  left and the model/effort picker + send circle on the right (Claude.ai layout; no lone picker line).
+  newline). Composer = one pill: textarea on top, tool row below, right-aligned: model/effort picker ·
+  web-search globe · send circle (Claude.ai layout; no lone picker line).
   Current chat = `video.chats.find(id === video.activeChatId)`; none → the first send creates one via
   `db.newChat()`. Switching drops an empty never-sent chat. Rename → inline input (Enter/blur commit,
   Esc cancel) → `vault.syncChat`. Delete → `confirmBox` replaces the message list ("Delete "<title>"?",

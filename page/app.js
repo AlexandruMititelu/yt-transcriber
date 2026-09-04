@@ -498,7 +498,7 @@ function chatPane(video, disk) {
   const root = el('div', { class: 'chat' }, bar.root, list,
     el('div', { class: 'composer' },
       el('div', { class: 'input-pill' }, input,
-        el('div', { class: 'tool-row' }, webBtn, el('span', { class: 'spacer' }), picker, sendBtn))));
+        el('div', { class: 'tool-row' }, el('span', { class: 'spacer' }), picker, webBtn, sendBtn))));
   root.__toggleWeb = toggleWeb;
   return root;
 }

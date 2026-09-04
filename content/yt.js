@@ -431,7 +431,7 @@
     // Claude.ai-style composer: textarea on top, tool row below (globe · model picker · send), all in one pill.
     const pill = h('div', 'ytx-input-pill');
     const toolRow = h('div', 'ytx-tool-row');
-    toolRow.append(webBtn, h('span', 'ytx-tool-spacer'), L.picker.createPicker({ isLive: live }), sendBtn);
+    toolRow.append(h('span', 'ytx-tool-spacer'), L.picker.createPicker({ isLive: live }), webBtn, sendBtn);
     pill.append(chatTa, toolRow);
     composer.append(pill);
 
