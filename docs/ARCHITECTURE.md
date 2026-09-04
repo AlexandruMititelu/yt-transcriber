@@ -19,7 +19,7 @@ src/lib/llm.js                (provider-agnostic LLM service, ESM)
 src/lib/search.js             (BM25 over transcript groups, pure)
 src/lib/vault.js              (knowledge-base folder mirror: markdown builders/parsers + disk sync, ESM)
 src/lib/tags.js               (Obsidian tag rules: normTag, extractTags (inline #tags), parseTagList (front matter), chipTags (DOM))
-src/ui/tags.js|css            (tag editor chips + input with datalist suggestions; chip/filter-row styles, shared)
+src/ui/tags.js|css            (tagChip (hue per tag) + createTagEditor: full form = chips + input + known-tag toggles; compact = chips + "+" that drops the same input/list down; shared)
 src/ui/tokens.css             (design tokens for extension pages)
 src/ui/picker.js|css          (model + effort popover, shared)
 src/ui/chatbar.js|css         (chat switcher bar + confirm box, shared)
@@ -530,8 +530,8 @@ Views (hash routing: `#/`, `#/video/<id>`, `#/settings`):
   toggles it in `libTags`; filter = video carries ALL selected tags; "Clear filter"; label shows the selection, `.on`
   when active), video count (all session-scoped). All: a "Pinned" section first (when any), then "Everything
   else" (or one section per group key). Pinned: only pinned videos (empty hint otherwise). Video card = `.card-wrap.card`
-  holding the `<a class=card-link>` (title, channel, relative date), a tag row (`cardTags`: coloured chips + a dashed
-  "+" that opens `createTagEditor` in a `.card-tagpop` popover, saves + `vault.syncTags` in place, no repaint),
+  holding the `<a class=card-link>` (title, channel, relative date), a tag row (`videoTagEditor`: compact `createTagEditor`, chips with ✕ + "+" popover; saves + `vault.syncTags` in place, no
+  repaint; same editor under the detail title),
   badges (N segments · N messages · N notes) and a
   separate actions row (pin + ⌫ delete, faint until hover/focus, never nested in the link). Delete → `confirmBox`
   overlay on the card (library record only; vault files stay). The pin is yellow when pinned and toggles
