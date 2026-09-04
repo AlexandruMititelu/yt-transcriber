@@ -60,14 +60,14 @@ export function createChatBar({ chats, activeId, onSelect, onNew, onRename, onDe
     renderMenu();
     menu.classList.add('is-open');
     trigger.classList.add('is-open');
-    document.addEventListener('click', onDoc);
-    document.addEventListener('keydown', onKey);
+    window.addEventListener('pointerdown', onDoc, true);
+    window.addEventListener('keydown', onKey, true);
   }
   function closeMenu() {
     menu.classList.remove('is-open');
     trigger.classList.remove('is-open');
-    document.removeEventListener('click', onDoc);
-    document.removeEventListener('keydown', onKey);
+    window.removeEventListener('pointerdown', onDoc, true);
+    window.removeEventListener('keydown', onKey, true);
   }
   trigger.addEventListener('click', (e) => {
     e.stopPropagation();

@@ -38,7 +38,6 @@ export function createPicker({ isLive = () => true } = {}) {
     const eff = h('span', 'ytx-picker-effort', canThink() ? (EFFORT_LABEL[settings.effort] ?? 'Off') : 'No effort');
     if (!canThink()) { eff.classList.add('is-off'); eff.title = 'This model has no thinking/effort setting'; }
     trigger.append(eff);
-    if (settings.webSearch) trigger.append(h('span', 'ytx-picker-web', 'Web'));
     const caret = h('span', 'ytx-picker-caret');
     caret.appendChild(chevronDown());
     trigger.append(caret);
@@ -83,17 +82,10 @@ export function createPicker({ isLive = () => true } = {}) {
     const eff = item('Effort', val, () => { view = view === 'effort' ? 'models' : 'effort'; render(); });
     eff.disabled = !ok;
     footer.append(eff);
-    if (view !== 'effort') {
-      const web = item('Web search', h('span', 'ytx-picker-value', settings.webSearch ? 'On' : 'Off'), () => {
-        set({ webSearch: !settings.webSearch });
-        render();
-      });
-      web.title = 'Let the model run web searches (server-side) and cite sources';
-      footer.append(web);
-    }
   }
 
   // composedPath, not root.contains: a click that re-renders the menu detaches its target
+  // Capture-phase pointerdown on window: fires before YouTube's own handlers, which stop propagation.
   const onDoc = (e) => { if (!e.composedPath().includes(root)) close(); };
   const onKey = (e) => { if (e.key === 'Escape') close(); };
   function open() {
@@ -101,14 +93,14 @@ export function createPicker({ isLive = () => true } = {}) {
     render();
     menu.classList.add('is-open');
     trigger.classList.add('is-open');
-    document.addEventListener('click', onDoc);
-    document.addEventListener('keydown', onKey);
+    window.addEventListener('pointerdown', onDoc, true);
+    window.addEventListener('keydown', onKey, true);
   }
   function close() {
     menu.classList.remove('is-open');
     trigger.classList.remove('is-open');
-    document.removeEventListener('click', onDoc);
-    document.removeEventListener('keydown', onKey);
+    window.removeEventListener('pointerdown', onDoc, true);
+    window.removeEventListener('keydown', onKey, true);
   }
   trigger.addEventListener('click', (e) => {
     e.stopPropagation();

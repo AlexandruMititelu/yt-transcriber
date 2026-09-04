@@ -137,7 +137,7 @@ export const DEFAULT_SETTINGS = {
   aboutMe: '', tone: '',            // free text, injected into the chat system prompt
   vaultDir: '',                     // knowledge base folder (Obsidian vault); '' = storage.local only
   hotkeys: true,                    // all shortcuts on/off; the list itself is fixed in config/hotkeys.js
-  webSearch: false,                 // server-side web search tool; globe button in the composer + picker row
+  webSearch: false,                 // server-side web search tool; globe button in the composer
 }
 export async function getSettings()            // {...DEFAULT_SETTINGS, ...stored}; migrates v1 {provider, apiKey, model} → per-provider key + 'provider:model', drops legacy + notion keys
 export async function saveSettings(patch)      // merge + write; returns merged
