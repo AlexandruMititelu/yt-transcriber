@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Native messaging host for YT Transcriber: the extension's only way to touch the filesystem.
 // Protocol: 4-byte LE length + JSON, both directions. Request {id, op, ...} → reply {id, ok, ...}.
-// Ops: ping | pick-folder | list {path} | read {path} | write {path, content} | delete {path} | rename {from, to} | mkdir {path}
+// Ops: ping | pick-folder | list {path} | read {path} | stat {path} | write {path, content} | delete {path} | rename {from, to} | mkdir {path}
+// File ops carry `root` (the vault's YT-transcriber dir); any path outside it is refused.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -100,13 +101,27 @@ function pickFolder() {
   });
 }
 
+// Resolve `p` and make sure it stays inside msg.root. The extension is the only client, but a
+// confused message must not turn into "write anywhere the user can".
+export function confine(root, p) {
+  if (!root) throw new Error('missing root');
+  const r = path.resolve(String(root));
+  const q = path.resolve(String(p ?? ''));
+  const rel = path.relative(r, q);
+  if (rel.startsWith('..') || path.isAbsolute(rel)) throw new Error(`path outside root: ${p}`);
+  return q;
+}
+
+const mtimeOf = async (p) => { try { return Math.round((await fs.promises.stat(p)).mtimeMs); } catch { return null; } };
+
 async function handle(msg) {
   const { op } = msg;
   if (op === 'ping') return { version: VERSION, platform: process.platform };
   if (op === 'pick-folder') return { path: await pickFolder() };
+  const at = (p) => confine(msg.root, p);
   if (op === 'list') {
     try {
-      const ents = await fs.promises.readdir(path.resolve(msg.path), { withFileTypes: true });
+      const ents = await fs.promises.readdir(at(msg.path), { withFileTypes: true });
       return { entries: ents.map((e) => ({ name: e.name, dir: e.isDirectory() })) };
     } catch (e) {
       if (e.code === 'ENOENT' || e.code === 'ENOTDIR') return { entries: [] };
@@ -114,45 +129,50 @@ async function handle(msg) {
     }
   }
   if (op === 'read') {
+    const p = at(msg.path);
     try {
-      return { content: await fs.promises.readFile(path.resolve(msg.path), 'utf8') };
+      return { content: await fs.promises.readFile(p, 'utf8'), mtime: await mtimeOf(p) };
     } catch (e) {
-      if (e.code === 'ENOENT') return { content: null };
+      if (e.code === 'ENOENT') return { content: null, mtime: null };
       throw e;
     }
   }
+  if (op === 'stat') return { mtime: await mtimeOf(at(msg.path)) };
   if (op === 'write') {
-    const p = path.resolve(msg.path);
+    const p = at(msg.path);
     await fs.promises.mkdir(path.dirname(p), { recursive: true });
     await fs.promises.writeFile(p, String(msg.content ?? ''), 'utf8');
-    return {};
+    return { mtime: await mtimeOf(p) };
   }
   if (op === 'mkdir') {
-    await fs.promises.mkdir(path.resolve(msg.path), { recursive: true });
+    await fs.promises.mkdir(at(msg.path), { recursive: true });
     return {};
   }
   if (op === 'delete') {
-    await fs.promises.rm(path.resolve(msg.path), { force: true });
+    await fs.promises.rm(at(msg.path), { force: true, recursive: false });
     return {};
   }
   if (op === 'rename') {
-    const to = path.resolve(msg.to);
+    const to = at(msg.to);
     await fs.promises.mkdir(path.dirname(to), { recursive: true });
-    await fs.promises.rename(path.resolve(msg.from), to);
+    await fs.promises.rename(at(msg.from), to);
     return {};
   }
   throw new Error(`unknown op: ${op}`);
 }
 
 // Requests run strictly in order: a write followed by a read/rename of the same file must see the write.
+const MAX_FRAME = 64 * 1024 * 1024; // a bogus length header must not make us buffer forever
 let buf = Buffer.alloc(0);
 let queue = Promise.resolve();
 process.stdin.on('data', (chunk) => {
   buf = Buffer.concat([buf, chunk]);
   while (buf.length >= 4) {
     const len = buf.readUInt32LE(0);
+    if (len > MAX_FRAME) { send({ ok: false, error: 'frame too large' }); process.exit(1); }
     if (buf.length < 4 + len) break;
-    const msg = JSON.parse(buf.subarray(4, 4 + len).toString('utf8'));
+    let msg;
+    try { msg = JSON.parse(buf.subarray(4, 4 + len).toString('utf8')); } catch { msg = { op: 'bad-json' }; }
     buf = buf.subarray(4 + len);
     const run = () => handle(msg)
       .then((r) => send({ id: msg.id, ok: true, ...r }))

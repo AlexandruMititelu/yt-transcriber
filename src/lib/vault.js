@@ -56,30 +56,41 @@ const parseStamp = (str) => {
 };
 const iso = localStamp;
 
-export function frontmatter(meta) {
+// `extra` = raw YAML lines for keys we don't own (tags, aliases, cssclasses… added in Obsidian), re-emitted verbatim.
+export function frontmatter(meta, extra = '') {
   const lines = Object.entries(meta)
     .filter(([, v]) => v !== undefined && v !== null && v !== '')
     .map(([k, v]) => `${k}: ${typeof v === 'number' ? v : yamlStr(v)}`);
+  if (extra) lines.push(extra.replace(/\s+$/, ''));
   return `---\n${lines.join('\n')}\n---\n`;
 }
 
-// Minimal front matter reader: `key: value` lines, JSON/quoted strings unwrapped. → { meta, body }
+// Minimal front matter reader: `key: value` lines, JSON/quoted strings unwrapped; indented / `- item`
+// lines belong to the key above. → { meta, body, raw: {key: 'verbatim lines'} }
 export function parseFrontmatter(md) {
   const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(md);
-  if (!m) return { meta: {}, body: md };
+  if (!m) return { meta: {}, body: md, raw: {} };
   const meta = {};
+  const raw = {};
+  let k = null;
   for (const line of m[1].split(/\r?\n/)) {
-    const i = line.indexOf(':');
-    if (i < 1) continue;
-    const k = line.slice(0, i).trim();
-    let v = line.slice(i + 1).trim();
+    const head = /^([A-Za-z0-9_.-]+):(.*)$/.exec(line);
+    if (!head) { if (k) raw[k] += `\n${line}`; continue; }
+    k = head[1];
+    raw[k] = line;
+    let v = head[2].trim();
     if (/^".*"$/.test(v)) { try { v = JSON.parse(v); } catch { v = v.slice(1, -1); } }
     else if (/^'.*'$/.test(v)) v = v.slice(1, -1);
     else if (/^-?\d+(\.\d+)?$/.test(v)) v = Number(v);
     meta[k] = v;
   }
-  return { meta, body: md.slice(m[0].length) };
+  return { meta, body: md.slice(m[0].length), raw };
 }
+
+// Raw lines of every key not in `own`, joined: what we carry across a rewrite.
+const extraOf = (raw, own) => Object.keys(raw).filter((k) => !own.has(k)).map((k) => raw[k]).join('\n');
+const NOTE_KEYS = new Set(['ytx', 'id', 'kind', 'title', 'video', 'time', 'start', 'color', 'created']);
+const CHAT_KEYS = new Set(['ytx', 'id', 'title', 'video', 'created', 'updated']);
 
 export function noteToMd(video, card) {
   return frontmatter({
@@ -92,14 +103,14 @@ export function noteToMd(video, card) {
     start: card.start == null ? undefined : Math.floor(card.start),
     color: card.color || 0,
     created: iso(card.ts),
-  }) + (card.text || '');
+  }, card.fm) + (card.text || '');
 }
 
 // → partial card {text, kind, title?, start?, color?, ts?}. Files without our front matter (written by
 // hand in Obsidian) are long-form notes; legacy ytx files without `kind` are quick notes.
 export function parseNote(md) {
-  const { meta, body } = parseFrontmatter(md);
-  const out = { text: body.replace(/\s+$/, '') };
+  const { meta, body, raw } = parseFrontmatter(md);
+  const out = { text: body.replace(/\s+$/, ''), fm: extraOf(raw, NOTE_KEYS) };
   if (meta.ytx !== 'note') { out.kind = 'note'; return out; }
   out.kind = meta.kind === 'note' ? 'note' : 'quick';
   if (meta.id) out.id = String(meta.id);
@@ -126,9 +137,12 @@ export function chatToMd(video, chat) {
     video: video.url,
     created: iso(chat.createdAt),
     updated: iso(chat.updatedAt),
-  });
+  }, chat.fm);
   const body = chat.messages.map((m) => {
-    const lines = String(m.content).replace(/\s+$/, '').split('\n').map((l) => (l ? `> ${l}` : '>'));
+    // A content line that looks like a callout header would parse as a new message: escape the bracket.
+    const lines = String(m.content).replace(/\s+$/, '').split('\n')
+      .map((l) => l.replace(/^\[!(user|assistant)\]/, '\\[!$1]'))
+      .map((l) => (l ? `> ${l}` : '>'));
     return `> [!${m.role}] ${localStamp(m.ts)}\n${lines.join('\n')}\n`;
   }).join('\n');
   return `${head}# ${chat.title}\n\n${body}`;
@@ -144,7 +158,7 @@ function parseCallouts(body) {
       cur = { role: head[1], ts: parseStamp(head[2]), lines: [] };
       messages.push(cur);
     } else if (cur && line.startsWith('>')) {
-      cur.lines.push(line.replace(/^> ?/, ''));
+      cur.lines.push(line.replace(/^> ?/, '').replace(/^\\\[!(user|assistant)\]/, '[!$1]'));
     } else {
       cur = null; // first non-quoted line closes the callout
     }
@@ -165,10 +179,10 @@ function parseMarkers(body) {
 
 // → { title?, messages: [{role, content, ts}], createdAt?, updatedAt? }
 export function parseChat(md) {
-  const { meta, body } = parseFrontmatter(md);
+  const { meta, body, raw } = parseFrontmatter(md);
   let messages = parseCallouts(body);
   if (!messages.length) messages = parseMarkers(body);
-  const out = { messages };
+  const out = { messages, fm: extraOf(raw, CHAT_KEYS) };
   if (meta.id) out.id = String(meta.id);
   if (meta.title) out.title = String(meta.title);
   for (const [k, f] of [['created', 'createdAt'], ['updated', 'updatedAt']]) {
@@ -227,17 +241,19 @@ const summaryPath = (settings, video) => join(videoDir(settings, video), `${vide
 
 export const ping = () => native({ op: 'ping' });
 export const pickFolder = async () => (await native({ op: 'pick-folder' })).path;
+// Every file op carries the vault root; the host refuses paths outside it (defence in depth).
+const io = (settings, msg) => native({ root: rootDir(settings), ...msg });
 
-async function listMd(dir) {
-  const { entries } = await native({ op: 'list', path: dir });
+async function listMd(settings, dir) {
+  const { entries } = await io(settings, { op: 'list', path: dir });
   return entries.filter((e) => !e.dir && e.name.endsWith('.md')).map((e) => e.name.slice(0, -3));
 }
 
 // Both subfolders exist as soon as the video has anything on disk, so notes can be written
 // offline in Obsidian and picked up next time.
 async function ensureDirs(settings, video) {
-  await native({ op: 'mkdir', path: notesDir(settings, video) });
-  await native({ op: 'mkdir', path: chatsDir(settings, video) });
+  await io(settings, { op: 'mkdir', path: notesDir(settings, video) });
+  await io(settings, { op: 'mkdir', path: chatsDir(settings, video) });
   await syncTranscript(settings, video);
 }
 
@@ -253,23 +269,36 @@ export async function syncTranscript(settings, video) {
   if (!enabled(settings) || !video.transcript?.grouped?.length) return;
   const path = join(videoDir(settings, video), 'Transcript.md');
   if (video.transcriptFile === path) return;
-  await native({ op: 'write', path, content: transcriptToMd(video) });
+  await io(settings, { op: 'write', path, content: transcriptToMd(video) });
   video.transcriptFile = path;
 }
 
-// Write (or rename+write) one file under `dir`; `owner.file` is the disk key.
-async function put(dir, owner, name, content) {
-  if (owner.file && owner.file !== name) {
-    await native({ op: 'rename', from: join(dir, `${owner.file}.md`), to: join(dir, `${name}.md`) });
+// Write (or rename+write) one file under `dir`; `owner.file` is the disk key, `owner.mtime` the version we
+// last saw. If the file changed on disk since (edited in Obsidian), disk wins: `onDisk(content)` reloads
+// the owner and nothing is written. → 'written' | 'reloaded'
+async function put(settings, dir, owner, name, content, onDisk) {
+  if (owner.file && owner.mtime) {
+    const cur = join(dir, `${owner.file}.md`);
+    const { mtime } = await io(settings, { op: 'stat', path: cur });
+    if (mtime && mtime !== owner.mtime) {
+      const r = await io(settings, { op: 'read', path: cur });
+      if (r.content != null) { onDisk(r.content); owner.mtime = r.mtime || mtime; return 'reloaded'; }
+    }
   }
-  await native({ op: 'write', path: join(dir, `${name}.md`), content });
+  if (owner.file && owner.file !== name) {
+    await io(settings, { op: 'rename', from: join(dir, `${owner.file}.md`), to: join(dir, `${name}.md`) });
+  }
+  const r = await io(settings, { op: 'write', path: join(dir, `${name}.md`), content });
   owner.file = name;
+  owner.mtime = r.mtime || null;
+  return 'written';
 }
 
-async function drop(dir, owner) {
+async function drop(settings, dir, owner) {
   if (!owner.file) return;
-  await native({ op: 'delete', path: join(dir, `${owner.file}.md`) });
+  await io(settings, { op: 'delete', path: join(dir, `${owner.file}.md`) });
   owner.file = null;
+  owner.mtime = null;
 }
 
 const takenExcept = (items, me) => new Set(items.filter((x) => x !== me && x.file).map((x) => x.file));
@@ -278,26 +307,28 @@ export async function syncNote(settings, video, card) {
   if (!enabled(settings)) return;
   if (!card.file && !(card.text || '').trim() && !(card.title || '').trim()) return; // don't create files for blank cards
   await ensureDirs(settings, video);
-  await put(notesDir(settings, video), card, noteName(card, takenExcept(video.notes.cards, card)), noteToMd(video, card));
+  return put(settings, notesDir(settings, video), card, noteName(card, takenExcept(video.notes.cards, card)), noteToMd(video, card),
+    (md) => Object.assign(card, parseNote(md)));
 }
 
 export async function removeNote(settings, video, card) {
-  if (enabled(settings)) await drop(notesDir(settings, video), card);
+  if (enabled(settings)) await drop(settings, notesDir(settings, video), card);
 }
 
 export async function syncChat(settings, video, chat) {
   if (!enabled(settings)) return;
   if (!chat.file && !chat.messages.length) return;
   await ensureDirs(settings, video);
-  await put(chatsDir(settings, video), chat, chatName(chat, takenExcept(video.chats, chat)), chatToMd(video, chat));
+  return put(settings, chatsDir(settings, video), chat, chatName(chat, takenExcept(video.chats, chat)), chatToMd(video, chat),
+    (md) => Object.assign(chat, parseChat(md)));
 }
 
 export async function removeChat(settings, video, chat) {
-  if (enabled(settings)) await drop(chatsDir(settings, video), chat);
+  if (enabled(settings)) await drop(settings, chatsDir(settings, video), chat);
 }
 
-async function dirExists(dir) {
-  const { entries } = await native({ op: 'list', path: dir });
+async function dirExists(settings, dir) {
+  const { entries } = await io(settings, { op: 'list', path: dir });
   return entries.length > 0;
 }
 
@@ -306,11 +337,11 @@ export async function pin(settings, video) {
   if (!enabled(settings)) throw new Error('no-vault');
   const from = videoDirAt(settings, video, false);
   const to = videoDirAt(settings, video, true);
-  if (await dirExists(from)) await native({ op: 'rename', from, to });
+  if (await dirExists(settings, from)) await io(settings, { op: 'rename', from, to });
   video.pinned = { at: Date.now(), dir: to };
   video.transcriptFile = null; // moved with the folder; re-stamp under the new path
   await ensureDirs(settings, video);
-  await native({ op: 'write', path: summaryPath(settings, video), content: pinToMd(video) });
+  await io(settings, { op: 'write', path: summaryPath(settings, video), content: pinToMd(video) });
   return to;
 }
 
@@ -318,8 +349,8 @@ export async function unpin(settings, video) {
   if (!enabled(settings)) throw new Error('no-vault');
   const from = videoDirAt(settings, video, true);
   const to = videoDirAt(settings, video, false);
-  await native({ op: 'delete', path: join(from, `${videoFolder(video)}.md`) });
-  if (await dirExists(from)) await native({ op: 'rename', from, to });
+  await io(settings, { op: 'delete', path: join(from, `${videoFolder(video)}.md`) });
+  if (await dirExists(settings, from)) await io(settings, { op: 'rename', from, to });
   video.pinned = null;
   video.transcriptFile = null;
   return to;
@@ -331,12 +362,12 @@ export async function hydrate(settings, video) {
   if (!enabled(settings)) return;
   if (!video.folder && !hasTitle(video)) return; // nothing on disk can belong to a video we can't name yet
   // Where the folder actually lives decides pinned state (moving it in Obsidian pins/unpins).
-  const inPinned = await dirExists(videoDirAt(settings, video, true));
+  const inPinned = await dirExists(settings, videoDirAt(settings, video, true));
   if (inPinned && !video.pinned) video.pinned = { at: Date.now(), dir: videoDirAt(settings, video, true) };
-  else if (!inPinned && video.pinned && (await dirExists(videoDirAt(settings, video, false)))) video.pinned = null;
+  else if (!inPinned && video.pinned && (await dirExists(settings, videoDirAt(settings, video, false)))) video.pinned = null;
   const nDir = notesDir(settings, video);
   const cDir = chatsDir(settings, video);
-  const [noteFiles, chatFiles] = await Promise.all([listMd(nDir), listMd(cDir)]);
+  const [noteFiles, chatFiles] = await Promise.all([listMd(settings, nDir), listMd(settings, cDir)]);
   const summary = videoFolder(video);
 
   // notes
@@ -345,12 +376,12 @@ export async function hydrate(settings, video) {
   const byId = new Map(video.notes.cards.map((c) => [c.id, c]));
   for (const name of noteFiles) {
     if (name === summary) continue; // the pin summary lives in the video folder, not notes/, but be safe
-    const { content } = await native({ op: 'read', path: join(nDir, `${name}.md`) });
+    const { content, mtime } = await io(settings, { op: 'read', path: join(nDir, `${name}.md`) });
     if (content == null) continue;
     const parsed = parseNote(content);
     // Identity = the uuid in front matter (survives renames in Obsidian); file name is the fallback.
     const prev = (parsed.id && byId.get(parsed.id)) || byFile.get(name);
-    const card = { id: parsed.id || prev?.id || crypto.randomUUID(), title: '', start: null, color: 0, ts: Date.now(), ...prev, ...parsed, file: name };
+    const card = { id: parsed.id || prev?.id || crypto.randomUUID(), title: '', start: null, color: 0, ts: Date.now(), ...prev, ...parsed, file: name, mtime: mtime || null };
     if (card.kind === 'note') card.title = name; // filename is the title: renames in Obsidian stick
     cards.push(card);
   }
@@ -364,7 +395,7 @@ export async function hydrate(settings, video) {
   const chatByFile = new Map(video.chats.filter((c) => c.file).map((c) => [c.file, c]));
   const chatById = new Map(video.chats.map((c) => [c.id, c]));
   for (const name of chatFiles) {
-    const { content } = await native({ op: 'read', path: join(cDir, `${name}.md`) });
+    const { content, mtime } = await io(settings, { op: 'read', path: join(cDir, `${name}.md`) });
     if (content == null) continue;
     const parsed = parseChat(content);
     const prev = (parsed.id && chatById.get(parsed.id)) || chatByFile.get(name);
@@ -376,6 +407,7 @@ export async function hydrate(settings, video) {
       ...parsed,
       title: name, // filename is the title: renames in Obsidian stick
       file: name,
+      mtime: mtime || null,
     });
   }
   chats.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));

@@ -15,9 +15,10 @@ export const DEFAULT_SETTINGS = {
 // v1 settings were { provider, apiKey, model } — map into per-provider keys once. Notion keys dropped.
 function migrate(s) {
   if (!s) return s;
-  const { provider = 'anthropic', apiKey, model, notionToken, notionDatabaseId, ...rest } = s;
+  const { notionToken, notionDatabaseId, ...clean } = s;
+  if (!('apiKey' in clean)) return clean; // already v2: keep model & friends untouched
+  const { provider = 'anthropic', apiKey, model, ...rest } = clean;
   const out = { ...rest };
-  if (!('apiKey' in s)) return out;
   if (apiKey && !out[`${provider}Key`]) out[`${provider}Key`] = apiKey;
   if (model && !String(model).includes(':')) out.model = `${provider}:${model}`;
   else if (model) out.model = model;

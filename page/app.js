@@ -212,7 +212,14 @@ async function renderDetail(videoId) {
   // Knowledge base folder set → files on disk are the truth; pull them in before rendering.
   let warned = false;
   const warn = (e) => { console.warn('knowledge base', e); if (!warned) { warned = true; toast(`Knowledge base: ${e.message}`); } };
-  const disk = (fn) => db.getSettings().then((s) => fn(s)).catch(warn);
+  // Disk wins on conflict: a sync that returns 'reloaded' pulled the Obsidian edit in; rebuild panes.
+  const disk = (fn) => db.getSettings().then((s) => fn(s)).then((r) => {
+    if (r !== 'reloaded') return;
+    db.saveVideo(video);
+    for (const k of Object.keys(built)) delete built[k];
+    show(seg.querySelector('.seg-btn.active')?.dataset.tab || 'Transcript');
+    toast('Changed in Obsidian: reloaded from disk');
+  }).catch(warn);
 
   const pinBtn = el('button', { class: 'icon-btn pin' }, pinIcon());
   const paintPin = () => {
@@ -268,6 +275,7 @@ async function renderDetail(videoId) {
   const s1 = await db.getSettings();
   const names = Object.keys(panes);
   detailKeys = (e) => {
+    if (e.key === 'Escape') built.Chat?.__cancel?.();
     if (s1.hotkeys === false) return;
     const hk = hotkeyId(e);
     if (!hk) return;
@@ -477,9 +485,6 @@ function chatPane(video, disk) {
       send();
     }
   };
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && cancel) cancel();
-  });
   sendBtn.onclick = send;
   const webBtn = el('button', { class: 'web-btn' }, globeIcon());
   const paintWeb = (on) => {
@@ -500,6 +505,7 @@ function chatPane(video, disk) {
       el('div', { class: 'input-pill' }, input,
         el('div', { class: 'tool-row' }, el('span', { class: 'spacer' }), picker, webBtn, sendBtn))));
   root.__toggleWeb = toggleWeb;
+  root.__cancel = () => { if (cancel) cancel(); };
   return root;
 }
 
@@ -631,6 +637,8 @@ async function renderSettings() {
     class: 'btn',
     onclick: async () => {
       const all = await browser.storage.local.get(null);
+      // API keys stay out of the file: it lands in Downloads and gets backed up / synced.
+      if (all.settings) all.settings = { ...all.settings, anthropicKey: '', openaiKey: '' };
       const url = URL.createObjectURL(new Blob([JSON.stringify(all, null, 2)], { type: 'application/json' }));
       const a = el('a', { href: url, download: 'yt-transcriber-export.json' });
       document.body.append(a);
@@ -639,6 +647,26 @@ async function renderSettings() {
       setTimeout(() => URL.revokeObjectURL(url), 5000);
     },
   }, 'Export data');
+
+  // Import = merge an export back in (videos + non-secret settings). Keys in storage are kept.
+  const importInput = el('input', { type: 'file', accept: 'application/json', hidden: '' });
+  importInput.onchange = async () => {
+    const f = importInput.files?.[0];
+    if (!f) return;
+    try {
+      const data = JSON.parse(await f.text());
+      if (!data || typeof data !== 'object') throw new Error('not an export file');
+      const videos = Object.fromEntries(Object.entries(data).filter(([k]) => k.startsWith('video:')));
+      const cur = await db.getSettings();
+      const { anthropicKey, openaiKey, ...rest } = data.settings ?? {};
+      await browser.storage.local.set({ ...videos, settings: { ...cur, ...rest, anthropicKey: cur.anthropicKey || anthropicKey || '', openaiKey: cur.openaiKey || openaiKey || '' } });
+      toast(`Imported ${Object.keys(videos).length} videos`);
+      renderSettings();
+    } catch (err) {
+      toast(`Import failed: ${err.message}`);
+    }
+  };
+  const importBtn = el('button', { class: 'btn', onclick: () => importInput.click() }, 'Import data');
 
   const field = (label, input, help) => el('label', { class: 'field' },
     el('span', { class: 'field-label' }, label), input,
@@ -662,7 +690,7 @@ async function renderSettings() {
         el('label', { class: 'field-check' }, hotkeys, el('span', { class: 'field-label' }, 'Keyboard shortcuts')),
         el('table', { class: 'hotkeys' }, HOTKEYS.map((h) => el('tr', {}, el('td', {}, el('kbd', {}, h.keys)), el('td', {}, h.desc)))),
         el('span', { class: 'field-help' }, 'Fixed for now: turn them all on or off here. Defined in config/hotkeys.js.')),
-      el('div', { class: 'settings-actions' }, saveBtn, testBtn('anthropic', 'Anthropic'), testBtn('openai', 'OpenAI'), testHostBtn, exportBtn)));
+      el('div', { class: 'settings-actions' }, saveBtn, testBtn('anthropic', 'Anthropic'), testBtn('openai', 'OpenAI'), testHostBtn, exportBtn, importBtn, importInput)));
 }
 
 // ---------- router ----------

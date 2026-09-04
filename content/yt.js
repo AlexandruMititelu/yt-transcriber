@@ -199,8 +199,16 @@
     const diskDirty = new Set(); // cards
     const flushNotes = () => {
       if (notesDirty) { notesDirty = false; save(); }
-      for (const d of diskDirty) disk((s) => L.vault.syncNote(s, video, d));
+      for (const d of diskDirty) disk((s) => L.vault.syncNote(s, video, d).then(onSynced));
       diskDirty.clear();
+    };
+    // Disk wins on conflict: vault reloaded the item from the file edited in Obsidian.
+    const onSynced = (r) => {
+      if (r !== 'reloaded' || !live()) return;
+      save();
+      renderNotes();
+      renderChat();
+      toast('Changed in Obsidian: reloaded from disk');
     };
     const saveSoon = debounce(() => { if (live()) flushNotes(); }, 500);
     flushSave = () => { if (typeof notesView !== 'undefined') notesView.flush(); flushNotes(); };
@@ -466,7 +474,7 @@
         c.title = title;
         c.updatedAt = Date.now();
         save();
-        disk((s) => L.vault.syncChat(s, video, c));
+        disk((s) => L.vault.syncChat(s, video, c).then(onSynced));
       },
       onDelete: () => {
         const c = cur();
@@ -595,7 +603,7 @@
         chat.messages.push({ role: 'assistant', content: reply, ts: Date.now() });
         chat.updatedAt = Date.now();
         await save();
-        disk((s) => L.vault.syncChat(s, video, chat));
+        disk((s) => L.vault.syncChat(s, video, chat).then(onSynced));
         autoTitle(chat, settings);
         if (cur() === chat) renderChat();
       } catch (e) {

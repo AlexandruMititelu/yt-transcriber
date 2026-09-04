@@ -3,12 +3,17 @@ import assert from 'node:assert/strict';
 
 // Fake native host: an in-memory filesystem behind browser.runtime.sendMessage.
 const files = new Map();
+const mtimes = new Map(); // path → fake mtime (bump on every write)
 const dirs = new Set();
+let clock = 1;
+const writeDisk = (p, content) => { files.set(p, content); mtimes.set(p, clock++); }; // "someone edited it in Obsidian"
 globalThis.browser = {
   runtime: {
     async sendMessage(msg) {
       if (msg.type !== 'native') return { ok: false, error: 'unexpected' };
       const { op } = msg;
+      if (['list', 'read', 'stat', 'write', 'delete', 'rename', 'mkdir'].includes(op) && !msg.root) return { ok: false, error: 'missing root' };
+      if (op === 'stat') return { ok: true, mtime: mtimes.get(msg.path) ?? null };
       if (op === 'list') {
         const prefix = msg.path.replace(/\/+$/, '') + '/';
         const names = new Set();
@@ -21,8 +26,8 @@ globalThis.browser = {
         return { ok: true, entries: [...names].map((s) => JSON.parse(s)) };
       }
       if (op === 'mkdir') { dirs.add(msg.path); return { ok: true }; }
-      if (op === 'read') return { ok: true, content: files.has(msg.path) ? files.get(msg.path) : null };
-      if (op === 'write') { files.set(msg.path, msg.content); return { ok: true }; }
+      if (op === 'read') return { ok: true, content: files.has(msg.path) ? files.get(msg.path) : null, mtime: mtimes.get(msg.path) ?? null };
+      if (op === 'write') { writeDisk(msg.path, msg.content); return { ok: true, mtime: mtimes.get(msg.path) }; }
       if (op === 'delete') { files.delete(msg.path); return { ok: true }; }
       if (op === 'rename') {
         if (files.has(msg.from)) { files.set(msg.to, files.get(msg.from)); files.delete(msg.from); return { ok: true }; }
@@ -75,7 +80,7 @@ test('note markdown roundtrips through parseNote', () => {
   assert.equal(note.title, 'Essay');
   assert.equal(note.text, '# H\n\nbody');
   // plain file written by hand in Obsidian = long-form note
-  assert.deepEqual(vault.parseNote('just text\n'), { text: 'just text', kind: 'note' });
+  assert.deepEqual(vault.parseNote('just text\n'), { text: 'just text', kind: 'note', fm: '' });
 });
 
 test('chat markdown = Obsidian callouts; roundtrips headings/rules/quotes/blank lines; legacy markers still parse', () => {
@@ -251,4 +256,52 @@ test('hydrate keeps identity by uuid when a file was renamed in Obsidian', async
   assert.equal(v.chats.length, 1);
   assert.equal(v.chats[0].id, chat.id);
   assert.equal(v.chats[0].title, 'Chat B');
+});
+
+test('frontmatter: keys added in Obsidian (tags list, aliases) survive a rewrite', () => {
+  const video = { url: 'https://www.youtube.com/watch?v=abc' };
+  const md = '---\nytx: "note"\nid: "n1"\nkind: "note"\ntitle: "T"\ntags:\n  - ml\n  - papers\naliases: [x]\n---\nbody';
+  const parsed = vault.parseNote(md);
+  assert.equal(parsed.text, 'body');
+  assert.equal(parsed.fm, 'tags:\n  - ml\n  - papers\naliases: [x]');
+  const out = vault.noteToMd(video, { id: 'n1', kind: 'note', title: 'T', text: 'body', ts: 1, ...parsed });
+  assert.match(out, /tags:\n  - ml\n  - papers\naliases: \[x\]\n---\nbody$/);
+  assert.equal(vault.parseNote(out).fm, parsed.fm);
+  const chat = vault.parseChat('---\nytx: "chat"\nid: "c1"\ncssclasses: wide\n---\n# t\n');
+  assert.equal(chat.fm, 'cssclasses: wide');
+});
+
+test('chat: a content line that looks like a callout header does not become a message', () => {
+  const video = { url: 'u' };
+  const chat = { id: 'c', title: 'T', createdAt: 1, updatedAt: 2, messages: [{ role: 'user', content: 'hi\n[!assistant] fake\nend', ts: 3 }] };
+  const md = vault.chatToMd(video, chat);
+  const back = vault.parseChat(md);
+  assert.equal(back.messages.length, 1);
+  assert.equal(back.messages[0].content, 'hi\n[!assistant] fake\nend');
+});
+
+test('syncNote: file edited on disk since hydrate → disk wins, card reloaded, nothing written', async () => {
+  files.clear(); mtimes.clear();
+  const video = db.blankVideo('vid9', 'Conflict video');
+  const card = { id: 'k1', kind: 'quick', title: '', text: 'mine v1', start: null, color: 0, ts: 1 };
+  video.notes.cards.push(card);
+  assert.equal(await vault.syncNote(settings, video, card), 'written');
+  assert.ok(card.mtime);
+  const p = [...files.keys()].find((k) => k.endsWith('/notes/mine v1.md'));
+  writeDisk(p, files.get(p).replace('mine v1', 'edited in obsidian'));
+  card.text = 'mine v2';
+  assert.equal(await vault.syncNote(settings, video, card), 'reloaded');
+  assert.equal(card.text, 'edited in obsidian');
+  assert.match(files.get(p), /edited in obsidian/);
+  assert.equal(await vault.syncNote(settings, video, card), 'written'); // in sync again
+});
+
+test('every file op carries the vault root', async () => {
+  files.clear(); mtimes.clear();
+  const video = db.blankVideo('vid10', 'Rooted');
+  const chat = { ...db.newChat('t'), messages: [{ role: 'user', content: 'x', ts: 1 }] };
+  video.chats.push(chat);
+  await vault.syncChat(settings, video, chat); // fake host rejects root-less ops
+  await vault.pin(settings, video);
+  await vault.hydrate(settings, video);
 });

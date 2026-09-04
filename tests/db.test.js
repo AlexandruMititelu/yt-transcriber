@@ -172,3 +172,13 @@ test('getVideo heals records that froze the "YouTube" placeholder as title/folde
   assert.equal(got.title, '');
   assert.equal(got.folder, null);
 });
+
+test('v2 settings keep model/effort/webSearch across getSettings (regression: model reset on load)', async () => {
+  store.clear();
+  await db.saveSettings({ model: 'openai:gpt-5.1', effort: 'high', webSearch: true, notionToken: 'x' });
+  const s = await db.getSettings();
+  assert.equal(s.model, 'openai:gpt-5.1');
+  assert.equal(s.effort, 'high');
+  assert.equal(s.webSearch, true);
+  assert.equal('notionToken' in s, false);
+});
