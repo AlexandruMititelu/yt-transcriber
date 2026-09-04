@@ -13,6 +13,8 @@ export const HELP = {
   note: 'Note: a full markdown document with a title. Opens in the editor; the card shows only the title and first sentence.',
 };
 
+import { extractTags, chipTags } from '../lib/tags.js';
+
 function h(tag, cls, text) {
   const n = document.createElement(tag);
   if (cls) n.className = cls;
@@ -104,11 +106,13 @@ export function createNotesView(opts) {
   let cardEls = new Map(); // id → current list card element (rebuilt on every list paint)
   let query = '';
   let newestFirst = false;
+  let tagFilter = null; // inline #tag chosen in the filter row
 
   // Cards in current filter/sort order (same rules paint() renders with).
   const displayCards = () => {
     const q = query.trim().toLowerCase();
     let cards = video.notes.cards.filter((c) => !q || `${c.title || ''}\n${c.text || ''}`.toLowerCase().includes(q));
+    if (tagFilter) cards = cards.filter((c) => extractTags(c.text).includes(tagFilter));
     if (newestFirst) cards = [...cards].reverse();
     return cards;
   };
@@ -252,7 +256,7 @@ export function createNotesView(opts) {
         box.appendChild(md);
         return;
       }
-      if (card.text.trim()) box.appendChild(renderMd(card.text));
+      if (card.text.trim()) { const md = renderMd(card.text); chipTags(md, (t) => { tagFilter = tagFilter === t ? null : t; refresh(); }); box.appendChild(md); }
       else box.appendChild(h('div', 'ytx-notes-placeholder', placeholder));
     };
     const edit = () => {
@@ -443,6 +447,18 @@ export function createNotesView(opts) {
       sort.addEventListener('click', () => { newestFirst = !newestFirst; sort.textContent = newestFirst ? 'Newest' : 'Oldest'; paint(); });
       bar.append(h('span', 'ytx-notes-spacer'), search, sort);
     }
+    // Filter row: every inline #tag across the notes, with counts; click toggles the filter.
+    const tagRow = h('div', 'ytx-tag-row ytx-notes-tags');
+    const counts = new Map();
+    for (const c of all) for (const t of extractTags(c.text)) counts.set(t, (counts.get(t) || 0) + 1);
+    for (const [t, n] of [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))) {
+      const chip = h('button', `ytx-tag${tagFilter === t ? ' is-on' : ''}`, `#${t} `);
+      chip.type = 'button';
+      chip.append(h('span', 'ytx-tag-n', String(n)));
+      chip.setAttribute('aria-pressed', tagFilter === t ? 'true' : 'false');
+      chip.addEventListener('click', () => { tagFilter = tagFilter === t ? null : t; refresh(); });
+      tagRow.append(chip);
+    }
     const grid = h('div', 'ytx-notes-grid');
     const paint = () => {
       grid.textContent = '';
@@ -462,7 +478,7 @@ export function createNotesView(opts) {
       markSelected();
     };
     paint();
-    root.append(bar, grid);
+    root.append(bar, tagRow, grid);
   }
 
   /* ---- editor ---- */

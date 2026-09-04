@@ -40,6 +40,8 @@
 }
 .ytx-notes-btn.is-note:hover { background: var(--green, #248a3d); color: #fff; }
 
+.ytx-notes-tags { margin: -2px 0 8px; }
+
 .ytx-notes-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));

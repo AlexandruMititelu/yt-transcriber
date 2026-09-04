@@ -79,6 +79,7 @@ export function blankVideo(videoId, title = '', channel = '') {
     activeChatId: null,
     notes: { cards: [] }, // cards: [{id, kind: 'quick'|'note', title, text, start, color, ts, file?}]
     pinned: null,
+    tags: [], // Obsidian tags (hub note front matter), no '#'
     folder: null, // vault folder name, frozen on first disk write (title may change later)
     transcriptFile: null, // vault path of Transcript.md once written
     hubFile: null, // vault path of <video>/<video>.md once written
@@ -143,6 +144,7 @@ export async function listVideos() {
           cards: v.notes?.cards?.length ?? 0,
         },
         pinned: !!v.pinned,
+        tags: v.tags ?? [],
       };
     })
     .sort((a, b) => b.updatedAt - a.updatedAt);

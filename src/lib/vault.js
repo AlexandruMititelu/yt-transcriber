@@ -6,6 +6,7 @@
 // Pure builders/parsers are exported for tests; async ops go through the native host (bus.native).
 
 import { native } from './bus.js';
+import { parseTagList } from './tags.js';
 import { fmtTime } from './format.js';
 
 export const ROOT_NAME = 'YT-transcriber';
@@ -60,7 +61,7 @@ const iso = localStamp;
 export function frontmatter(meta, extra = '') {
   const lines = Object.entries(meta)
     .filter(([, v]) => v !== undefined && v !== null && v !== '')
-    .map(([k, v]) => `${k}: ${typeof v === 'number' ? v : yamlStr(v)}`);
+    .map(([k, v]) => `${k}: ${typeof v === 'number' ? v : Array.isArray(v) ? `[${v.join(', ')}]` : yamlStr(v)}`);
   if (extra) lines.push(extra.replace(/\s+$/, ''));
   return `---\n${lines.join('\n')}\n---\n`;
 }
@@ -201,7 +202,9 @@ export function parseChat(md) {
   return out;
 }
 
-const HUB_KEYS = new Set(['ytx', 'id', 'url', 'title', 'channel', 'duration', 'length', 'lang', 'saved', 'pinned']);
+const HUB_KEYS = new Set(['ytx', 'id', 'url', 'title', 'channel', 'duration', 'length', 'lang', 'saved', 'pinned', 'tags']);
+// `tags` from a hub note's front matter in whatever spelling Obsidian left it (flow list, block list, plain).
+export const tagsOf = (meta, raw) => ('tags' in raw ? parseTagList(raw.tags.includes('\n') ? raw.tags : meta.tags) : null);
 const hubMeta = (video, pinnedAt) => ({
   ytx: 'video',
   id: video.videoId,
@@ -213,6 +216,7 @@ const hubMeta = (video, pinnedAt) => ({
   lang: video.transcript?.lang,
   saved: iso(video.savedAt),
   pinned: pinnedAt ? iso(pinnedAt) : undefined,
+  tags: video.tags?.length ? video.tags : undefined,
 });
 
 // <video>/<video>.md — the hub note every video gets: title, link, chapters, link to Transcript.md.
@@ -232,8 +236,11 @@ export function videoToMd(video, { pinnedAt = video.pinned?.at } = {}) {
 }
 
 // Re-stamp our front matter on an existing hub note, keeping the body and any user keys verbatim.
-export function restampHub(md, video, { pinnedAt } = {}) {
-  const { body, raw } = parseFrontmatter(md);
+// Tags on disk win (edited in Obsidian) unless the caller is writing a tag change (`tagsFromApp`).
+export function restampHub(md, video, { pinnedAt, tagsFromApp = false } = {}) {
+  const { meta, body, raw } = parseFrontmatter(md);
+  const disk = tagsOf(meta, raw);
+  if (disk && !tagsFromApp) video.tags = disk;
   return frontmatter(hubMeta(video, pinnedAt), extraOf(raw, HUB_KEYS)) + body;
 }
 
@@ -242,7 +249,7 @@ export const pinToMd = (video) => videoToMd(video, { pinnedAt: Date.now() });
 
 // YT-transcriber/Index.md: one line per video folder, pinned first. Built from what is on disk.
 export function indexToMd(entries) {
-  const row = (e) => `- [[${e.pinned ? `${PINNED_DIR}/` : ''}${e.folder}/${e.folder}|${e.title || e.folder}]]${e.channel ? ` · ${e.channel}` : ''}`;
+  const row = (e) => `- [[${e.pinned ? `${PINNED_DIR}/` : ''}${e.folder}/${e.folder}|${e.title || e.folder}]]${e.channel ? ` · ${e.channel}` : ''}${e.tags?.length ? ' ' + e.tags.map((t) => `#${t}`).join(' ') : ''}`;
   const pinned = entries.filter((e) => e.pinned);
   const rest = entries.filter((e) => !e.pinned);
   const lines = ['# YT Transcriber', ''];
@@ -312,6 +319,16 @@ async function ensureHub(settings, video) {
   video.hubFile = path;
 }
 
+// Tags changed in the app → restamp the hub note's front matter (body untouched) and refresh Index.md.
+export async function syncTags(settings, video) {
+  if (!enabled(settings)) return;
+  await ensureDirs(settings, video);
+  const path = hubPath(settings, video);
+  const { content } = await io(settings, { op: 'read', path });
+  if (content != null) await io(settings, { op: 'write', path, content: restampHub(content, video, { pinnedAt: video.pinned?.at, tagsFromApp: true }) });
+  await refreshIndex(settings).catch(() => {});
+}
+
 // Scan root + pinned/ for hub notes and rewrite Index.md.
 export async function refreshIndex(settings) {
   if (!enabled(settings)) return;
@@ -323,8 +340,8 @@ export async function refreshIndex(settings) {
       if (!e.dir || (!pinned && e.name === PINNED_DIR)) continue;
       const { content } = await io(settings, { op: 'read', path: join(base, e.name, `${e.name}.md`) });
       if (content == null) continue;
-      const { meta } = parseFrontmatter(content);
-      entries.push({ folder: e.name, pinned, title: meta.title || e.name, channel: meta.channel || '' });
+      const { meta, raw } = parseFrontmatter(content);
+      entries.push({ folder: e.name, pinned, title: meta.title || e.name, channel: meta.channel || '', tags: tagsOf(meta, raw) ?? [] });
     }
   }
   entries.sort((a, b) => String(a.title).localeCompare(String(b.title)));
@@ -474,6 +491,13 @@ export async function hydrate(settings, video) {
   const cDir = chatsDir(settings, video);
   const [noteFiles, chatFiles] = await Promise.all([listMd(settings, nDir), listMd(settings, cDir)]);
   if (video.hubFile && video.hubFile !== hubPath(settings, video)) video.hubFile = null; // folder moved
+  // Hub note tags win when the key is there (edited in Obsidian); a hub without the key keeps local tags.
+  const hub = await io(settings, { op: 'read', path: hubPath(settings, video) });
+  if (hub.content != null) {
+    const { meta, raw } = parseFrontmatter(hub.content);
+    const t = tagsOf(meta, raw);
+    if (t) video.tags = t;
+  }
   const summary = videoFolder(video);
 
   // notes

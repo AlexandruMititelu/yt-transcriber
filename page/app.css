@@ -151,6 +151,9 @@ kbd { font-family: var(--font-mono); font-size: 11.5px; padding: 1px 6px; border
 
 /* library tools */
 .lib-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 16px; }
+.lib-tags { margin: -8px 0 16px; }
+.card-tags { margin-bottom: 8px; }
+.detail-head .ytx-tags { margin-top: 6px; max-width: 420px; }
 .lib-tools .segmented { margin: 0; }
 .lib-search { flex: 1; min-width: 180px; width: auto; border-radius: 999px; padding: 6px 14px; }
 

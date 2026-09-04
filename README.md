@@ -55,7 +55,7 @@ Layout inside the vault:
 <vault>/YT-transcriber/
   Index.md                    links to every video (pinned first), rebuilt automatically
   <video title>/              created once a note or chat exists
-    <video title>.md          hub note: link, channel, length, chapters, [[Transcript]], a Notes section for you
+    <video title>.md          hub note: link, channel, length, chapters, [[Transcript]], a Notes section for you; `tags:` in front matter
     Transcript.md             timestamped transcript with chapter headings
     attachments/<m-ss>.jpg    frame captures
     notes/<first line>.md     quick note (front matter: kind, time, link, color)
@@ -86,6 +86,7 @@ Transcripts and settings live in the browser profile's `storage.local` — on th
 - **Web search**: globe button next to Send. The model runs its own searches (Anthropic server-side tool or OpenAI built-in search), answers with a "Sources" list, links open in a new tab
 - **Shortcuts** (toggle in Settings): Alt+↑ / Alt+↓ switch tabs, Alt+E / Alt+V switch the note editor between raw markdown and rendered view, Alt+W toggles web search, Alt+C focuses the chat box, Alt+N new note, Alt+Q new quick note, Alt+Enter back to the note list / open the selected note, Alt+' / Alt+\ select previous / next note, Alt+Shift+Enter focus the player, Alt+F focuses transcript search
 - **+** (header) saves the video to the library without notes or chats; just watching never creates an entry
+- **Tags**: the tag button in the panel header (and the field under the title in the Library) tags the video; they land in the hub note's front matter as `tags:` and on its Index.md line as `#tags`, so Obsidian's tag pane, search and graph see them. Edit them in Obsidian and the app picks them up. Suggestions come from tags you already used. Library cards show them, the row under the toolbar filters by tag, and search matches them. Notes need no tag field: type `#idea` inline like anywhere in Obsidian; the notes tab shows such tags as chips and a filter row
 - **Pin** (top right) moves the video's folder into `YT-transcriber/pinned/` and turns yellow; press again to unpin. Pinned videos sit at the top of the Library, and every card has a pin
 - **⧉** opens the Library: browse saved videos, reopen transcript/chat/notes, delete, settings
 

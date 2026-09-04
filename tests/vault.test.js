@@ -338,13 +338,22 @@ test('hub note + Index.md: written once per video, pin/unpin only restamp front 
   const pinnedHub = 'C:\\Vault/YT-transcriber/pinned/Hub video/Hub video.md';
   assert.ok(files.has(pinnedHub));
   assert.match(files.get(pinnedHub), /pinned: "\d{4}/);
-  assert.match(files.get(pinnedHub), /tags:\n  - talk/);
+  assert.match(files.get(pinnedHub), /tags: \[talk\]/); // tags are ours now: disk list read back, re-emitted as a flow list
+  assert.deepEqual(video.tags, ['talk']);
   assert.match(files.get(pinnedHub), /my thoughts/);
   assert.match(files.get('C:\\Vault/YT-transcriber/Index.md'), /## Pinned\n\n- \[\[pinned\/Hub video\/Hub video\|Hub video\]\]/);
   await vault.unpin(settings, video);
   assert.ok(files.has(hub));
   assert.doesNotMatch(files.get(hub), /pinned:/);
   assert.match(files.get(hub), /my thoughts/);
+  // tags set in the app → hub restamped, Index.md line carries #tags; hydrate reads hub tags back
+  video.tags = ['talk', 'ml'];
+  await vault.syncTags(settings, video);
+  assert.match(files.get(hub), /tags: \[talk, ml\]/);
+  assert.match(files.get('C:\\Vault/YT-transcriber/Index.md'), /Hub video\]\] · Chan #talk #ml/);
+  writeDisk(hub, files.get(hub).replace('tags: [talk, ml]', 'tags:\n  - rust\n  - "#papers"'));
+  await vault.hydrate(settings, video);
+  assert.deepEqual(video.tags, ['rust', 'papers']);
   // frame capture → attachments + embed
   const embed = await vault.saveFrame(settings, video, 'data:image/jpeg;base64,AAAA', 61);
   assert.equal(embed, '![[attachments/1-01.jpg]]');

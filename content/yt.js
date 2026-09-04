@@ -33,9 +33,9 @@
 
   async function loadLibs() {
     if (L) return L;
-    const names = ['format', 'transcript', 'bus', 'db', 'llm', 'vault', 'picker', 'chatbar', 'notes', 'icons', 'hotkeys', 'markdown', 'toast', 'chat'];
-    const UI = new Set(['picker', 'chatbar', 'notes', 'icons', 'markdown', 'toast', 'chat']);
-    const pathFor = (n) => (n === 'hotkeys' ? 'config/hotkeys.js' : UI.has(n) ? `src/ui/${n}.js` : `src/lib/${n}.js`);
+    const names = ['format', 'transcript', 'bus', 'db', 'llm', 'vault', 'picker', 'chatbar', 'notes', 'icons', 'hotkeys', 'markdown', 'toast', 'chat', 'tags', 'tagsUi'];
+    const UI = new Set(['picker', 'chatbar', 'notes', 'icons', 'markdown', 'toast', 'chat', 'tagsUi']);
+    const pathFor = (n) => (n === 'hotkeys' ? 'config/hotkeys.js' : n === 'tagsUi' ? 'src/ui/tags.js' : UI.has(n) ? `src/ui/${n}.js` : `src/lib/${n}.js`);
     const mods = await Promise.all(names.map((n) => import(url(pathFor(n)))));
     // UMD vendors set globalThis.marked / globalThis.DOMPurify; mermaid loads lazily.
     await Promise.all([import(url('vendor/marked.min.js')), import(url('vendor/purify.min.js'))]);
@@ -48,7 +48,7 @@
     const style = h('style');
     style.id = 'ytx-fonts';
     // <link> to a moz-extension: stylesheet gets blocked on youtube.com; inline the text instead.
-    for (const name of ['picker', 'chatbar', 'notes', 'markdown', 'toast', 'chat']) {
+    for (const name of ['picker', 'chatbar', 'notes', 'markdown', 'toast', 'chat', 'tags']) {
       fetch(url(`src/ui/${name}.css`)).then((r) => r.text()).then((css) => {
         const s = h('style');
         s.id = `ytx-${name}-css`;
@@ -200,7 +200,38 @@
     libraryBtn.appendChild(L.icons.libraryIcon());
     libraryBtn.title = 'Open library';
     libraryBtn.setAttribute('aria-label', 'Open library');
-    header.append(addBtn, refetchBtn, pinBtn, libraryBtn);
+    // Tags: popover under the header; saving tags keeps the video and restamps the hub note.
+    const tagWrap = h('div', 'ytx-tagwrap');
+    const tagBtn = h('button', 'ytx-icon-btn ytx-tagbtn');
+    tagBtn.appendChild(L.icons.tagIcon());
+    tagBtn.setAttribute('aria-label', 'Tags');
+    const tagPop = h('div', 'ytx-tagpop');
+    const paintTags = () => { tagBtn.classList.toggle('is-on', !!video.tags?.length); tagBtn.title = video.tags?.length ? `Tags: ${video.tags.map((t) => `#${t}`).join(' ')}` : 'Tags'; };
+    let allTags = [];
+    const tagEd = L.tagsUi.createTagEditor({
+      get: () => video.tags ?? [],
+      set: (tags) => {
+        video.tags = tags;
+        video.kept = true;
+        paintTags();
+        tagEd.refresh();
+        save().then(() => disk((s) => L.vault.syncTags(s, video)));
+      },
+      suggest: () => allTags,
+    });
+    tagPop.append(tagEd.root);
+    tagWrap.append(tagBtn, tagPop);
+    tagBtn.addEventListener('click', async () => {
+      const open = tagPop.classList.toggle('is-open');
+      tagBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      if (!open) return;
+      allTags = [...new Set((await L.db.listVideos()).flatMap((v) => v.tags ?? []))].sort();
+      tagEd.refresh();
+      tagEd.focus();
+    });
+    document.addEventListener('click', (e) => { if (!tagWrap.contains(e.target)) tagPop.classList.remove('is-open'); }, true);
+    paintTags();
+    header.append(addBtn, refetchBtn, tagWrap, pinBtn, libraryBtn);
     panel.appendChild(header);
 
     const tabsBar = h('div', 'ytx-tabs');

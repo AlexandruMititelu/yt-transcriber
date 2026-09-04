@@ -9,6 +9,7 @@ import { createChatView } from '../src/ui/chat.js';
 import { renderMarkdown, setDark } from '../src/ui/markdown.js';
 import { createToaster } from '../src/ui/toast.js';
 import { pinIcon, chevronDown, copyIcon, gearIcon, chevronLeft, trashIcon } from '../src/ui/icons.js';
+import { createTagEditor } from '../src/ui/tags.js';
 import { HOTKEYS, hotkeyId } from '../config/hotkeys.js';
 import { PROMPTS, promptsToText } from '../config/prompts.js';
 
@@ -83,6 +84,7 @@ const renderMdFor = (video) => (text) => renderMarkdown(text, { timeHref: (sec) 
 
 let libQuery = '';
 let libSort = 'recent'; // 'recent' | 'title' | 'channel'
+let libTag = null; // tag filter chip
 let libGroup = false; // group by channel
 let libShell = null; // header + tools, built once per visit to #/ — only the body inside .lib-stage repaints
 let libPaint = 0; // paint token: a slow listVideos must never overwrite a newer paint
@@ -161,10 +163,11 @@ function buildLibShell() {
   } }, 'By channel');
   const count = el('span', { class: 'lib-count' });
   const stage = el('div', { class: 'lib-stage' }, el('div', { class: 'empty' }, 'Loading…'));
+  const tags = el('div', { class: 'ytx-tag-row lib-tags' });
   $app.replaceChildren(header,
     el('div', { class: 'lib-tools' }, search, sortMenu(() => paintLibrary('fade')), group, count),
-    stage);
-  libShell = { stage, count };
+    tags, stage);
+  libShell = { stage, count, tags };
 }
 
 async function renderLibrary() {
@@ -178,7 +181,14 @@ async function paintLibrary(transition = 'fade') {
   const all = await db.listVideos();
   if (token !== libPaint || !libShell?.stage.isConnected) return;
   const q = libQuery.trim().toLowerCase();
-  let vids = all.filter((v) => !q || `${v.title} ${v.channel}`.toLowerCase().includes(q));
+  let vids = all.filter((v) => !q || `${v.title} ${v.channel} ${(v.tags ?? []).map((t) => `#${t}`).join(' ')}`.toLowerCase().includes(q));
+  if (libTag) vids = vids.filter((v) => (v.tags ?? []).includes(libTag));
+  // Tag filter row: every tag in the library with counts; click toggles.
+  const counts = new Map();
+  for (const v of all) for (const t of v.tags ?? []) counts.set(t, (counts.get(t) || 0) + 1);
+  libShell.tags.replaceChildren(...[...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([t, n]) =>
+    el('button', { class: `ytx-tag${libTag === t ? ' is-on' : ''}`, 'aria-pressed': String(libTag === t), onclick: () => { libTag = libTag === t ? null : t; paintLibrary('fade'); } },
+      `#${t} `, el('span', { class: 'ytx-tag-n' }, String(n)))));
   if (libSort === 'title') vids = [...vids].sort((a, b) => (a.title || '').localeCompare(b.title || ''));
   else if (libSort === 'channel') vids = [...vids].sort((a, b) => (a.channel || '').localeCompare(b.channel || '') || b.updatedAt - a.updatedAt);
   const pinned = vids.filter((v) => v.pinned);
@@ -252,6 +262,7 @@ function videoCard(v) {
     el('a', { class: 'card', href: `#/video/${v.videoId}` },
       el('div', { class: 'card-title' }, v.title || v.videoId),
       el('div', { class: 'card-meta' }, [v.channel, relTime(v.updatedAt)].filter(Boolean).join(' · ')),
+      v.tags?.length ? el('div', { class: 'ytx-tag-row card-tags' }, v.tags.map((t) => el('span', { class: 'ytx-tag' }, `#${t}`))) : null,
       el('div', { class: 'card-badges' },
         `${v.counts.segments} segments · ${v.counts.messages} messages · ${v.counts.cards} notes`)),
     el('div', { class: 'card-actions' }, pin, del));
@@ -281,6 +292,19 @@ async function renderDetail(videoId) {
     toast('Changed in Obsidian: reloaded from disk');
   }).catch(warn);
 
+  let allTags = [];
+  db.listVideos().then((vs) => { allTags = [...new Set(vs.flatMap((v) => v.tags ?? []))].sort(); tagEditor.refresh(); }).catch(() => {});
+  const tagEditor = createTagEditor({
+    get: () => video.tags ?? [],
+    set: async (tags) => {
+      video.tags = tags;
+      video.kept = true;
+      tagEditor.refresh();
+      await db.saveVideo(video);
+      disk((s) => vault.syncTags(s, video));
+    },
+    suggest: () => allTags,
+  });
   const pinBtn = el('button', { class: 'icon-btn pin' }, pinIcon());
   const paintPin = () => {
     pinBtn.classList.toggle('on', !!video.pinned);
@@ -309,7 +333,8 @@ async function renderDetail(videoId) {
     el('a', { class: 'icon-btn', href: '#/', title: 'Library', 'aria-label': 'Back to library' }, chevronLeft()),
     el('div', { class: 'detail-head' },
       el('a', { class: 'detail-title', href: video.url, target: '_blank' }, video.title || video.videoId),
-      el('div', { class: 'detail-meta' }, video.channel || '')),
+      el('div', { class: 'detail-meta' }, video.channel || ''),
+      tagEditor.root),
     pinBtn);
 
   const pane = el('div', { class: 'pane' });

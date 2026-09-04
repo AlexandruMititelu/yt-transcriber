@@ -18,6 +18,8 @@ src/lib/db.js                 (storage.local wrapper, ESM)
 src/lib/llm.js                (provider-agnostic LLM service, ESM)
 src/lib/search.js             (BM25 over transcript groups, pure)
 src/lib/vault.js              (knowledge-base folder mirror: markdown builders/parsers + disk sync, ESM)
+src/lib/tags.js               (Obsidian tag rules: normTag, extractTags (inline #tags), parseTagList (front matter), chipTags (DOM))
+src/ui/tags.js|css            (tag editor chips + input with datalist suggestions; chip/filter-row styles, shared)
 src/ui/tokens.css             (design tokens for extension pages)
 src/ui/picker.js|css          (model + effort popover, shared)
 src/ui/chatbar.js|css         (chat switcher bar + confirm box, shared)
@@ -25,7 +27,7 @@ src/ui/notes.js|css           (notes tab: quick notes + note editor, shared)
 src/ui/chat.js|css            (chat tab: streaming, stop/retry, presets, usage, frame capture, context meter, shared)
 src/ui/markdown.js|css        (markdown → DOM: sanitize, time chips, code copy, mermaid, shared)
 src/ui/toast.js|css           (toaster: createToaster(host) → toast(msg, {link, action, error, ms}), shared)
-src/ui/icons.js               (inline SVG icons: pin, trash, chevrons, eye, globe, camera, search, plus, copy, chat, refresh, library, gear, check — NO emoji/glyph icons anywhere, see .claude/skills/ui)
+src/ui/icons.js               (inline SVG icons: pin, trash, chevrons, eye, globe, camera, search, plus, copy, chat, refresh, library, gear, check, arrowUp, stop, tag — NO emoji/glyph icons anywhere, see .claude/skills/ui)
 config/hotkeys.js             (keyboard shortcuts: HOTKEYS list, hotkeyId(e), keysFor(id))
 config/prompts.js             (PROMPTS: one-click chat presets shown while a chat is empty)
 assets/icon.png | logo-light.svg | logo-dark.svg  (app icon (manifest); logo-light.svg = the T used in the toolbar and both headers on every theme; logo-dark.svg = tile variant, kept unused)
@@ -299,10 +301,15 @@ When `settings.vaultDir` is set, files on disk are the source of truth. Layout:
   <video>/                created only when the first note or chat is written; notes/ AND chats/ are
                           both created then (even if one stays empty) so files can be added offline
     <video>.md            hub note, written once per location (`video.hubFile`): front matter (ytx: video, id, url,
-                          title, channel, duration (s), length, lang, saved, pinned (only while pinned)) + "# title",
+                          title, channel, duration (s), length, lang, saved, pinned (only while pinned), tags (flow list
+                          `[ml, rust]`, only when set)) + "# title",
                           "[Watch on YouTube](url)", Channel/Length, [[Transcript]], "## Chapters" (from the
                           description, linked to url&t=), "## Notes". Pin/unpin only restamp the front matter
-                          (`restampHub`): the body and any user keys (tags…) stay.
+                          (`restampHub`): the body and any user keys (aliases…) stay. `tags` is ours: on restamp
+                          the disk list wins (edited in Obsidian) unless `tagsFromApp` (a tag edit in the app,
+                          `syncTags` → restamp + refreshIndex); `hydrate` reads hub tags into `video.tags` when the
+                          key exists. Index.md lines end with the video's `#tags`. Notes carry no tag field: inline
+                          `#tag` in their text is the tag (Obsidian indexes it; the app chips + filters it).
     Transcript.md         front matter (ytx: transcript, id, url, title, channel, lang, track, duration) + "# title" +
                           "## <chapter>" headings + "- [m:ss](url&t=Ns) text" lines; written with the folder or when the
                           track/translation changes (`video.transcriptFile` remembers the path)
@@ -355,6 +362,8 @@ export async function removeChat(settings, video, chat)
 export async function pin(settings, video)                      // throws Error('no-vault') when disabled; moves the folder under pinned/, restamps the hub note with pinned:, refreshes Index.md
 export async function unpin(settings, video)                    // moves the folder back, restamps the hub note without pinned:, refreshes Index.md
 export async function hydrate(settings, video)                  // disk → record (see below); no-op when disabled; throws when host missing
+export async function syncTags(settings, video)                 // tag edit in the app → ensureDirs, restamp hub (tagsFromApp), refreshIndex
+export const tagsOf = (meta, raw) => string[] | null           // hub front-matter tags in any spelling; null when the key is absent
 ```
 All async ops are no-ops when `enabled(settings)` is false (except `pin`, which throws `no-vault`).
 

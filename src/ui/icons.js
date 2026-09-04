@@ -33,3 +33,4 @@ export const gearIcon = () => svg('<circle cx="12" cy="12" r="3"/><path d="M19.4
 export const checkIcon = () => svg('<path d="M5 12l5 5L20 7"/>', 'ytx-ico ytx-ico-check');
 export const arrowUpIcon = () => svg('<path d="M12 19V5"/><path d="M5 12l7-7 7 7"/>', 'ytx-ico ytx-ico-arrow-up');
 export const stopIcon = () => svg('<rect x="6" y="6" width="12" height="12" rx="2"/>', 'ytx-ico ytx-ico-stop');
+export const tagIcon = () => svg('<path d="M3 12V4h8l9 9-8 8-9-9z"/><circle cx="7.5" cy="8.5" r="1.5"/>', 'ytx-ico ytx-ico-tag');

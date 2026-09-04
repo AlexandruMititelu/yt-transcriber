@@ -177,6 +177,15 @@
   fill: currentColor;
 }
 
+#ytx-panel .ytx-tagwrap { position: relative; }
+#ytx-panel .ytx-tagbtn.is-on { color: var(--accent); }
+#ytx-panel .ytx-tagpop {
+  display: none; position: absolute; right: 0; top: calc(100% + 6px); z-index: 6; width: 240px; padding: 8px;
+  border: 1px solid var(--border); border-radius: 12px; background: var(--surface);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 12px 32px rgba(0, 0, 0, 0.18);
+}
+#ytx-panel .ytx-tagpop.is-open { display: block; }
+
 /* ---- segmented control ---- */
 
 #ytx-panel .ytx-tabs {
