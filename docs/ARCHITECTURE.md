@@ -326,8 +326,10 @@ Bootstrap: `(async () => { ... })()`. All lib access via
   `document.querySelector('video').currentTime = seg.start` (+ `.play()`). Double click →
   `navigator.clipboard.writeText(`[${fmtTime(seg.start)}] ${seg.text}`)` + toast "Copied".
   States: loading / error ("No captions on this video" for Error 'no-captions', retry button) / list.
-- **Chat tab**: chat bar (`src/ui/chatbar.js`: `<select>` of chats + "＋ New chat", ⋯ menu with
-  Rename / Delete chat) + message list + composer (textarea; Enter sends, Shift+Enter newline; send button).
+- **Chat tab**: chat bar (`src/ui/chatbar.js`: a macOS-style pop-up button showing the current chat title;
+  its popover lists the chats with a checkmark, then "+ New chat", then Rename / Delete chat (red);
+  double-click the trigger also renames) + message list + composer (textarea; Enter sends, Shift+Enter
+  newline; send button).
   Current chat = `video.chats.find(id === video.activeChatId)`; none → the first send creates one via
   `db.newChat()`. Switching drops an empty never-sent chat. Rename → inline input (Enter/blur commit,
   Esc cancel) → `vault.syncChat`. Delete → `confirmBox` replaces the message list ("Delete "<title>"?",
