@@ -591,7 +591,12 @@ Fonts: --font-ui "Geist" then system stack, --font-mono "JetBrains Mono" (both @
 body/activeElement) and `tests/smoke.test.js` builds every shared view and imports `page/app.js` through all three
 routes (detail with each pane, library All + Archive, settings) against it, asserting no console errors and no
 "Error:" render. It exists to catch construction-time bugs `node --check` cannot: use-before-declaration (TDZ),
-missing imports, calls on undefined. Add new views/routes there. (node --test, node:assert/strict)
+missing imports, calls on undefined. Add new views/routes there.
+`tests/session.test.js` drives the keyboard flows (notes delete/open/tags, tag editor arrows, chat bar keyboard
+mode), streaming tool phases, vault tags/Archive/case migration and markdown wiki/embeds through the same stand-in.
+`tests/compat.test.js` keeps manifest.json and manifest.chromium.json in step (permissions, hosts, resources,
+unlimitedStorage, fixed key), forbids direct `chrome.*` use outside the shim, and fails when a Firefox-only marker
+(theme_icons, -moz-, browser_action, moz-extension: in code) appears outside its known list. (node --test, node:assert/strict)
 
 - format: fmtTime (0, 65, 3671, 59.9), clampText cut/no-cut, chunkText (respects size, no empties, word split).
 - transcript: extractPlayerResponse (html fixture with braces inside strings + `var` form + absent),

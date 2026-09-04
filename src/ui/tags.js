@@ -120,18 +120,22 @@ export function createTagEditor({ get, set, suggest, compact = false, chips: sho
   }
   // Keyboard: arrows walk input → known tags → selected tags (wrapping); Enter presses a chip; Alt+Backspace
   // removes a selected one; Alt+Enter closes (compact) and returns to the "+".
-  const focusables = () => [input, ...root.querySelectorAll('.ytx-tag:not(.is-locked)')].filter((n) => n.isConnected && n.offsetParent !== null);
-  root.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && e.altKey) { e.preventDefault(); e.stopPropagation(); close(); (plus ?? input).focus(); return; }
+  const focusables = () => [input, ...known.querySelectorAll('.ytx-tag'), ...chips.querySelectorAll('.ytx-tag:not(.is-locked)')].filter((n) => n.isConnected && n.offsetParent !== null);
+  // → true when the key was consumed. Called from the root (chips) and from the input's own handler
+  // (which stops propagation for everything else, so arrows must be handled before that).
+  function nav(e) {
+    if (e.key === 'Enter' && e.altKey) { e.preventDefault(); e.stopPropagation(); close(); (plus ?? input).focus(); return true; }
     const list = focusables();
     const i = list.indexOf(document.activeElement);
-    if (i < 0) return;
+    if (i < 0) return false;
     const onInput = document.activeElement === input;
     const fwd = e.key === 'ArrowDown' || (e.key === 'ArrowRight' && !onInput);
     const back = e.key === 'ArrowUp' || (e.key === 'ArrowLeft' && !onInput);
-    if (fwd || back) { e.preventDefault(); e.stopPropagation(); list[(i + (fwd ? 1 : list.length - 1)) % list.length].focus(); return; }
-    if (e.key === 'Backspace' && e.altKey && document.activeElement.classList.contains('is-sel')) { e.preventDefault(); e.stopPropagation(); document.activeElement.click(); }
-  });
+    if (fwd || back) { e.preventDefault(); e.stopPropagation(); list[(i + (fwd ? 1 : list.length - 1)) % list.length].focus(); return true; }
+    if (e.key === 'Backspace' && e.altKey && document.activeElement.classList.contains('is-sel')) { e.preventDefault(); e.stopPropagation(); document.activeElement.click(); return true; }
+    return false;
+  }
+  root.addEventListener('keydown', (e) => { if (e.target !== input) nav(e); });
   function newChip(q) {
     const c = tagChip(q, { onClick: () => add() });
     c.classList.add('is-new');
@@ -153,6 +157,7 @@ export function createTagEditor({ get, set, suggest, compact = false, chips: sho
     flagT = setTimeout(() => input.classList.remove('is-bad'), 600);
   }
   input.addEventListener('keydown', (e) => {
+    if (nav(e)) return;
     if (e.key === ' ') { e.preventDefault(); flag(); return; } // no spaces in tags
     if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); add(); return; }
     if (e.key === 'Backspace' && !input.value && get().length) { e.preventDefault(); set(get().slice(0, -1)); return; }
