@@ -274,11 +274,15 @@
     panel.appendChild(body);
 
     function selectTab(key) {
+      // Incoming view slides in from the side it lives on (iOS-style), only on a real switch.
+      const dir = key === activeTab ? '' : TABS.indexOf(key) > TABS.indexOf(activeTab) ? 'ytx-in-r' : 'ytx-in-l';
       activeTab = key;
       for (const k of Object.keys(views)) {
         tabBtns[k].classList.toggle('is-active', k === key);
         tabBtns[k].setAttribute('aria-selected', k === key ? 'true' : 'false');
+        views[k].classList.remove('ytx-in-r', 'ytx-in-l');
         views[k].classList.toggle('is-active', k === key);
+        if (k === key && dir) { void views[k].offsetWidth; views[k].classList.add(dir); }
       }
       // scrollHeight is 0 while hidden, so the chat's own scroll is a no-op — re-scroll on reveal
       if (key === 'chat') { const l = views.chat.querySelector('.ytx-chat-list'); if (l) l.scrollTop = l.scrollHeight; }
