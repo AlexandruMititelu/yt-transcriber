@@ -111,8 +111,7 @@
 #ytx-panel :focus:not(:focus-visible) { outline: none; }
 
 @media (prefers-reduced-motion: reduce) {
-  #ytx-panel *, #ytx-panel *::before, #ytx-panel *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important;   #ytx-panel .ytx-view.ytx-in-r, #ytx-panel .ytx-view.ytx-in-l { animation: none; }
-}
+  #ytx-panel *, #ytx-panel *::before, #ytx-panel *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
 
 #ytx-panel a {
