@@ -294,9 +294,12 @@ When `settings.vaultDir` is set, files on disk are the source of truth. Layout:
   pinned/<video>/         the same tree while the video is pinned (pin = rename the folder here, unpin =
                           rename back; moving it by hand in Obsidian is detected on hydrate)
     chats/<chat>.md       front matter (ytx: chat, id (uuid), title, video, created, updated) + "# title" + messages,
-                          each an Obsidian callout: "> [!user|assistant] YYYY-MM-DD HH:mm:ss" (local time)
-                          followed by "> "-prefixed content lines; a non-quoted line ends the message. A content
-                          line that itself starts with `[!user]`/`[!assistant]` is written as `\[!…]` and unescaped on read.
+                          each an Obsidian callout: "> [!info] You · YYYY-MM-DD HH:mm:ss" (user, blue) or
+                          "> [!example] Assistant · YYYY-MM-DD HH:mm:ss" (assistant, purple; built-in types so
+                          Obsidian colours them apart; the type decides the role, the word is for humans; legacy
+                          `[!user]`/`[!assistant]` still parse), followed by "> "-prefixed content lines; a
+                          non-quoted line ends the message. A content line that itself starts with one of those
+                          tags is written as `\[!…]` and unescaped on read.
                           Legacy "<!-- ytx:<role> ts=<ms> -->" marker files still parse.
 ```
 

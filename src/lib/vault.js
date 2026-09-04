@@ -123,10 +123,15 @@ export function parseNote(md) {
   return out;
 }
 
-// Chat body = one Obsidian callout per message: `> [!user] 2026-09-04 13:31:26` then `> `-prefixed
-// content. Readable in Obsidian, still parseable: a message ends at the first non-quoted line.
-// Header = exactly `> [!role]` plus an optional stamp; anything else after the tag is content.
-const CALLOUT = /^> \[!(user|assistant)\](?: (\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}))?$/;
+// Chat body = one Obsidian callout per message: `> [!info] You · 2026-09-04 13:31:26` then `> `-prefixed
+// content. Built-in callout types so Obsidian colours them apart (info = blue, example = purple); the role
+// word in the title is for humans, the type decides the role. Legacy `[!user]` / `[!assistant]` still parse.
+// Header = exactly the tag, optional role word, optional stamp; anything else after the tag is content.
+const ROLE_TAG = { user: 'info', assistant: 'example' };
+const ROLE_WORD = { user: 'You', assistant: 'Assistant' };
+const TAG_ROLE = { info: 'user', example: 'assistant', user: 'user', assistant: 'assistant' };
+const CALLOUT = /^> \[!(user|assistant|info|example)\](?: (?:You|Assistant))?(?: ·)?(?: (\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}))?$/;
+const TAG_ESC = /^\[!(user|assistant|info|example)\]/;
 // Legacy (v1 files): `<!-- ytx:user ts=123 -->` markers with `### You|Assistant` headings.
 const MSG_MARK = /^<!-- ytx:(user|assistant) ts=(\d+) -->[ \t]*\r?\n(?:### (?:You|Assistant)[ \t]*\r?\n)?/gm;
 
@@ -142,9 +147,9 @@ export function chatToMd(video, chat) {
   const body = chat.messages.map((m) => {
     // A content line that looks like a callout header would parse as a new message: escape the bracket.
     const lines = String(m.content).replace(/\s+$/, '').split('\n')
-      .map((l) => l.replace(/^\[!(user|assistant)\]/, '\\[!$1]'))
+      .map((l) => l.replace(TAG_ESC, '\\[!$1]'))
       .map((l) => (l ? `> ${l}` : '>'));
-    return `> [!${m.role}] ${localStamp(m.ts)}\n${lines.join('\n')}\n`;
+    return `> [!${ROLE_TAG[m.role] || m.role}] ${ROLE_WORD[m.role] || m.role} · ${localStamp(m.ts)}\n${lines.join('\n')}\n`;
   }).join('\n');
   return `${head}# ${chat.title}\n\n${body}`;
 }
@@ -156,10 +161,10 @@ function parseCallouts(body) {
     const line = raw.replace(/\s+$/, '');
     const head = CALLOUT.exec(line);
     if (head) {
-      cur = { role: head[1], ts: parseStamp(head[2]), lines: [] };
+      cur = { role: TAG_ROLE[head[1]], ts: parseStamp(head[2]), lines: [] };
       messages.push(cur);
     } else if (cur && line.startsWith('>')) {
-      cur.lines.push(line.replace(/^> ?/, '').replace(/^\\\[!(user|assistant)\]/, '[!$1]'));
+      cur.lines.push(line.replace(/^> ?/, '').replace(/^\\\[!(user|assistant|info|example)\]/, '[!$1]'));
     } else {
       cur = null; // first non-quoted line closes the callout
     }

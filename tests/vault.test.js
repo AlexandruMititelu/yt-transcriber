@@ -95,8 +95,8 @@ test('chat markdown = Obsidian callouts; roundtrips headings/rules/quotes/blank 
     ],
   };
   const md = vault.chatToMd(video, chat);
-  assert.ok(md.includes('> [!user] 2026-09-04 13:31:26\n> why blue?\n'));
-  assert.ok(md.includes('> [!assistant] 2026-09-04 13:31:27\n> ### Rayleigh\n>\n> ---\n>\n> > a quote\n'));
+  assert.ok(md.includes('> [!info] You · 2026-09-04 13:31:26\n> why blue?\n'));
+  assert.ok(md.includes('> [!example] Assistant · 2026-09-04 13:31:27\n> ### Rayleigh\n>\n> ---\n>\n> > a quote\n'));
   assert.ok(!md.includes('<!--'));
   const back = vault.parseChat(md);
   assert.equal(back.id, 'c1', 'uuid in front matter');
@@ -346,4 +346,9 @@ test('hub note + Index.md: written once per video, pin/unpin only restamp front 
   const embed = await vault.saveFrame(settings, video, 'data:image/jpeg;base64,AAAA', 61);
   assert.equal(embed, '![[attachments/1-01.jpg]]');
   assert.ok(files.has('C:\\Vault/YT-transcriber/Hub video/attachments/1-01.jpg'));
+});
+
+test('legacy [!user]/[!assistant] callouts still parse to the right roles', () => {
+  const back = vault.parseChat('# t\n\n> [!user] 2026-09-04 13:31:26\n> q\n\n> [!assistant] 2026-09-04 13:31:27\n> a\n');
+  assert.deepEqual(back.messages.map((m) => [m.role, m.content]), [['user', 'q'], ['assistant', 'a']]);
 });

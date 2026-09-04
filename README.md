@@ -60,7 +60,7 @@ Layout inside the vault:
     attachments/<m-ss>.jpg    frame captures
     notes/<first line>.md     quick note (front matter: kind, time, link, color)
     notes/<title>.md          note (front matter: kind, title, link)
-    chats/<chat title>.md     one file per chat (Obsidian callouts per message)
+    chats/<chat title>.md     one file per chat (one callout per message: you = blue info, assistant = purple example)
   pinned/<video title>/       the same tree while pinned (hub note gets `pinned:`)
 ```
 
