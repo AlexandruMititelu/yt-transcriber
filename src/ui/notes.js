@@ -537,8 +537,8 @@ export function createNotesView(opts) {
     title.maxLength = 120;
     title.addEventListener('input', () => { card.title = title.value; onChange(card); });
     title.addEventListener('keydown', (e) => {
-      e.stopPropagation();
-      if (e.key === 'Enter') { e.preventDefault(); editorMode === 'edit' ? body.edit() : body.box.querySelector('[contenteditable]')?.focus(); }
+      if (!e.altKey) e.stopPropagation(); // Alt+ hotkeys (back, trash) still reach the host
+      if (e.key === 'Enter' && !e.altKey) { e.preventDefault(); editorMode === 'edit' ? body.edit() : body.box.querySelector('[contenteditable]')?.focus(); }
     });
     const ed = h('div', 'ytx-ed');
     bar.append(back, title);
@@ -562,7 +562,8 @@ export function createNotesView(opts) {
     foot.append(timeSlot(card), h('span', 'ytx-notes-spacer'), noteTagEditor(card, () => refresh()).root, ...(opts.onFrame ? [frameBtn(card)] : []), modes, delBtn(card, ed, () => refresh()));
     ed.append(bar, body.box, foot);
     root.appendChild(ed);
-    if (!card.title && !card.text) title.focus();
+    title.focus(); // caret on the title; Enter moves into the text
+    title.selectionStart = title.selectionEnd = title.value.length;
   }
 
   function refresh() {
