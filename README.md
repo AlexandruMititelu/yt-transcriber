@@ -4,7 +4,7 @@ Firefox MV2 extension. Transcript, chat, and notes panel next to any YouTube vid
 
 - Fetches the video's caption track and shows it as timestamped segments, with chapters, search, other caption tracks and translation
 - Click a segment to seek; hover for copy / "ask about this"
-- Chat with the video (Anthropic or OpenAI, your API key): streamed markdown answers with mermaid diagrams, code copy buttons and clickable timestamps. Stop, retry, one-click presets, token/cost per reply and a context-window meter, optional web search. Multiple chats per video, auto-titled, switchable
+- Chat with the video (Anthropic or OpenAI, your API key): streamed markdown answers with mermaid diagrams, code copy buttons and clickable timestamps. Stop, retry, one-click presets, token/cost per reply and a context-window meter, optional web search. Transcripts bigger than 20% of the model's window are not sent whole: the model gets the chapter list and two tools, `search_transcript` (keyword search) and `read_transcript` (verbatim range), and pulls what it needs. Multiple chats per video, auto-titled, switchable
 - Quick notes (≤280 chars, color-coded cards, always fully visible) and long-form notes (title + markdown editor), both render markdown when you click away, optional time stamps, frame captures
 - Knowledge base folder (your Obsidian vault): every video gets a hub note, Transcript.md, notes and chats as markdown files, an Index.md at the root, and those files are the source of truth (edits in Obsidian win)
 - Library page with search, sort, channel grouping, full detail view, settings, JSON export/import
