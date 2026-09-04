@@ -167,7 +167,12 @@
     panel.id = 'ytx-panel';
 
     const header = h('div', 'ytx-header');
-    header.appendChild(h('span', 'ytx-title', 'YT-Trans'));
+    const brand = h('span', 'ytx-title');
+    const logo = h('img', 'ytx-logo');
+    logo.alt = '';
+    logo.src = url('assets/logo-dark.svg'); // theme swap in applyTheme
+    brand.append(logo, 'YT-Trans');
+    header.appendChild(brand);
     const addBtn = h('button', 'ytx-icon-btn');
     addBtn.appendChild(L.icons.plusIcon());
     addBtn.title = 'Save this video to the library';
@@ -594,6 +599,7 @@
     /* ---- theme (follows YouTube's own dark attribute on <html>) ---- */
     const applyTheme = () => {
       panel.classList.toggle('ytx-dark', isDark());
+      logo.src = url(isDark() ? 'assets/logo-light.svg' : 'assets/logo-dark.svg');
       L.markdown.setDark(isDark()); // future mermaid renders follow the theme
     };
     applyTheme();

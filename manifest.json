@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "YT Transcriber",
-  "version": "0.1.36",
+  "version": "0.1.37",
   "description": "Transcript, chat, and notes for YouTube \u2014 bring your own LLM key, files land in your Obsidian vault.",
   "permissions": [
     "storage",
@@ -32,18 +32,32 @@
     }
   ],
   "browser_action": {
-    "default_title": "YT Transcriber \u2014 Library"
+    "default_title": "YT Transcriber \u2014 Library",
+    "default_icon": "assets/icon.png",
+    "theme_icons": [
+      {
+        "light": "assets/logo-dark.svg",
+        "dark": "assets/logo-light.svg",
+        "size": 32
+      }
+    ]
   },
   "web_accessible_resources": [
     "src/*",
     "vendor/*",
     "page/*",
-    "config/*"
+    "config/*",
+    "assets/*"
   ],
   "browser_specific_settings": {
     "gecko": {
       "id": "yt-transcriber@alex.local",
       "strict_min_version": "115.0"
     }
+  },
+  "icons": {
+    "48": "assets/icon.png",
+    "96": "assets/icon.png",
+    "128": "assets/icon.png"
   }
 }

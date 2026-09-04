@@ -81,7 +81,6 @@ const renderMdFor = (video) => (text) => renderMarkdown(text, { timeHref: (sec) 
 
 // ---------- library ----------
 
-let libFilter = 'all'; // 'all' | 'pinned' (session-scoped)
 let libQuery = '';
 let libSort = 'recent'; // 'recent' | 'title' | 'channel'
 let libGroup = false; // group by channel
@@ -146,22 +145,13 @@ function swapBody(body, transition) {
 }
 
 function buildLibShell() {
+  const logo = el('img', { class: 'logo', alt: '', src: '../assets/logo-dark.svg' });
+  const paintLogo = () => { logo.src = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && osDark.matches) ? '../assets/logo-light.svg' : '../assets/logo-dark.svg'; };
+  paintLogo();
+  osDark.addEventListener('change', paintLogo);
   const header = el('header', { class: 'topbar' },
-    el('h1', {}, 'YT Transcriber'),
+    el('h1', {}, logo, 'YT Transcriber'),
     el('a', { class: 'icon-btn', href: '#/settings', title: 'Settings', 'aria-label': 'Settings' }, gearIcon()));
-  const seg = el('div', { class: 'segmented', role: 'tablist' }, [['all', 'All'], ['pinned', 'Pinned']].map(([key, label]) =>
-    el('button', { class: `seg-btn${libFilter === key ? ' active' : ''}`, role: 'tab', dataset: { key }, 'aria-selected': String(libFilter === key) }, label)));
-  seg.onclick = (e) => {
-    const b = e.target.closest('.seg-btn');
-    if (!b || b.dataset.key === libFilter) return;
-    libFilter = b.dataset.key;
-    for (const x of seg.children) {
-      const on = x.dataset.key === libFilter;
-      x.classList.toggle('active', on);
-      x.setAttribute('aria-selected', String(on));
-    }
-    paintLibrary(libFilter === 'pinned' ? 'left' : 'right');
-  };
   const search = el('input', { class: 'input lib-search', type: 'search', placeholder: 'Search title or channel…', 'aria-label': 'Search videos' });
   search.value = libQuery;
   const searchSoon = debounce(() => paintLibrary('fade'), 150);
@@ -175,7 +165,7 @@ function buildLibShell() {
   const count = el('span', { class: 'lib-count' });
   const stage = el('div', { class: 'lib-stage' }, el('div', { class: 'empty' }, 'Loading…'));
   $app.replaceChildren(header,
-    el('div', { class: 'lib-tools' }, seg, search, sortMenu(() => paintLibrary('fade')), group, count),
+    el('div', { class: 'lib-tools' }, search, sortMenu(() => paintLibrary('fade')), group, count),
     stage);
   libShell = { stage, count };
 }
@@ -212,9 +202,6 @@ async function paintLibrary(transition = 'fade') {
       el('p', { class: 'hint' }, 'Open a YouTube video — the transcript panel saves everything here.'));
   } else if (!vids.length) {
     body = el('div', { class: 'empty' }, el('p', {}, 'Nothing matches.'));
-  } else if (libFilter === 'pinned') {
-    body = pinned.length ? grouped(pinned, null)
-      : el('div', { class: 'empty' }, el('p', {}, 'Nothing pinned.'), el('p', { class: 'hint' }, 'Hover a video and click the pin.'));
   } else {
     body = el('div', {},
       pinned.length ? section('Pinned', pinned) : null,

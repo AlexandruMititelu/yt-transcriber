@@ -86,7 +86,7 @@ Transcripts and settings live in the browser profile's `storage.local` — on th
 - **Web search**: globe button next to Send. The model runs its own searches (Anthropic server-side tool or OpenAI built-in search), answers with a "Sources" list, links open in a new tab
 - **Shortcuts** (toggle in Settings): Alt+↑ / Alt+↓ switch tabs, Alt+E / Alt+V switch the note editor between raw markdown and rendered view, Alt+W toggles web search, Alt+C focuses the chat box, Alt+N new note, Alt+Q new quick note, Alt+Enter back to the note list / open the selected note, Alt+' / Alt+\ select previous / next note, Alt+Shift+Enter focus the player, Alt+F focuses transcript search
 - **+** (header) saves the video to the library without notes or chats; just watching never creates an entry
-- **Pin** (top right) moves the video's folder into `YT-transcriber/pinned/` and turns yellow; press again to unpin. The Library has an All | Pinned filter and a pin on every card
+- **Pin** (top right) moves the video's folder into `YT-transcriber/pinned/` and turns yellow; press again to unpin. Pinned videos sit at the top of the Library, and every card has a pin
 - **⧉** opens the Library: browse saved videos, reopen transcript/chat/notes, delete, settings
 
 ## Ship to Zen (from WSL)

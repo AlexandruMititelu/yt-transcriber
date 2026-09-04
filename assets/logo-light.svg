@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="1024" height="1024">
+  <defs>
+    <linearGradient id="ribbon" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFFBF2"/>
+      <stop offset="0.55" stop-color="#F5E3C3"/>
+      <stop offset="1" stop-color="#E8B478"/>
+    </linearGradient>
+    <linearGradient id="fold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5A3A1E" stop-opacity="0.5"/>
+      <stop offset="1" stop-color="#5A3A1E" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.45"/>
+      <stop offset="0.5" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <g fill="url(#ribbon)">
+    <rect x="112" y="136" width="288" height="76" rx="38"/>
+    <path d="M218 212 H294 V352 L256 412 L218 352 Z"/>
+  </g>
+  <rect x="112" y="136" width="288" height="76" rx="38" fill="url(#sheen)"/>
+  <path d="M218 212 H294 V290 Z" fill="url(#fold)"/>
+</svg>
