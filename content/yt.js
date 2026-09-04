@@ -170,7 +170,7 @@
     const brand = h('span', 'ytx-title');
     const logo = h('img', 'ytx-logo');
     logo.alt = '';
-    logo.src = url('assets/logo-dark.svg'); // theme swap in applyTheme
+    logo.src = url('assets/logo-light.svg');
     brand.append(logo, 'YT-Trans');
     header.appendChild(brand);
     const addBtn = h('button', 'ytx-icon-btn');
@@ -599,7 +599,6 @@
     /* ---- theme (follows YouTube's own dark attribute on <html>) ---- */
     const applyTheme = () => {
       panel.classList.toggle('ytx-dark', isDark());
-      logo.src = url(isDark() ? 'assets/logo-light.svg' : 'assets/logo-dark.svg');
       L.markdown.setDark(isDark()); // future mermaid renders follow the theme
     };
     applyTheme();

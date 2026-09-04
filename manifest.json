@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "YT Transcriber",
-  "version": "0.1.38",
+  "version": "0.1.39",
   "description": "Transcript, chat, and notes for YouTube \u2014 bring your own LLM key, files land in your Obsidian vault.",
   "permissions": [
     "storage",
@@ -36,7 +36,7 @@
     "default_icon": "assets/icon.png",
     "theme_icons": [
       {
-        "light": "assets/logo-dark.svg",
+        "light": "assets/logo-light.svg",
         "dark": "assets/logo-light.svg",
         "size": 32
       }

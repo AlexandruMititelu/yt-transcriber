@@ -27,7 +27,7 @@ src/ui/toast.js|css           (toaster: createToaster(host) → toast(msg, {link
 src/ui/icons.js               (inline SVG icons: pin, trash, chevrons, eye, globe, camera, search, plus, copy, chat, refresh, library, gear, check — NO emoji/glyph icons anywhere, see .claude/skills/ui)
 config/hotkeys.js             (keyboard shortcuts: HOTKEYS list, hotkeyId(e), keysFor(id))
 config/prompts.js             (PROMPTS: one-click chat presets shown while a chat is empty)
-assets/icon.png | logo-dark.svg | logo-light.svg  (app icon (manifest + toolbar) and the two logo variants: dark tile for light UI, light T for dark UI)
+assets/icon.png | logo-light.svg | logo-dark.svg  (app icon (manifest); logo-light.svg = the T used in the toolbar and both headers on every theme; logo-dark.svg = tile variant, kept unused)
 content/yt.js                 (content script, CLASSIC script — no top-level import/export)
 content/yt.css                (panel styles, ALL rules scoped under #ytx-panel)
 page/app.html                 (library full page + settings; NO inline scripts/handlers — CSP)
@@ -366,7 +366,7 @@ Bootstrap: `(async () => { ... })()`. All lib access via
 - Fetch `src/ui/{picker,chatbar,notes,markdown,toast,chat}.css` and inject them as `<style>`s (a `<link>` to moz-extension: is blocked on youtube.com; unique ytx-picker-* classes) and a `<style>` with @font-face for Geist (variable, 100-900) and JetBrains Mono using absolute
   `browser.runtime.getURL('vendor/jetbrains-mono-400.woff2')` URLs (content-script CSS can't use
   relative url()).
-- Header: logo (assets/logo-dark.svg on light, logo-light.svg on dark) + "YT-Trans", buttons (SVG, aria-labels): + add (only while the video has no DB record:
+- Header: logo (assets/logo-light.svg) + "YT-Trans", buttons (SVG, aria-labels): + add (only while the video has no DB record:
   sets `video.kept`, saves, hides itself), ⟳ (refetch transcript), pin (SVG from `src/ui/icons.js`; toggles
   `vault.pin` / `vault.unpin` → save → toast; yellow #ffcc00 + filled when `video.pinned`; `no-vault` →
   toast pointing at Settings), ⧉ library (`bus.call({type:'open-library'})`).
@@ -482,7 +482,7 @@ NO inline scripts or on* attributes (extension CSP). Theme: `settings.theme` →
 Views (hash routing: `#/`, `#/video/<id>`, `#/settings`):
 - **Library `#/`**: header "YT Transcriber" + Settings gear and the tools row are built ONCE per visit (`buildLibShell`);
   only the body inside `.lib-stage` is repainted (`paintLibrary`), so typing in the search box never re-creates it.
-  Header = logo (theme-matched svg) + name. Tools: search box (title/channel,
+  Header = logo (assets/logo-light.svg) + name. Tools: search box (title/channel,
   debounced), sort pop-up button (label + chevron rotating 180° when open, popover with a check column: Recent |
   Title | Channel), "By channel" grouping toggle, video count (all session-scoped). All: a "Pinned" section first (when any), then "Everything
   else" (or one section per channel). Pinned: only pinned videos (empty hint otherwise). Video card = `.card-wrap`

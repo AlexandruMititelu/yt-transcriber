@@ -145,10 +145,7 @@ function swapBody(body, transition) {
 }
 
 function buildLibShell() {
-  const logo = el('img', { class: 'logo', alt: '', src: '../assets/logo-dark.svg' });
-  const paintLogo = () => { logo.src = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && osDark.matches) ? '../assets/logo-light.svg' : '../assets/logo-dark.svg'; };
-  paintLogo();
-  osDark.addEventListener('change', paintLogo);
+  const logo = el('img', { class: 'logo', alt: '', src: '../assets/logo-light.svg' });
   const header = el('header', { class: 'topbar' },
     el('h1', {}, logo, 'YT Transcriber'),
     el('a', { class: 'icon-btn', href: '#/settings', title: 'Settings', 'aria-label': 'Settings' }, gearIcon()));
