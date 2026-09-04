@@ -118,7 +118,7 @@ export function createChatView(opts) {
     ctx.title = `${last ? 'Context used by the last reply' : 'Estimated prompt size'}: ${llm.fmtK(used)} of ${llm.fmtK(win)} tokens`;
     ctx.classList.toggle('is-warn', used / win > 0.8);
   }
-  pill.append(ta, tools);
+  pill.append(attach, ta, tools);
   composer.append(presets, pill);
 
   /* ---- chats ---- */
