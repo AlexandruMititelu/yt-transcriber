@@ -64,6 +64,34 @@ export function setDark(on) {
   if (mermaidP) mermaidP.then((m) => m.initialize(mermaidCfg())).catch(() => {});
 }
 
+// $$…$$ (display) and $…$ (inline) → placeholders before marked (which would eat _ and *); code spans and
+// fences are left alone; "$5 and $7" stays text (inline math cannot start or end with a space or be a bare number).
+const MATH_CHUNK = /(```[\s\S]*?```|`[^`\n]*`)|(\$\$[\s\S]+?\$\$)|\$(?!\s|\d+(?:[.,]\d+)?\$)([^\s$](?:[^$\n]*?[^\s$])?)\$/g;
+export const mathToHtml = (text) => String(text ?? '').replace(MATH_CHUNK, (m, code, display, inline) => {
+  if (code) return code;
+  const tex = display ? display.slice(2, -2).trim() : inline;
+  if (/^\d+(?:[.,]\d+)?$/.test(tex)) return m; // "$5" style numbers
+  return `<span class="ytx-math${display ? ' ytx-math-display' : ''}" data-tex="${esc(tex)}"${display ? ' data-display="1"' : ''}>${esc(tex)}</span>`;
+});
+let katexP = null;
+function ensureKatex() {
+  if (!katexP) {
+    katexP = import(new URL('../../vendor/katex/katex.mjs', import.meta.url).href).then((m) => m.default) // ESM build: same in browsers and node
+      .catch((e) => { katexP = null; throw e; });
+  }
+  return katexP;
+}
+function renderMathIn(root) {
+  const nodes = root.querySelectorAll('.ytx-math');
+  if (!nodes.length) return;
+  ensureKatex().then((katex) => {
+    for (const n of nodes) {
+      try { n.innerHTML = katex.renderToString(n.dataset.tex, { displayMode: !!n.dataset.display, throwOnError: false, output: 'html' }); }
+      catch { /* bad TeX: the raw source stays visible */ }
+    }
+  }).catch(() => {}); // KaTeX failed to load: raw source stays
+}
+
 function ensureMermaid() {
   if (!mermaidP) {
     mermaidP = import(new URL('../../vendor/mermaid.min.js', import.meta.url).href).then(() => {
@@ -168,7 +196,7 @@ const wikiToHtml = (text) => String(text ?? '')
 export function renderMarkdown(text, { onSeek, timeHref, onWiki, onEmbed, cls = 'ytx-md' } = {}) {
   const md = h('div', cls);
   // FORBID_TAGS img: a prompt-injected transcript could make the LLM emit an image URL that exfiltrates chat content on fetch
-  md.innerHTML = globalThis.DOMPurify.sanitize(globalThis.marked.parse(wikiToHtml(text)), { FORBID_TAGS: ['img'] });
+  md.innerHTML = globalThis.DOMPurify.sanitize(globalThis.marked.parse(wikiToHtml(mathToHtml(text))), { FORBID_TAGS: ['img'] });
   for (const a of md.querySelectorAll('a.ytx-wiki')) {
     a.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); onWiki?.(a.dataset.target); });
   }
@@ -187,5 +215,6 @@ export function renderMarkdown(text, { onSeek, timeHref, onWiki, onEmbed, cls = 
   linkifyTimestamps(md, { onSeek, timeHref });
   decorateCode(md);
   renderMermaidIn(md);
+  renderMathIn(md);
   return md;
 }

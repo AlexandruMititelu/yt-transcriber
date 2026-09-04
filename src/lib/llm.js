@@ -310,6 +310,8 @@ export function buildSystemPrompt({ title, channel, segments, aboutMe = '', tone
     'Answer questions about this video using its transcript below. ' +
     'You may answer with markdown, and may draw diagrams in ```mermaid fenced blocks. ' +
     'Cite timestamps like [12:34] when referencing the video. ' +
+    'Write maths in LaTeX: $…$ inline and $$…$$ on its own line for anything with fractions, roots, sums, integrals, ' +
+    'subscripts, Greek letters or matrices; trivial arithmetic like a + b = c or 3 × 4 stays plain text. ' +
     'Never use em dashes or double hyphens (--); use commas, periods, or colons instead.\n\n';
   if (webSearch) {
     prompt +=

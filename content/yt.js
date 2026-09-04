@@ -49,6 +49,13 @@
     const style = h('style');
     style.id = 'ytx-fonts';
     // <link> to a moz-extension: stylesheet gets blocked on youtube.com; inline the text instead.
+    // KaTeX stylesheet: its font urls are relative to the css file, so point them into the extension.
+    fetch(url('vendor/katex/katex.min.css')).then((r) => r.text()).then((css) => {
+      const s = h('style');
+      s.id = 'ytx-katex-css';
+      s.textContent = css.replace(/url\(fonts\//g, `url(${url('vendor/katex/fonts/')}`);
+      document.head.appendChild(s);
+    }).catch(() => {});
     for (const name of ['picker', 'chatbar', 'notes', 'markdown', 'toast', 'chat', 'tags', 'quote']) {
       fetch(url(`src/ui/${name}.css`)).then((r) => r.text()).then((css) => {
         const s = h('style');

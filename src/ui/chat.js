@@ -205,8 +205,8 @@ export function createChatView(opts) {
   list.addEventListener('scroll', () => { if (nearBottom()) newPill.classList.remove('is-on'); });
 
   /* ---- bubbles ---- */
-  function copyBtn(text) {
-    const b = h('button', 'ytx-msg-copy');
+  function copyBtn(text, cls = '') {
+    const b = h('button', `ytx-msg-copy${cls}`);
     b.type = 'button';
     b.title = 'Copy message';
     b.setAttribute('aria-label', 'Copy message');
@@ -224,8 +224,10 @@ export function createChatView(opts) {
     el.__msg = m; // quote menu source
     if (m.ts) el.title = fmtClock(m.ts);
     if (m.role === 'assistant') {
-      el.append(renderMd(m.content), copyBtn(m.content));
-      if (m.usage) el.append(h('span', 'ytx-msg-usage', llm.fmtUsage(m.model, m.usage)));
+      const foot = h('div', 'ytx-msg-foot');
+      if (m.usage) foot.append(h('span', 'ytx-msg-usage', llm.fmtUsage(m.model, m.usage)));
+      foot.append(copyBtn(m.content));
+      el.append(renderMd(m.content), copyBtn(m.content, ' ytx-msg-copy-top'), foot);
     } else {
       if (m.image || (m.embed && opts.readFrame)) {
         const img = h('img', 'ytx-msg-img');

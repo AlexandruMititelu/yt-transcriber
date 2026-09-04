@@ -790,7 +790,7 @@ async function renderSettings() {
   leaveSettings = async () => { if (isDirty()) { await db.saveSettings(formValues()); await db.clearCachedModels(); toast('Settings saved'); } };
 
   const testBtn = (provider, label) => {
-    const b = el('button', { class: 'btn' }, `Test ${label} key`);
+    const b = el('button', { class: 'btn key-eye', type: 'button' }, 'Test');
     b.onclick = async () => {
       b.disabled = true;
       try {
@@ -864,50 +864,78 @@ async function renderSettings() {
   };
   const importBtn = el('button', { class: 'btn', onclick: () => importInput.click() }, 'Import data');
 
-  const field = (label, input, help) => el('label', { class: 'field' },
-    el('span', { class: 'field-label' }, label), input,
-    help ? el('span', { class: 'field-help' }, help) : null);
+  // Real <label for> + aria-describedby so screen readers tie label and hint to the control.
+  let fid = 0;
+  const field = (label, input, help) => {
+    const id = `set-${++fid}`;
+    const ctl = input.matches('input, textarea') ? input : input.querySelector('input, textarea');
+    if (ctl) { ctl.id = id; if (help) ctl.setAttribute('aria-describedby', `${id}-help`); }
+    return el('div', { class: 'field' },
+      el('label', { class: 'field-label', for: ctl ? id : null }, label),
+      input,
+      help ? el('span', { class: 'field-help', id: `${id}-help` }, help) : null);
+  };
+  const section = (title, ...kids) => el('section', { class: 'settings-section', 'aria-labelledby': `sec-${++fid}` },
+    el('h2', { id: `sec-${fid}` }, title), ...kids);
+  theme.setAttribute('role', 'radiogroup');
+  theme.setAttribute('aria-label', 'Appearance');
+  for (const b of theme.children) { b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', b.classList.contains('active')); }
+  theme.addEventListener('click', () => { for (const b of theme.children) b.setAttribute('aria-checked', b.classList.contains('active')); });
+  const shortcutsTable = (label, rows) => el('table', { class: 'hotkeys', 'aria-label': label },
+    rows.map(([k, d]) => el('tr', {}, el('td', {}, el('kbd', {}, k)), el('td', {}, d))));
+
+  ak.row.append(testBtn('anthropic', 'Anthropic'));
+  ok.row.append(testBtn('openai', 'OpenAI'));
 
   $app.replaceChildren(
-    el('header', { class: 'topbar' },
+    el('header', { class: 'lib-head' }, el('div', { class: 'topbar' },
       el('a', { class: 'icon-btn', href: '#/', title: 'Library', 'aria-label': 'Back to library' }, chevronLeft()),
-      el('h1', {}, 'Settings')),
-    el('div', { class: 'settings-form' },
-      field('Anthropic API key', ak.row, el('span', {}, ak.status, ' · Model and thinking effort are picked in the chat composer.')),
-      field('OpenAI API key', ok.row, ok.status),
-      field('Appearance', theme, 'Library page theme. The YouTube panel follows YouTube.'),
-      field('Caption language', lang, 'Preferred transcript language (e.g. en, ro, nl). Other tracks and translations are in the transcript toolbar.'),
-      field('About me', aboutMe, 'Added to every chat system prompt so answers fit you.'),
-      el('div', { class: 'field' }, el('span', { class: 'field-label' }, 'Chat presets'),
-        el('div', { class: 'field-col' }, presetList, el('div', { class: 'field-row' }, addPreset, resetPrompts)),
-        el('span', { class: 'field-help' }, 'Shortcut = the chip shown while a chat is empty; the text is what it sends. Remove all for none.')),
-      field('Tone of voice', tone, 'How the assistant should talk.'),
-      field('Knowledge base folder', el('div', { class: 'field-row' }, vaultDir, chooseBtn),
-        el('span', {}, 'Your Obsidian vault (or any folder). Notes, chats and pinned videos are written as markdown under ',
-          el('code', {}, 'YT-transcriber/'), ' inside it, and files there are the source of truth. ',
-          'Needs the native host once: run ', el('code', {}, 'native\\install.ps1'), ' (Windows) or ',
-          el('code', {}, 'native/install.sh'), ', restart the browser, then Test host.')),
-      el('div', { class: 'field' },
-        el('label', { class: 'field-check' }, hotkeys, el('span', { class: 'field-label' }, 'Keyboard shortcuts')),
-        el('table', { class: 'hotkeys' }, HOTKEYS.map((h) => el('tr', {}, el('td', {}, el('kbd', {}, h.keys)), el('td', {}, h.desc)))),
-        el('span', { class: 'field-help' }, 'Fixed for now: turn them all on or off here. Defined in config/hotkeys.js.')),
-      el('div', { class: 'field' },
-        el('span', { class: 'field-label' }, 'Text shortcuts & gestures'),
-        el('table', { class: 'hotkeys' }, [
-          ['@now', 'In a note: the current video time as @mm:ss'],
-          ['@now=t', '…plus the caption line being spoken'],
-          ['@now=tt', '…plus the previous, current and next lines as a quote'],
-          ['@now=ttt', '…plus the whole timestamp block'],
-          ['@m:ss', 'Any hand-typed time becomes a clickable stamp (@2:17 → @02:17)'],
-          ['#tag', 'In a note: an Obsidian tag (chips, filter row, tag pane)'],
-          ['[12:34]', 'In chat replies: a timestamp chip that seeks'],
-          ['Ctrl + right-click', 'On selected text in a chat reply or transcript row: Copy · Copy as quote · Quote in a new note'],
-          ['Double-click', 'Transcript row or caption line: jump the video there (single click just selects text)'],
-          ['Enter / Shift+Enter', 'Chat: send / new line. Esc stops a streaming reply'],
-          ['Space / Enter', 'On a focused transcript row: jump there'],
-        ].map(([k, d]) => el('tr', {}, el('td', {}, el('kbd', {}, k)), el('td', {}, d)))),
-        el('span', { class: 'field-help' }, 'Always on.')),
-      el('div', { class: 'settings-actions' }, saveBtn, testBtn('anthropic', 'Anthropic'), testBtn('openai', 'OpenAI'), testHostBtn, exportBtn, importBtn, importInput)));
+      el('h1', {}, 'Settings'),
+      saveBtn)),
+    el('div', { class: 'settings' },
+      section('API keys',
+        field('Anthropic', ak.row, el('span', {}, ak.status, ' · Model and thinking effort are picked in the chat composer.')),
+        field('OpenAI', ok.row, ok.status)),
+      section('Appearance',
+        field('Theme', theme, 'Library page theme. The YouTube panel follows YouTube.')),
+      section('Transcript',
+        field('Caption language', lang, 'Preferred transcript language (e.g. en, ro, nl). Other tracks and translations are in the transcript toolbar.')),
+      section('Chat',
+        field('About me', aboutMe, 'Added to every chat system prompt so answers fit you.'),
+        field('Tone of voice', tone, 'How the assistant should talk.'),
+        el('div', { class: 'field' }, el('span', { class: 'field-label' }, 'Presets'),
+          el('div', { class: 'field-col' }, presetList, el('div', { class: 'field-row' }, addPreset, resetPrompts)),
+          el('span', { class: 'field-help' }, 'Shortcut = the chip shown while a chat is empty; the text is what it sends. Remove all for none.'))),
+      section('Knowledge base',
+        field('Folder', el('div', { class: 'field-row' }, vaultDir, chooseBtn, testHostBtn),
+          el('span', {}, 'Your Obsidian vault (or any folder). Notes, chats and pinned videos are written as markdown under ',
+            el('code', {}, 'YT-transcriber/'), ' inside it, and files there are the source of truth. ',
+            'Needs the native host once: run ', el('code', {}, 'native\\install.ps1'), ' (Windows) or ',
+            el('code', {}, 'native/install.sh'), ', restart the browser, then Test host.'))),
+      section('Shortcuts',
+        el('div', { class: 'field' },
+          el('label', { class: 'field-check' }, hotkeys, el('span', { class: 'field-label' }, 'Keyboard shortcuts')),
+          shortcutsTable('Keyboard shortcuts', HOTKEYS.map((h) => [h.keys, h.desc])),
+          el('span', { class: 'field-help' }, 'Fixed for now: turn them all on or off here. Defined in config/hotkeys.js.')),
+        el('div', { class: 'field' },
+          el('span', { class: 'field-label' }, 'Text shortcuts & gestures'),
+          shortcutsTable('Text shortcuts and gestures', [
+            ['@now', 'In a note: the current video time as @mm:ss'],
+            ['@now=t', '…plus the caption line being spoken'],
+            ['@now=tt', '…plus the previous, current and next lines as a quote'],
+            ['@now=ttt', '…plus the whole timestamp block'],
+            ['@m:ss', 'Any hand-typed time becomes a clickable stamp (@2:17 → @02:17)'],
+            ['#tag', 'In a note: an Obsidian tag (chips, filter row, tag pane)'],
+            ['[12:34]', 'In chat replies: a timestamp chip that seeks'],
+            ['Ctrl + right-click', 'On selected text in a chat reply or transcript row: Copy · Copy as quote · Quote in a new note'],
+            ['Double-click', 'Transcript row or caption line: jump the video there (single click just selects text)'],
+            ['Enter / Shift+Enter', 'Chat: send / new line. Esc stops a streaming reply'],
+            ['Space / Enter', 'On a focused transcript row: jump there'],
+          ]),
+          el('span', { class: 'field-help' }, 'Always on.'))),
+      section('Data',
+        el('div', { class: 'settings-actions' }, exportBtn, importBtn, importInput),
+        el('span', { class: 'field-help' }, 'Export = every video plus non-secret settings as JSON (API keys stay out). Import merges such a file back in.'))));
 }
 
 // ---------- router ----------

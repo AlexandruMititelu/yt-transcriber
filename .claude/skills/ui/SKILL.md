@@ -31,6 +31,41 @@ Core values: **hierarchy & clarity** (size/weight/color separate primary from se
 - **Back navigation**: chevron-left + label, rendered in `--accent`, not a boxed button.
 - **Toasts**: `role="status"`, auto-dismiss, no blocking modal chrome.
 
+## Control rows & toolbars (the equal-spacing rule)
+
+A row of icon controls (quick-note footer: colour dot · tag `+` · trash; chat bubble actions; card actions) must read as evenly spaced. Optical evenness comes from **one hit box, one gap**, not from tuning margins per control:
+
+- Every control in the row sits in the **same square slot** (22px in the panel, 28–32px on the library page), glyph centred. A 14–16px glyph in a 22px slot is fine; a 20px glyph in a 20px slot next to a 15px glyph in a 22px slot is not — that is exactly what made the footer look uneven.
+- **One `gap` on the row container** (4px panel, 6–8px page). No per-control `margin-left`, no spacers between siblings except the single `margin-left: auto` / spacer that pushes the group right.
+- Visible glyphs within a row stay within ~4px of each other in size, so the edge-to-edge distances land within 1px of equal. Measure with `getBoundingClientRect()` when in doubt; don't eyeball.
+- The trash is last and only turns red on hover (`#ff453a`); it gets no extra spacing to "separate" it.
+
+## House rules pulled from other projects (Apple HIG first)
+
+Distilled from the SustainixAI `design-guidelines` skill, the personal-site `DESIGN.md`, the Psy-Reflect style guide and the bnb design rule, keeping what applies to a two-host vanilla-CSS extension.
+
+**Pillars** — Clarity (legible at every size, precise icons, no ornament), Deference (chrome quiet, content first; translucency/blur only on chrome that content scrolls under), Depth (a small shadow scale used only for things that float; no parallax, no skeuomorphism).
+
+**Hierarchy: weight and colour before size.** Section heads are `600` at 13–15px, not bigger text. `700` only for the page/detail title. Secondary information is `--muted`, not smaller-and-lighter-and-italic. Numbers that align (timestamps, usage) use `--font-mono` with tabular figures.
+
+**Depth is hairline + tint, never a resting shadow.** Surfaces are flat: `--surface` on `--bg` with a 1px `--border`. `--shadow` is reserved for hover lift (cards), menus/popovers, toasts and the mermaid overlay. Dividers inside a surface are `--border`; do not stack a bordered card inside a bordered card.
+
+**Accent is a spice.** `--accent` marks the one primary action per view, selection, links, focus. Never fill secondary buttons with it. Destructive is `#ff453a` and never the most prominent control. Tags keep their own hue system (`tags.css`), BREEAM-style: don't harmonise them toward the accent.
+
+**Spacing scale: 4px.** Use 4 / 6 / 8 / 10 / 12 / 16 / 20 / 24. Section gap on the library page is 16–28px. Inside a card: 14–20px padding, 16px between fields, 6px label→control→help. Don't invent 5px, 7px, 13px.
+
+**Radius hierarchy**, small to large: chips/tags/pills `999px`; inputs, small buttons, code `--radius-sm` (8px); cards, panes, menus `--radius` (12px); modals 16px; message bubbles 14px with one 4px corner toward the sender. Never one uniform large radius on everything.
+
+**Forms & settings pages.** Group into titled `<section>` cards (h2 at 15px/600), one topic per card, fields stacked at 16px, `max-width` ≈ 640px so lines stay readable. Every control has a real `<label for>`; help text is tied with `aria-describedby`; segmented controls are `role="radiogroup"` + `role="radio"`/`aria-checked`. Test/secondary actions sit **beside the field they test** (key row: input · Show · Test), not in a button pile at the bottom. The single primary action (Save) lives in the sticky header, right-aligned, disabled until dirty.
+
+**Rows and lists.** Hairline separators, quiet hover fill (`--surface-2`), never a border change on hover; no per-row shadows. Pick one row style per list.
+
+**Motion budget.** Animate opacity, colour, background and small transforms only; never width/height/padding. 150–250ms ease-out; 300ms for a view swap. Fade-in-on-hover affordances (copy buttons, usage, card actions) start at `opacity: 0` and also show on `:focus-visible`/`:focus-within` so keyboards get them too.
+
+**Z-index ladder.** Two rungs: sticky chrome (`z-index: 40`) and floating surfaces — menus, popovers, modal, toast (`100`+). The tag popover is `position: fixed` at the top because it escapes scroll containers on YouTube; don't add new rungs in between.
+
+**Anti-patterns (the AI-slop list).** Purple/indigo gradients; icon-in-coloured-circle feature grids; everything centred; one bubbly radius everywhere; `font-weight: 700` on body copy; text below 12px; `!important` to win a specificity fight; `outline: none` without a `:focus-visible` replacement; emoji as icons; a wall of equally prominent buttons; decorative icons; colours not in `tokens.css`.
+
 ## Pre-finish checklist
 
 - [ ] Hover state on every clickable element?
@@ -41,6 +76,8 @@ Core values: **hierarchy & clarity** (size/weight/color separate primary from se
 - [ ] Looks right in both light and dark (`prefers-color-scheme` and `data-theme` override) on both hosts (YouTube panel + library page)?
 - [ ] Respects `prefers-reduced-motion`?
 - [ ] No emojis anywhere in UI strings/icons?
+- [ ] Icon control rows: same slot size, single `gap`, edge distances measured equal?
+- [ ] Forms: `<label for>`, `aria-describedby` on help text, sections titled?
 
 ## Repo pointers
 

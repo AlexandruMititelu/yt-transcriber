@@ -136,12 +136,13 @@ button:disabled { opacity: 0.5; cursor: default; }
 /* notes: src/ui/notes.css */
 .notes { display: flex; flex-direction: column; min-height: calc(100vh - 200px); } /* editor reaches the bottom of the window */
 
-/* settings */
-.settings-form {
-  display: flex; flex-direction: column; gap: 16px;
-  max-width: 560px; padding: 20px;
+/* settings: one card per section, fields stacked inside */
+.settings { display: flex; flex-direction: column; gap: 16px; max-width: 640px; }
+.settings-section {
+  display: flex; flex-direction: column; gap: 16px; padding: 18px 20px;
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
 }
+.settings-section h2 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
 .field { display: flex; flex-direction: column; gap: 6px; }
 .field-label {
   font-size: 12px; font-weight: 600; color: var(--muted);
@@ -149,11 +150,13 @@ button:disabled { opacity: 0.5; cursor: default; }
 }
 .field-help { font-size: 12px; color: var(--muted); }
 .field-check { display: flex; align-items: center; gap: 8px; cursor: pointer; }
-.field-check input { width: auto; margin: 0; }
+.field-check input { width: auto; margin: 0; accent-color: var(--accent); }
 .hotkeys { border-collapse: collapse; font-size: 13px; }
-.hotkeys td { padding: 3px 12px 3px 0; }
+.hotkeys td { padding: 3px 12px 3px 0; vertical-align: top; }
+.hotkeys td:first-child { white-space: nowrap; }
 kbd { font-family: var(--font-mono); font-size: 11.5px; padding: 1px 6px; border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 5px; background: var(--surface-2); }
-.settings-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
+.settings-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.topbar .btn.primary { flex: none; }
 .field-row { display: flex; gap: 8px; }
 .field-row .input { flex: 1; }
 .field-help code { font-family: var(--font-mono); font-size: 11.5px; }
@@ -212,14 +215,14 @@ kbd { font-family: var(--font-mono); font-size: 11.5px; padding: 1px 6px; border
 .key-status { font-family: var(--font-mono); font-size: 11.5px; }
 .key-status.ok { color: var(--green); }
 .key-status.bad { color: #ff453a; }
-.settings-form .segmented { align-self: flex-start; margin: 0; }
+.settings .segmented { align-self: flex-start; margin: 0; }
 
 /* narrow viewports */
 @media (max-width: 640px) {
   #app { padding: 16px 12px 48px; }
   .grid { grid-template-columns: 1fr; }
   .lib-count { display: none; }
-  .settings-form { padding: 14px; }
+  .settings-section { padding: 14px; }
   .pane { padding: 10px; }
   .chat { max-height: none; }
 }

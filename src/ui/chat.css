@@ -32,7 +32,7 @@
 .ytx-msg-user .ytx-msg-text { white-space: pre-wrap; }
 .ytx-msg-img { display: block; max-width: 100%; border-radius: 8px; margin: 0 0 6px; }
 .ytx-msg-at { display: inline-block; margin-bottom: 4px; font-family: var(--font-mono); font-size: 11px; opacity: 0.8; }
-.ytx-msg-assistant { align-self: flex-start; background: var(--surface-2); border-bottom-left-radius: 4px; padding-right: 30px; }
+.ytx-msg-assistant { align-self: flex-start; background: var(--surface-2); border-bottom-left-radius: 4px; }
 .ytx-msg-pending { color: var(--muted); }
 .ytx-msg-status { display: block; }
 /* tool activity line under a streaming reply: text shimmer, like Claude's "Searching the web…" */
@@ -51,19 +51,23 @@
   background: none; border: 1px dashed var(--border); color: var(--muted); font-size: 12px;
 }
 
-/* assistant actions: copy top-right (no layout cost), usage appears bottom-right on hover */
-.ytx-msg-acts { display: contents; }
+/* assistant actions: copy floats top-right and sits again in a footer row with the usage; both show on hover/focus
+   so the bubble keeps equal left/right padding (panel is narrow, text gets the width) */
 .ytx-msg-copy {
-  position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; border: 0; border-radius: 6px; background: none;
-  color: var(--muted); font: inherit; font-size: 13px; line-height: 1; cursor: pointer; opacity: 0.6;
+  width: 22px; height: 22px; border: 0; border-radius: 6px; background: var(--surface-2);
+  color: var(--muted); font: inherit; font-size: 13px; line-height: 1; cursor: pointer; opacity: 0;
+  display: inline-flex; align-items: center; justify-content: center; transition: opacity 0.15s ease, background-color 0.15s ease;
 }
-.ytx-msg-copy:hover { opacity: 1; background: var(--surface); color: var(--text); }
+.ytx-msg-copy-top { position: absolute; top: 6px; right: 6px; }
+.ytx-msg:hover .ytx-msg-copy, .ytx-msg-copy:focus-visible { opacity: 1; }
+.ytx-msg-copy:hover { background: var(--surface); color: var(--text); }
 .ytx-msg-copy .ytx-ico { width: 14px; height: 14px; }
+.ytx-msg-foot { display: flex; align-items: center; justify-content: flex-end; gap: 6px; height: 18px; margin: 2px -4px -4px 0; }
 .ytx-msg-usage {
-  position: absolute; right: 8px; bottom: -14px; color: var(--muted); font-family: var(--font-mono); font-size: 10px;
+  color: var(--muted); font-family: var(--font-mono); font-size: 10px;
   opacity: 0; transition: opacity 0.15s ease; pointer-events: none;
 }
-.ytx-msg:hover .ytx-msg-usage { opacity: 1; }
+.ytx-msg:hover .ytx-msg-usage, .ytx-msg-foot:focus-within .ytx-msg-usage { opacity: 1; }
 
 .ytx-chat-retry {
   padding: 3px 10px; border: 0; border-radius: 999px; background: var(--accent-soft); color: var(--accent);
