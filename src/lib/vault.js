@@ -384,6 +384,18 @@ export async function refreshIndex(settings) {
   await io(settings, { op: 'write', path: indexPath(settings), content: indexToMd(entries) });
 }
 
+// `![[attachments/x.jpg]]` → data: URL (null when the file is missing or the host predates read-b64).
+const frameCache = new Map();
+export async function readFrame(settings, video, file) {
+  if (!enabled(settings)) return null;
+  const path = join(videoDir(settings, video), String(file).replace(/^\/+/, ''));
+  if (frameCache.has(path)) return frameCache.get(path);
+  const r = await io(settings, { op: 'read-b64', path }).catch(() => ({ data: null }));
+  const url = r?.data ? `data:image/${/\.png$/i.test(path) ? 'png' : 'jpeg'};base64,${r.data}` : null;
+  if (url) frameCache.set(path, url);
+  return url;
+}
+
 // A video frame (data: URL from a canvas) → <video>/attachments/<m-ss>.jpg; returns the Obsidian embed.
 export async function saveFrame(settings, video, dataUrl, sec) {
   if (!enabled(settings)) throw new Error('no-vault');

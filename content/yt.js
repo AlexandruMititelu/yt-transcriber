@@ -69,7 +69,8 @@
   }
 
   let onWiki = null; // set per init: opens [[chats/<file>]] links from quotes
-  const renderMd = (text) => L.markdown.renderMarkdown(text, { onSeek: seek, onWiki: (t) => onWiki?.(t) });
+  let onEmbed = null; // set per init: ![[attachments/x.jpg]] → data: URL through the vault
+  const renderMd = (text) => L.markdown.renderMarkdown(text, { onSeek: seek, onWiki: (t) => onWiki?.(t), onEmbed: (f) => onEmbed?.(f) });
 
   function scrapeMeta() {
     const title = L.vault.cleanTitle(
@@ -641,6 +642,7 @@
       },
     });
     views.chat.appendChild(chatView.root);
+    onEmbed = (file) => L.db.getSettings().then((s) => L.vault.readFrame(s, video, file)).catch(() => null);
     onWiki = (target) => {
       const name = String(target).replace(/^chats\//, '');
       const c = video.chats.find((x) => x.file === name || x.title === name || L.vault.chatName(x) === name);

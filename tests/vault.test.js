@@ -12,7 +12,7 @@ globalThis.browser = {
     async sendMessage(msg) {
       if (msg.type !== 'native') return { ok: false, error: 'unexpected' };
       const { op } = msg;
-      if (['list', 'read', 'stat', 'write', 'write-b64', 'delete', 'rename', 'mkdir'].includes(op) && !msg.root) return { ok: false, error: 'missing root' };
+      if (['list', 'read', 'read-b64', 'stat', 'write', 'write-b64', 'delete', 'rename', 'mkdir'].includes(op) && !msg.root) return { ok: false, error: 'missing root' };
       if (op === 'stat') return { ok: true, mtime: mtimes.get(msg.path) ?? null };
       if (op === 'list') {
         const prefix = msg.path.replace(/\/+$/, '') + '/';
@@ -29,6 +29,7 @@ globalThis.browser = {
       if (op === 'read') return { ok: true, content: files.has(msg.path) ? files.get(msg.path) : null, mtime: mtimes.get(msg.path) ?? null };
       if (op === 'write') { writeDisk(msg.path, msg.content); return { ok: true, mtime: mtimes.get(msg.path) }; }
       if (op === 'write-b64') { writeDisk(msg.path, `<b64:${msg.data.length}>`); return { ok: true }; }
+      if (op === 'read-b64') return { ok: true, data: files.has(msg.path) ? 'QUFB' : null };
       if (op === 'delete') { files.delete(msg.path); return { ok: true }; }
       if (op === 'rename') {
         if (files.has(msg.from)) { files.set(msg.to, files.get(msg.from)); files.delete(msg.from); return { ok: true }; }
@@ -368,6 +369,8 @@ test('hub note + Index.md: written once per video, pin/unpin only restamp front 
   const embed = await vault.saveFrame(settings, video, 'data:image/jpeg;base64,AAAA', 61);
   assert.equal(embed, '![[attachments/1-01.jpg]]');
   assert.ok(files.has('C:\\Vault/YT-transcriber/Hub video/attachments/1-01.jpg'));
+  assert.equal(await vault.readFrame(settings, video, 'attachments/1-01.jpg'), 'data:image/jpeg;base64,QUFB');
+  assert.equal(await vault.readFrame(settings, video, 'attachments/none.jpg'), null);
 });
 
 test('legacy [!user]/[!assistant] callouts still parse to the right roles', () => {

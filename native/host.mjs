@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 // Native messaging host for YT Transcriber: the extension's only way to touch the filesystem.
 // Protocol: 4-byte LE length + JSON, both directions. Request {id, op, ...} → reply {id, ok, ...}.
-// Ops: ping | pick-folder | list {path} | read {path} | stat {path} | write {path, content} | write-b64 {path, data} | delete {path} | rename {from, to} | mkdir {path}
+// Ops: ping | pick-folder | list {path} | read {path} | read-b64 {path} | stat {path} | write {path, content} | write-b64 {path, data} | delete {path} | rename {from, to} | mkdir {path}
 // File ops carry `root` (the vault's YT-transcriber dir); any path outside it is refused.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 
-const VERSION = '1';
+const VERSION = '2';
 
 function send(obj) {
   const body = Buffer.from(JSON.stringify(obj), 'utf8');
@@ -136,6 +136,9 @@ async function handle(msg) {
       if (e.code === 'ENOENT') return { content: null, mtime: null };
       throw e;
     }
+  }
+  if (op === 'read-b64') { // binary (frame captures) → base64, null when missing
+    try { return { data: (await fs.promises.readFile(at(msg.path))).toString('base64') }; } catch (e) { if (e.code === 'ENOENT') return { data: null }; throw e; }
   }
   if (op === 'stat') return { mtime: await mtimeOf(at(msg.path)) };
   if (op === 'write') {

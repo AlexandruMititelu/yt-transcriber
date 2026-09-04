@@ -464,7 +464,8 @@ Bootstrap: `(async () => { ... })()`. All lib access via
   last reply's `usage.in + usage.out` / `llm.contextWindow(model)` (tokens in the tooltip) (an estimate `~N` from the system prompt's chars/3.5 before any
   reply); orange above 80%. `usage.in` is the whole prompt on both providers (Anthropic uncached + cache read + cache
   write summed in `parseResult`). Assistant content rendered via `renderMd` =
-  `src/ui/markdown.js` `renderMarkdown(text, {onSeek | timeHref, onWiki})`: `[[target|label]]` → `<a class=ytx-wiki data-target>`
+  `src/ui/markdown.js` `renderMarkdown(text, {onSeek | timeHref, onWiki, onEmbed})`: `![[x.jpg]]` → `<span class=ytx-embed>` resolved to an
+  `<img src=data:>` by onEmbed(file) (hosts: `vault.readFrame` via host `read-b64`, cached; img stays forbidden in the sanitizer); `[[target|label]]` → `<a class=ytx-wiki data-target>`
   (click → onWiki(target); hosts open `chats/<file>` by file/title/chatName and switch to Chat) → marked → DOMPurify (img forbidden) → links
   target=_blank → `[12:34]` / `@12:34` time chips (button that seeks on the watch page, link to url&t= in the
   library) → copy button + language tag on every code block → mermaid fences rendered lazily

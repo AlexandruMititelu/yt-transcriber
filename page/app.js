@@ -82,7 +82,11 @@ function atTimeUrl(url, sec) {
 
 let wikiHandler = null;
 let quoteToNote = null; // set by renderDetail: quote → new note in the Notes pane // set by renderDetail: opens [[chats/<file>]] links from quotes
-const renderMdFor = (video) => (text) => renderMarkdown(text, { timeHref: (sec) => atTimeUrl(video.url, sec), onWiki: (t) => wikiHandler?.(t) });
+const renderMdFor = (video) => (text) => renderMarkdown(text, {
+  timeHref: (sec) => atTimeUrl(video.url, sec),
+  onWiki: (t) => wikiHandler?.(t),
+  onEmbed: (f) => db.getSettings().then((s) => vault.readFrame(s, video, f)).catch(() => null),
+});
 
 // ---------- library ----------
 
@@ -847,6 +851,22 @@ async function renderSettings() {
         el('label', { class: 'field-check' }, hotkeys, el('span', { class: 'field-label' }, 'Keyboard shortcuts')),
         el('table', { class: 'hotkeys' }, HOTKEYS.map((h) => el('tr', {}, el('td', {}, el('kbd', {}, h.keys)), el('td', {}, h.desc)))),
         el('span', { class: 'field-help' }, 'Fixed for now: turn them all on or off here. Defined in config/hotkeys.js.')),
+      el('div', { class: 'field' },
+        el('span', { class: 'field-label' }, 'Text shortcuts & gestures'),
+        el('table', { class: 'hotkeys' }, [
+          ['@now', 'In a note: the current video time as @mm:ss'],
+          ['@now=t', '…plus the caption line being spoken'],
+          ['@now=tt', '…plus the previous, current and next lines as a quote'],
+          ['@now=ttt', '…plus the whole timestamp block'],
+          ['@m:ss', 'Any hand-typed time becomes a clickable stamp (@2:17 → @02:17)'],
+          ['#tag', 'In a note: an Obsidian tag (chips, filter row, tag pane)'],
+          ['[12:34]', 'In chat replies: a timestamp chip that seeks'],
+          ['Ctrl + right-click', 'On selected text in a chat reply or transcript row: Copy · Copy as quote · Quote in a new note'],
+          ['Double-click', 'Transcript row or caption line: jump the video there (single click just selects text)'],
+          ['Enter / Shift+Enter', 'Chat: send / new line. Esc stops a streaming reply'],
+          ['Space / Enter', 'On a focused transcript row: jump there'],
+        ].map(([k, d]) => el('tr', {}, el('td', {}, el('kbd', {}, k)), el('td', {}, d)))),
+        el('span', { class: 'field-help' }, 'Always on.')),
       el('div', { class: 'settings-actions' }, saveBtn, testBtn('anthropic', 'Anthropic'), testBtn('openai', 'OpenAI'), testHostBtn, exportBtn, importBtn, importInput)));
 }
 
