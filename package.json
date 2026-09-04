@@ -1,0 +1,12 @@
+{
+  "name": "yt-transcriber-v2",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/",
+    "start": "web-ext run --source-dir . --firefox-binary \"C:\\Program Files\\Zen Browser\\zen.exe\""
+  },
+  "devDependencies": {
+    "web-ext": "^8.3.0"
+  }
+}

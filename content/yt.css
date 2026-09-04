@@ -1,0 +1,673 @@
+/* YT Transcriber panel — every rule scoped under #ytx-panel.
+   Token VALUES copied from src/ui/tokens.css (content CSS can't @import extension urls).
+   Theme is class-driven: .ytx-dark set by yt.js from YouTube's own <html dark>. */
+
+#ytx-panel {
+  --font-ui: "Geist", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --bg: #f5f5f7;
+  --surface: #ffffff;
+  --surface-2: #f2f2f4;
+  --text: #1d1d1f;
+  --muted: #6e6e73;
+  --accent: #007aff;
+  --accent-soft: rgba(0, 122, 255, 0.1);
+  --border: rgba(0, 0, 0, 0.08);
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 8px 24px rgba(0, 0, 0, 0.06);
+  --thumb: #ffffff;
+  --code-bg: rgba(0, 0, 0, 0.05);
+  --keep-0: var(--surface);
+  --keep-1: #fff8d6;
+  --keep-2: #e2f6e3;
+  --keep-3: #e1f0ff;
+  --keep-4: #fde7ef;
+
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  max-height: 80vh; /* fallback; yt.js sets an explicit height = player height */
+  margin: 0 0 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  box-sizing: border-box;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text);
+}
+
+#ytx-panel[style*="height"] {
+  max-height: none;
+}
+
+#ytx-panel.ytx-dark {
+  --bg: #161617;
+  --surface: #1e1e20;
+  --surface-2: #2a2a2d;
+  --text: #f5f5f7;
+  --muted: #98989d;
+  --accent: #0a84ff;
+  --accent-soft: rgba(10, 132, 255, 0.16);
+  --border: rgba(255, 255, 255, 0.1);
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.4);
+  --thumb: #48484a;
+  --code-bg: rgba(255, 255, 255, 0.07);
+  --keep-1: #4a4526;
+  --keep-2: #2a4030;
+  --keep-3: #243b52;
+  --keep-4: #4a2c38;
+}
+
+#ytx-panel *,
+#ytx-panel *::before,
+#ytx-panel *::after {
+  box-sizing: border-box;
+}
+
+#ytx-panel button:not(:where([class^="ytx-picker"], [class^="ytx-chatbar"], [class^="ytx-confirm"], [class^="ytx-notes"], [class^="ytx-qn"], [class^="ytx-nt"], [class^="ytx-ed"])) {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  -moz-appearance: none;
+  appearance: none;
+}
+
+#ytx-panel textarea {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  outline: none;
+  resize: none;
+  margin: 0;
+}
+
+#ytx-panel a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+/* ---- header ---- */
+
+#ytx-panel .ytx-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 12px 8px 16px;
+  flex: none;
+}
+
+#ytx-panel .ytx-title {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.1px;
+}
+
+#ytx-panel .ytx-icon-btn {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  color: var(--muted);
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+#ytx-panel .ytx-icon-btn:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+#ytx-panel .ytx-icon-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+#ytx-panel .ytx-icon-btn.is-on {
+  color: var(--accent);
+}
+
+#ytx-panel .ytx-pin.is-on {
+  color: #ffcc00;
+}
+
+#ytx-panel .ytx-pin.is-on .ytx-ico-pin {
+  fill: currentColor;
+}
+
+/* ---- segmented control ---- */
+
+#ytx-panel .ytx-tabs {
+  display: flex;
+  flex: none;
+  margin: 0 14px 10px;
+  padding: 2px;
+  background: var(--surface-2);
+  border-radius: 9px;
+}
+
+#ytx-panel .ytx-tab {
+  flex: 1;
+  padding: 5px 0;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  text-align: center;
+  transition: color 0.15s ease;
+}
+
+#ytx-panel .ytx-tab.is-active {
+  background: var(--thumb);
+  color: var(--text);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+
+/* ---- body / views ---- */
+
+#ytx-panel .ytx-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+#ytx-panel .ytx-view {
+  display: none;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
+
+#ytx-panel .ytx-view.is-active {
+  display: flex;
+}
+
+#ytx-panel .ytx-scroll,
+#ytx-panel .ytx-chat-list {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+#ytx-panel .ytx-transcript {
+  position: relative;
+  padding: 0 10px 12px;
+}
+
+#ytx-panel .ytx-follow-bar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  justify-content: flex-end;
+  padding: 4px 0 6px;
+  background: var(--surface);
+}
+
+#ytx-panel .ytx-follow {
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+#ytx-panel .ytx-follow.is-on {
+  background: var(--accent-soft);
+  border-color: transparent;
+  color: var(--accent);
+}
+
+#ytx-panel .ytx-row.is-current {
+  background: var(--accent-soft);
+}
+
+#ytx-panel .ytx-notes {
+  padding: 2px 14px 14px;
+}
+
+/* ---- shared bits ---- */
+
+#ytx-panel .ytx-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 36px 16px;
+  color: var(--muted);
+  font-size: 12.5px;
+  text-align: center;
+}
+
+#ytx-panel .ytx-spinner {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  animation: ytx-spin 0.8s linear infinite;
+}
+
+@keyframes ytx-spin {
+  to { transform: rotate(360deg); }
+}
+
+#ytx-panel .ytx-btn {
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  transition: background-color 0.15s ease;
+}
+
+#ytx-panel .ytx-time {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* ---- transcript tab ---- */
+
+#ytx-panel .ytx-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 7px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+#ytx-panel .ytx-row:hover {
+  background: var(--surface-2);
+}
+
+#ytx-panel .ytx-row .ytx-time {
+  margin-top: 1px;
+}
+
+#ytx-panel .ytx-text {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+/* ---- chat tab ---- */
+
+#ytx-panel .ytx-chat-list {
+  flex: 1;
+  min-height: 140px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 12px 12px;
+}
+
+#ytx-panel .ytx-msg {
+  max-width: 88%;
+  padding: 8px 11px;
+  border-radius: 14px;
+  font-family: var(--font-ui);
+  font-size: 13.5px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+#ytx-panel .ytx-msg-user {
+  align-self: flex-end;
+  background: var(--accent);
+  color: #ffffff;
+  border-bottom-right-radius: 4px;
+  white-space: pre-wrap;
+}
+
+#ytx-panel .ytx-msg-assistant {
+  align-self: flex-start;
+  background: var(--surface-2);
+  border-bottom-left-radius: 4px;
+  position: relative;
+  padding-right: 30px;
+}
+
+#ytx-panel .ytx-copy {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.6;
+}
+
+#ytx-panel .ytx-copy:hover {
+  opacity: 1;
+  background: var(--surface);
+  color: var(--text);
+}
+
+#ytx-panel .ytx-pending {
+  color: var(--muted);
+}
+
+#ytx-panel .ytx-msg-system {
+  align-self: center;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: 1px dashed var(--border);
+  color: var(--muted);
+  font-family: var(--font-ui);
+  font-size: 12px;
+}
+
+#ytx-panel .ytx-ts {
+  display: inline-block;
+  padding: 0 5px;
+  margin: 0 1px;
+  border-radius: 5px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-soft);
+  vertical-align: baseline;
+}
+
+#ytx-panel .ytx-ts:hover {
+  text-decoration: underline;
+}
+
+#ytx-panel .ytx-md p {
+  margin: 0 0 8px;
+}
+
+#ytx-panel .ytx-md h1,
+#ytx-panel .ytx-md h2,
+#ytx-panel .ytx-md h3,
+#ytx-panel .ytx-md h4,
+#ytx-panel .ytx-md h5,
+#ytx-panel .ytx-md h6 {
+  margin: 10px 0 6px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+#ytx-panel .ytx-md ul,
+#ytx-panel .ytx-md ol {
+  margin: 0 0 8px;
+  padding-left: 18px;
+}
+
+#ytx-panel .ytx-md li {
+  margin: 2px 0;
+}
+
+#ytx-panel .ytx-md code {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--code-bg);
+}
+
+#ytx-panel .ytx-md pre {
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--code-bg);
+  overflow-x: auto;
+}
+
+#ytx-panel .ytx-md pre code {
+  padding: 0;
+  background: none;
+}
+
+#ytx-panel .ytx-md blockquote {
+  margin: 0 0 8px;
+  padding-left: 10px;
+  border-left: 2px solid var(--border);
+  color: var(--muted);
+}
+
+#ytx-panel .ytx-md > :last-child {
+  margin-bottom: 0;
+}
+
+#ytx-panel .ytx-mermaid {
+  margin: 0 0 8px;
+  overflow-x: auto;
+}
+
+#ytx-panel .ytx-mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+
+#ytx-panel .ytx-picker {
+  flex: none;
+  padding: 0 8px 6px;
+}
+
+#ytx-panel .ytx-chatbar {
+  flex: none;
+  padding: 0 12px 8px;
+}
+
+#ytx-panel .ytx-chat-list .ytx-confirm {
+  margin: auto 0;
+}
+
+#ytx-panel .ytx-composer {
+  flex: none;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+}
+
+#ytx-panel .ytx-composer textarea {
+  flex: 1;
+  min-height: 34px;
+  max-height: 96px;
+  padding: 8px 12px;
+  border-radius: 17px;
+  background: var(--surface-2);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.4;
+  overflow-y: auto;
+}
+
+#ytx-panel .ytx-composer textarea::placeholder {
+  color: var(--muted);
+}
+
+#ytx-panel .ytx-send {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  margin-bottom: 2px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent);
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+#ytx-panel .ytx-send:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* ---- notes tab ---- */
+
+#ytx-panel .ytx-addnote {
+  align-self: flex-start;
+  flex: none;
+  margin: 0 0 10px;
+}
+
+#ytx-panel .ytx-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+#ytx-panel .ytx-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--keep-0);
+}
+
+#ytx-panel .ytx-card.ytx-c1 { background: var(--keep-1); }
+#ytx-panel .ytx-card.ytx-c2 { background: var(--keep-2); }
+#ytx-panel .ytx-card.ytx-c3 { background: var(--keep-3); }
+#ytx-panel .ytx-card.ytx-c4 { background: var(--keep-4); }
+
+#ytx-panel .ytx-card-text {
+  width: 100%;
+  min-height: 48px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+#ytx-panel .ytx-card-foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#ytx-panel .ytx-card-time {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+#ytx-panel .ytx-chip-btn {
+  padding: 1px 6px;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+#ytx-panel .ytx-chip-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+#ytx-panel .ytx-chip-x {
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 10px;
+  color: var(--muted);
+}
+
+#ytx-panel .ytx-chip-x:hover {
+  background: var(--code-bg);
+  color: var(--text);
+}
+
+#ytx-panel .ytx-dot {
+  width: 14px;
+  height: 14px;
+  margin-left: auto;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: conic-gradient(#f6d860, #7ed49b, #7cb8f0, #f2a3c0, #f6d860);
+}
+
+#ytx-panel .ytx-icon-sm {
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+#ytx-panel .ytx-icon-sm:hover {
+  background: var(--code-bg);
+}
+
+/* ---- toast ---- */
+
+#ytx-panel .ytx-toast {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: rgba(28, 28, 30, 0.92);
+  color: #f5f5f7;
+  font-size: 12px;
+  white-space: nowrap;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  z-index: 10;
+  animation: ytx-toast 1.6s ease forwards;
+}
+
+#ytx-panel .ytx-toast a {
+  color: #6db2ff;
+  font-weight: 600;
+}
+
+@keyframes ytx-toast {
+  0% { opacity: 0; transform: translate(-50%, 8px); }
+  15% { opacity: 1; transform: translate(-50%, 0); }
+  75% { opacity: 1; }
+  100% { opacity: 0; }
+}

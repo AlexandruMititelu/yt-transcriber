@@ -1,0 +1,153 @@
+/* Chat switcher bar + confirm box — shared by the YouTube panel and the library page.
+   Unique class names (ytx-chatbar-*, ytx-confirm-*); colors come from the host's tokens. */
+.ytx-chatbar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-ui);
+}
+
+.ytx-chatbar-select,
+.ytx-chatbar-input {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  font-weight: 500;
+  outline: none;
+  box-shadow: none;
+}
+
+.ytx-chatbar-select {
+  cursor: pointer;
+}
+
+.ytx-chatbar-input:focus,
+.ytx-chatbar-select:focus {
+  border-color: var(--accent);
+}
+
+.ytx-chatbar-btn {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font: inherit;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.ytx-chatbar-btn:hover {
+  color: var(--text);
+  border-color: var(--muted);
+}
+
+.ytx-chatbar-menu {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 10;
+  min-width: 140px;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow, 0 8px 24px rgba(0, 0, 0, 0.12));
+}
+
+.ytx-chatbar-menu.is-open {
+  display: block;
+}
+
+.ytx-chatbar-item {
+  display: block;
+  width: 100%;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ytx-chatbar-item:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+
+.ytx-chatbar-item:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.ytx-chatbar-danger {
+  color: #ff453a;
+}
+
+.ytx-confirm {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 16px 12px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  text-align: center;
+}
+
+.ytx-confirm-text {
+  overflow-wrap: anywhere;
+}
+
+.ytx-confirm-row {
+  display: flex;
+  gap: 8px;
+}
+
+.ytx-confirm-btn {
+  padding: 5px 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ytx-confirm-btn:hover {
+  border-color: var(--muted);
+}
+
+.ytx-confirm-danger {
+  background: #ff453a;
+  border-color: transparent;
+  color: #fff;
+}
+
+.ytx-confirm-danger:hover {
+  filter: brightness(0.92);
+}

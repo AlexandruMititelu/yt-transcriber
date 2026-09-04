@@ -1,0 +1,146 @@
+/* Model/effort picker — shared by the YouTube panel and the library page. Class names are
+   unique (ytx-picker-*) so this can load unscoped on youtube.com. Colors come from the
+   host's tokens (#ytx-panel or :root). */
+.ytx-picker {
+  position: relative;
+  display: flex;
+  justify-content: flex-end;
+  font-family: var(--font-ui);
+}
+
+.ytx-picker-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.3;
+  cursor: pointer;
+}
+
+.ytx-picker-trigger::after {
+  content: "⌄";
+  margin-left: 2px;
+  line-height: 0.6;
+  color: var(--muted);
+}
+
+.ytx-picker-trigger:hover {
+  border-color: var(--muted);
+  color: var(--text);
+}
+
+.ytx-picker-model {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.ytx-picker-menu {
+  display: none;
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 6px);
+  z-index: 10;
+  width: 260px;
+  max-height: 340px;
+  flex-direction: column;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.16);
+  font-size: 13px;
+}
+
+.ytx-picker-menu.is-open {
+  display: flex;
+}
+
+.ytx-picker-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.ytx-picker-list::-webkit-scrollbar {
+  display: none;
+}
+
+.ytx-picker-footer {
+  flex: none;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+
+.ytx-picker-group {
+  padding: 8px 10px 4px;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  font-style: italic;
+}
+
+.ytx-picker-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ytx-picker-item:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+
+.ytx-picker-item:disabled {
+  color: var(--muted);
+  opacity: 0.6;
+  cursor: default;
+}
+
+.ytx-picker-item-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ytx-picker-check {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.ytx-picker-value {
+  color: var(--muted);
+}
+
+.ytx-picker-empty {
+  padding: 10px;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.ytx-picker-effort {
+  color: var(--muted);
+}
+
+.ytx-picker-effort.is-off {
+  opacity: 0.45;
+  text-decoration: line-through;
+}
