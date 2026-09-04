@@ -181,7 +181,10 @@ export function createNotesView(opts) {
     const card = selId != null ? video.notes.cards.find((c) => c.id === selId) : null;
     if (card) {
       if (card.kind === 'note') { openId = card.id; refresh(); return; }
-      cardEls.get(card.id)?.querySelector('.ytx-qn-body')?.click(); // reuse mdField's click-to-edit
+      const el = cardEls.get(card.id);
+      const ta = el?.querySelector('textarea');
+      if (ta) { ta.blur(); el.focus(); return; } // quick note being edited: leave edit mode, card stays selected
+      el?.querySelector('.ytx-qn-body')?.click(); // reuse mdField's click-to-edit
       return;
     }
     const cards = displayCards();
@@ -269,7 +272,10 @@ export function createNotesView(opts) {
   // Alt+Backspace: put focus on the trash of the open editor or the selected card (Enter then asks).
   function focusDelete() {
     if (openId) return; // inside a note Alt+Backspace stays the editor's own delete
-    (selId != null ? cardEls.get(selId) : null)?.querySelector('.ytx-notes-del')?.focus();
+    const el = selId != null ? cardEls.get(selId) : null;
+    const box = el?.querySelector('.ytx-notes-overlay');
+    if (box) { box.remove(); el.focus(); return; } // pressed again on the "Delete?" box: cancel
+    el?.querySelector('.ytx-notes-del')?.focus();
   }
   // Alt+T: open the tag popover of the open editor or the selected card. → true when something was opened.
   function focusTags() {
