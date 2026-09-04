@@ -160,6 +160,7 @@ export const DEFAULT_SETTINGS = {
   noteMode: 'edit',                 // note editor default mode, persisted by setMode
   follow: false,                    // transcript Follow toggle, remembered
   lang: 'en',                       // preferred caption language prefix
+  prompts: undefined,               // chat presets, "Label: text" per line (config/prompts.js parsePrompts); undefined = defaults, '' = none
 }
 export async function getSettings()            // {...DEFAULT_SETTINGS, ...stored}; migrates v1 {provider, apiKey, model} → per-provider key + 'provider:model', drops legacy + notion keys
 export async function saveSettings(patch)      // merge + write; returns merged
@@ -387,7 +388,8 @@ Bootstrap: `(async () => { ... })()`. All lib access via
   settingsAction})` → `{root, refresh, toggleWeb, cancel, focus, prefill, isBusy}`, shared with the library): chat bar
   (`src/ui/chatbar.js`: a macOS-style pop-up button showing the current chat title; its popover lists the chats with a
   checkmark, then "+ New chat", then Rename / Delete chat (red); double-click the trigger also renames) + message list +
-  composer. Composer = one pill: preset chips above (config/prompts.js, only while the chat is empty), textarea
+  composer. Composer = one pill: preset chips above (`settings.prompts` via config/prompts.js `parsePrompts`, only while
+  the chat is empty), textarea
   (autosize, Enter sends, Shift+Enter newline, stays enabled while a reply streams), tool row right-aligned:
   model/effort picker · web-search globe · send circle, which becomes a Stop square while busy (Esc also stops).
   Current chat = `video.chats.find(id === video.activeChatId)`; none → the first send creates one via
@@ -398,8 +400,8 @@ Bootstrap: `(async () => { ... })()`. All lib access via
   title is still NEW_CHAT_TITLE after the first exchange, `llm.titleChat` renames it (best effort). Stop keeps the
   streamed text as a message marked "*[stopped]*". Errors → inline system bubble with Retry (re-runs the same
   messages, nothing retyped); no-api-key → "Add your API key in Settings" + the host's `settingsAction()`.
-  Hover actions under every bubble: copy (both roles), edit & resend (user: drops that message and everything after,
-  puts the text back in the composer), token usage `fmtUsage` (assistant). The list auto-scrolls only while the user
+  Assistant bubbles: copy button top-right, token usage `fmtUsage` shown under the bubble on hover (absolute, no
+  layout cost). User bubbles: plain text only. The list auto-scrolls only while the user
   is at the bottom; otherwise a "↓ New reply" pill appears. Empty chat shows a hint and, for long videos, the share
   of the transcript that fits the prompt (`llm.promptCoverage`). Assistant content rendered via `renderMd` =
   `src/ui/markdown.js` `renderMarkdown(text, {onSeek | timeHref})`: marked → DOMPurify (img forbidden) → links
@@ -418,7 +420,7 @@ Bootstrap: `(async () => { ... })()`. All lib access via
   click → the editor replaces the whole tab: "‹" top-left, full-width title input, body, footer with the
   time slot, a camera button (panel only: `onFrame()` captures the playing `<video>` frame to a canvas →
   `vault.saveFrame` → the embed is appended to the open note, or a new note "Frame at m:ss" is created from the
-  list toolbar), an edit/view mode toggle (</> edit = permanent raw-markdown textarea, default, never flips
+  list toolbar; the embed is preceded by `@mm:ss`), an edit/view mode toggle (</> edit = permanent raw-markdown textarea, default, never flips
   on blur, no focus ring; eye = view: the rendered HTML is contenteditable and converted back to markdown
   with `htmlToMd` on every input, re-rendered on blur; mode persisted in `settings.noteMode`; tooltips show Alt+E /
   Alt+V) and a trash button (red on hover); other tabs stay reachable; the bar is a HIG-style nav bar:
@@ -481,7 +483,7 @@ Views (hash routing: `#/`, `#/video/<id>`, `#/settings`):
   like the panel; a `'reloaded'` sync result rebuilds the panes.
 - **Settings `#/settings`**: form — Anthropic key, OpenAI key (type=password with Show/Hide and a
   "● key set / ✓ key works / ✗ error" status), Appearance (Auto | Light | Dark, applied live), Caption language,
-  About me, Tone, Knowledge base folder (text input + "Choose…" → `vault.pickFolder` native dialog); Save button
+  About me, Chat presets (textarea, one "Label: prompt" per line, Reset to defaults), Tone, Knowledge base folder (text input + "Choose…" → `vault.pickFolder` native dialog); Save button
   (blue only when dirty; db.saveSettings + clearCachedModels; leaving the page with unsaved edits saves them) +
   "Test Anthropic/OpenAI key" (llm.chat tiny prompt → toast), "Test host" (`vault.ping` → toast version/platform
   or error), a "Keyboard shortcuts" checkbox with the HOTKEYS table (kbd + description), "Export data": JSON of

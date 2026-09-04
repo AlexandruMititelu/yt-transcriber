@@ -184,3 +184,5 @@ kbd { font-family: var(--font-mono); font-size: 11.5px; padding: 1px 6px; border
   .pane { padding: 10px; }
   .chat { max-height: none; }
 }
+.field-col { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.field-col textarea { width: 100%; }

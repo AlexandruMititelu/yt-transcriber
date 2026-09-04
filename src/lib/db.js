@@ -14,6 +14,7 @@ export const DEFAULT_SETTINGS = {
   noteMode: 'edit', // note editor default: 'edit' (raw markdown) | 'view' (rendered)
   follow: false, // transcript Follow toggle, remembered across videos
   lang: 'en', // preferred caption language (BCP-47 prefix)
+  prompts: undefined, // chat presets as "Label: text" lines; undefined = config/prompts.js defaults
 };
 
 // v1 settings were { provider, apiKey, model } — map into per-provider keys once. Notion keys dropped.

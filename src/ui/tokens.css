@@ -96,7 +96,8 @@
 }
 
 /* Keyboard focus must be visible; mouse focus stays quiet. */
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+:is(button, a, [role="button"], [role="tab"]):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+:is(input, textarea, select, [contenteditable]):focus { outline: none; }
 :focus:not(:focus-visible) { outline: none; }
 
 @media (prefers-reduced-motion: reduce) {

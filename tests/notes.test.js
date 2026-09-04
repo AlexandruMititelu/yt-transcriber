@@ -18,3 +18,11 @@ test('excerpt: first sentence, markdown stripped, capped', () => {
   assert.equal(notes.excerpt('- item one\n- item two'), 'item one item two');
   assert.equal(notes.excerpt('x'.repeat(400)).length, 280);
 });
+
+test('parsePrompts: "Label: text" lines, defaults when unset, none when empty', async () => {
+  const { parsePrompts, PROMPTS, promptsToText } = await import('../config/prompts.js');
+  assert.deepEqual(parsePrompts(undefined), PROMPTS);
+  assert.deepEqual(parsePrompts(''), []);
+  assert.deepEqual(parsePrompts('Sum: Summarize it\nbad line\nX: y: z'), [{ label: 'Sum', text: 'Summarize it' }, { label: 'X', text: 'y: z' }]);
+  assert.deepEqual(parsePrompts(promptsToText(PROMPTS)), PROMPTS);
+});

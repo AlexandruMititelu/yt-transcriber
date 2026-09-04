@@ -10,6 +10,7 @@ import { renderMarkdown, setDark } from '../src/ui/markdown.js';
 import { createToaster } from '../src/ui/toast.js';
 import { pinIcon } from '../src/ui/icons.js';
 import { HOTKEYS, hotkeyId } from '../config/hotkeys.js';
+import { PROMPTS, promptsToText } from '../config/prompts.js';
 
 const $app = document.getElementById('app');
 const toast = createToaster(document.body, { fixed: true });
@@ -418,6 +419,9 @@ async function renderSettings() {
   const themeValue = () => theme.querySelector('.active')?.dataset.v || 'auto';
   const lang = el('input', { class: 'input', placeholder: 'en', maxlength: '5' });
   lang.value = s.lang || 'en';
+  const prompts = el('textarea', { class: 'input mono', rows: 6, spellcheck: 'false', placeholder: promptsToText(PROMPTS) });
+  prompts.value = s.prompts ?? promptsToText(PROMPTS);
+  const resetPrompts = el('button', { class: 'btn', type: 'button', onclick: () => { prompts.value = promptsToText(PROMPTS); syncSave(); } }, 'Reset to defaults');
   const aboutMe = el('textarea', { class: 'input', rows: 4,
     placeholder: 'e.g. Backend dev, Romanian, learning ML. Prefers concrete examples.' });
   aboutMe.value = s.aboutMe;
@@ -452,6 +456,7 @@ async function renderSettings() {
     hotkeys: hotkeys.checked,
     theme: themeValue(),
     lang: lang.value.trim().toLowerCase() || 'en',
+    prompts: prompts.value,
   });
 
   // Save is blue only while the form differs from what is stored.
@@ -468,7 +473,7 @@ async function renderSettings() {
   }, 'Save');
   const isDirty = () => JSON.stringify(formValues()) !== saved;
   const syncSave = () => { saveBtn.disabled = !isDirty(); };
-  for (const f of [anthropicKey, openaiKey, aboutMe, tone, vaultDir, lang]) f.addEventListener('input', syncSave);
+  for (const f of [anthropicKey, openaiKey, aboutMe, tone, vaultDir, lang, prompts]) f.addEventListener('input', syncSave);
   hotkeys.addEventListener('change', syncSave);
   syncSave();
   // Leaving with unsaved edits saves them (nothing here is dangerous to persist).
@@ -563,6 +568,7 @@ async function renderSettings() {
       field('Appearance', theme, 'Library page theme. The YouTube panel follows YouTube.'),
       field('Caption language', lang, 'Preferred transcript language (e.g. en, ro, nl). Other tracks and translations are in the transcript toolbar.'),
       field('About me', aboutMe, 'Added to every chat system prompt so answers fit you.'),
+      field('Chat presets', el('div', { class: 'field-col' }, prompts, resetPrompts), 'One per line as "Label: prompt". Shown as chips while a chat is empty; leave empty for none.'),
       field('Tone of voice', tone, 'How the assistant should talk.'),
       field('Knowledge base folder', el('div', { class: 'field-row' }, vaultDir, chooseBtn),
         el('span', {}, 'Your Obsidian vault (or any folder). Notes, chats and pinned videos are written as markdown under ',

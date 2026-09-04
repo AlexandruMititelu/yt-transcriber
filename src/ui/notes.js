@@ -345,7 +345,7 @@ export function createNotesView(opts) {
           video.notes.cards.push(target);
           openId = target.id;
         }
-        target.text = `${target.text ? `${target.text}\n\n` : ''}${r.embed}\n`;
+        target.text = `${target.text ? `${target.text}\n\n` : ''}@${stampFmt(r.sec)} ${r.embed}\n`;
         onChange(target);
         flush();
         refresh();

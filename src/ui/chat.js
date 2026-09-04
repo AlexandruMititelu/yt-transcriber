@@ -7,7 +7,7 @@ import { createPicker } from './picker.js';
 import { createChatBar, confirmBox } from './chatbar.js';
 import { globeIcon } from './icons.js';
 import { keysFor } from '../../config/hotkeys.js';
-import { PROMPTS } from '../../config/prompts.js';
+import { PROMPTS, parsePrompts } from '../../config/prompts.js';
 
 function h(tag, cls, text) {
   const n = document.createElement(tag);
@@ -34,7 +34,8 @@ export function createChatView(opts) {
   const composer = h('div', 'ytx-chat-composer');
   const presets = h('div', 'ytx-chat-presets');
   const ta = h('textarea', 'ytx-chat-ta');
-  ta.placeholder = 'Ask about this video… (Enter to send, Shift+Enter for a new line)';
+  ta.placeholder = 'Ask about this video…';
+  ta.title = 'Enter to send, Shift+Enter for a new line';
   ta.rows = 1;
   ta.setAttribute('aria-label', 'Message');
   const sendBtn = h('button', 'ytx-chat-send', '↑');
@@ -129,16 +130,12 @@ export function createChatView(opts) {
   list.addEventListener('scroll', () => { if (nearBottom()) newPill.classList.remove('is-on'); });
 
   /* ---- bubbles ---- */
-  function iconBtn(cls, glyph, title, onClick) {
-    const b = h('button', `ytx-msg-act ${cls}`, glyph);
-    b.type = 'button';
-    b.title = title;
-    b.setAttribute('aria-label', title);
-    b.addEventListener('click', onClick);
-    return b;
-  }
   function copyBtn(text) {
-    const b = iconBtn('ytx-msg-copy', '⧉', 'Copy', () => {
+    const b = h('button', 'ytx-msg-copy', '⧉');
+    b.type = 'button';
+    b.title = 'Copy message';
+    b.setAttribute('aria-label', 'Copy message');
+    b.addEventListener('click', () => {
       navigator.clipboard.writeText(text).then(() => {
         b.textContent = '✓';
         setTimeout(() => { b.textContent = '⧉'; }, 1200);
@@ -146,45 +143,26 @@ export function createChatView(opts) {
     });
     return b;
   }
-  function bubble(m, idx, chat) {
+  function bubble(m) {
     const el = h('div', `ytx-msg ytx-msg-${m.role}`);
     if (m.ts) el.title = fmtClock(m.ts);
-    const acts = h('div', 'ytx-msg-acts');
     if (m.role === 'assistant') {
-      el.append(renderMd(m.content));
-      acts.append(copyBtn(m.content));
-      if (m.usage) {
-        const u = h('span', 'ytx-msg-usage', llm.fmtUsage(m.model, m.usage));
-        u.title = 'Tokens in · out' + (m.usage.cacheRead ? ` (${m.usage.cacheRead} read from cache)` : '');
-        acts.prepend(u);
-      }
+      el.append(renderMd(m.content), copyBtn(m.content));
+      if (m.usage) el.append(h('span', 'ytx-msg-usage', llm.fmtUsage(m.model, m.usage)));
     } else {
       el.append(h('div', 'ytx-msg-text', m.content));
-      acts.append(
-        copyBtn(m.content),
-        iconBtn('ytx-msg-edit', '✎', 'Edit and resend (drops later messages)', () => {
-          if (busy) return;
-          chat.messages = chat.messages.slice(0, idx);
-          chat.updatedAt = Date.now();
-          save();
-          sync(chat);
-          refresh();
-          ta.value = m.content;
-          autosize(ta);
-          ta.focus();
-        }),
-      );
     }
-    el.append(acts);
     return el;
   }
 
+  let prompts = PROMPTS;
+  db.getSettings().then((s) => { prompts = parsePrompts(s.prompts); renderPresets(); }).catch(() => {});
   function renderPresets() {
     presets.textContent = '';
     const c = cur();
-    if (c && c.messages.length) { presets.hidden = true; return; }
+    if ((c && c.messages.length) || !prompts.length) { presets.hidden = true; return; }
     presets.hidden = false;
-    for (const p of PROMPTS) {
+    for (const p of prompts) {
       const b = h('button', 'ytx-chat-preset', p.label);
       b.type = 'button';
       b.title = p.text;
@@ -205,7 +183,7 @@ export function createChatView(opts) {
       if (cov < 1) empty.append(h('div', 'ytx-chat-empty-warn', `Long video: only the first ${Math.round(cov * 100)}% of the transcript fits the prompt.`));
       list.append(empty);
     } else {
-      c.messages.forEach((m, i) => list.append(bubble(m, i, c)));
+      for (const m of c.messages) list.append(bubble(m));
     }
     renderPresets();
     list.scrollTop = list.scrollHeight;

@@ -392,3 +392,6 @@
 
 /* delete confirm sits on top of the card instead of replacing it */
 .ytx-notes-overlay { position: absolute; inset: 0; z-index: 4; background: var(--surface); border-radius: inherit; }
+
+.ytx-notes-bar .ytx-notes-cam { width: 28px; height: 28px; align-self: center; }
+.ytx-notes-cam .ytx-ico { width: 16px; height: 16px; }
