@@ -5,7 +5,7 @@ import * as vault from '../src/lib/vault.js';
 import { createPicker } from '../src/ui/picker.js';
 import { createChatBar, confirmBox } from '../src/ui/chatbar.js';
 import { createNotesView } from '../src/ui/notes.js';
-import { pinIcon } from '../src/ui/icons.js';
+import { pinIcon, globeIcon } from '../src/ui/icons.js';
 import { HOTKEYS, hotkeyId } from '../config/hotkeys.js';
 
 const $app = document.getElementById('app');
@@ -436,6 +436,7 @@ function chatPane(video, disk) {
     cancel = () => { gen++; pending.remove(); done(); cancel = null; };
     try {
       const settings = await db.getSettings();
+      if (settings.webSearch) pending.textContent = 'Thinking… (web search on)';
       const reply = await llm.chat({
         settings,
         system: llm.buildSystemPrompt({
@@ -478,9 +479,21 @@ function chatPane(video, disk) {
     if (e.key === 'Escape' && cancel) cancel();
   });
   sendBtn.onclick = send;
+  const webBtn = el('button', { class: 'icon-btn web' }, globeIcon());
+  const paintWeb = (on) => {
+    webBtn.classList.toggle('on', !!on);
+    webBtn.title = on ? 'Web search on (click to turn off)' : 'Web search off (click to let the model search the web)';
+  };
+  db.getSettings().then((s) => paintWeb(s.webSearch));
+  webBtn.onclick = async () => {
+    const s = await db.getSettings();
+    await db.saveSettings({ webSearch: !s.webSearch });
+    paintWeb(!s.webSearch);
+    toast(!s.webSearch ? 'Web search on' : 'Web search off');
+  };
   renderMsgs();
   return el('div', { class: 'chat' }, bar.root, list,
-    el('div', { class: 'composer' }, input, sendBtn), picker);
+    el('div', { class: 'composer' }, input, webBtn, sendBtn), picker);
 }
 
 function notesPane(video, disk) {

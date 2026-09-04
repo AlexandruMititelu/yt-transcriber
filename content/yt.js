@@ -410,7 +410,22 @@
     chatTa.rows = 1;
     const sendBtn = h('button', 'ytx-send', '↑');
     sendBtn.title = 'Send';
-    composer.append(chatTa, sendBtn);
+    // Web search toggle (same setting as the picker's "Web search" row).
+    const webBtn = h('button', 'ytx-web');
+    webBtn.appendChild(L.icons.globeIcon());
+    const paintWeb = (on) => {
+      webBtn.classList.toggle('is-on', !!on);
+      webBtn.title = on ? 'Web search on: the model can search the web and cite sources (click to turn off)' : 'Web search off (click to let the model search the web)';
+    };
+    L.db.getSettings().then((s) => paintWeb(s.webSearch)).catch(() => {});
+    webBtn.addEventListener('click', async () => {
+      const s = await L.db.getSettings();
+      const on = !s.webSearch;
+      await L.db.saveSettings({ webSearch: on });
+      paintWeb(on);
+      toast(on ? 'Web search on' : 'Web search off');
+    });
+    composer.append(chatTa, webBtn, sendBtn);
 
     const cur = () => video.chats.find((c) => c.id === video.activeChatId) ?? null;
     function ensureChat() {
@@ -554,6 +569,7 @@
       cancelChat = () => { chatGen++; pending.remove(); setChatBusy(false); cancelChat = null; };
       try {
         const settings = await L.db.getSettings();
+        if (settings.webSearch) pending.textContent = 'Thinking… (web search on)';
         const system = L.llm.buildSystemPrompt({
           title: video.title,
           channel: video.channel,

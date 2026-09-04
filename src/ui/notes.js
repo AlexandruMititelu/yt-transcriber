@@ -209,16 +209,25 @@ export function createNotesView(opts) {
       });
       ta.addEventListener('keydown', (e) => { if (!e.altKey) e.stopPropagation(); }); // keep YouTube hotkeys out, let Alt+ ones through
       if (!always) ta.addEventListener('blur', show);
+      // Remember the caret so switching modes and back lands where the user was.
+      const remember = () => { card._caret = ta.selectionStart; };
+      ta.addEventListener('keyup', remember);
+      ta.addEventListener('click', remember);
+      ta.addEventListener('blur', remember);
       box.appendChild(ta);
       if (counter) box.appendChild(counter);
       tick();
+      if (always && typeof card._caret === 'number') {
+        const p = Math.min(card._caret, ta.value.length);
+        ta.selectionStart = ta.selectionEnd = p;
+      }
       if (!always) ta.focus();
       return ta;
     };
     box.addEventListener('click', (e) => {
       if (e.target.closest('a, button')) return;
       if (box.classList.contains('is-editing') || (wysiwyg && wysiwyg())) {
-        if (e.target === box) focusField(box); // padding / empty space below the text
+        if (e.target === box) focusField(box, { end: true }); // padding / empty space below the text
         return;
       }
       edit();
@@ -227,11 +236,14 @@ export function createNotesView(opts) {
     return { box, edit, show };
   }
 
-  // Focus the editable in `box` with the caret at the end.
-  function focusField(box) {
+  // Focus the editable in `box`. `end` moves the caret to the end (click on empty space below the
+  // text); otherwise the caret stays where the field last had it (mode switch / hotkey).
+  function focusField(box, { end = false } = {}) {
     const f = box.querySelector('textarea, [contenteditable="true"]');
     if (!f) return;
+    if (document.activeElement === f) return; // already there: never move the caret
     f.focus();
+    if (!end) return;
     if (f.tagName === 'TEXTAREA') f.selectionStart = f.selectionEnd = f.value.length;
     else {
       const r = document.createRange();

@@ -33,6 +33,8 @@ button:disabled { opacity: 0.5; cursor: default; }
 .icon-btn:hover { background: var(--surface-2); color: var(--text); }
 .icon-btn.on { color: var(--accent); }
 .icon-btn.pin.on { color: #ffcc00; }
+.icon-btn.web.on { background: var(--surface-2); color: var(--accent); }
+.composer .icon-btn { margin-bottom: 4px; }
 .icon-btn.pin.on .ytx-ico-pin { fill: currentColor; }
 .ytx-md p { margin: 0 0 8px; }
 .ytx-md pre { background: var(--bg); border-radius: var(--radius-sm); padding: 8px; overflow-x: auto; }

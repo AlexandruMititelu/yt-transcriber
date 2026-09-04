@@ -76,7 +76,7 @@ Transcripts and settings live in the browser profile's `storage.local` — on th
 - **Transcript**: click a row to seek, double-click to copy the timestamped line; ⟳ refetches
 - **Chat**: the dropdown at the top switches chats or starts a new one; ⋯ renames or deletes (with confirmation). A new chat gets a title from the model after the first reply. Pick model + effort above the input; Enter sends, Shift+Enter for a newline; answers render markdown, ```mermaid blocks become diagrams, `[12:34]` timestamps are clickable seek chips
 - **Notes**: "+ quick note" (≤280 chars, shown in full) or "+ note" (green; opens a title + markdown editor, "‹ All notes" goes back). Markdown renders when you click away; click text to edit. "@ time" stamps the current video time, color dot cycles 5 Keep colors, ✕ clears the stamp, 🗑 asks, then deletes
-- **Web search**: model + effort picker › "Web search" toggle. The model runs its own searches (Anthropic server-side tool or OpenAI built-in search), answers with a "Sources" list, links open in a new tab
+- **Web search**: globe button next to Send (or the picker's "Web search" row). The model runs its own searches (Anthropic server-side tool or OpenAI built-in search), answers with a "Sources" list, links open in a new tab
 - **Shortcuts** (toggle in Settings): Alt+↑ / Alt+↓ switch tabs, Alt+E / Alt+V switch the note editor between raw markdown and rendered view
 - **Pin** (top right) moves the video's folder into `YT-transcriber/pinned/` and turns yellow; press again to unpin. The Library has an All | Pinned filter and a pin on every card
 - **⧉** opens the Library: browse saved videos, reopen transcript/chat/notes, delete, settings
