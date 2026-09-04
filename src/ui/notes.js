@@ -3,6 +3,8 @@
 //   note   long-form markdown document with a title; opens the editor in place of the list
 // Classes are unique (ytx-notes-*, ytx-qn-*, ytx-nt-*, ytx-ed-*) so this loads unscoped on youtube.com.
 import { confirmBox } from './chatbar.js';
+import { trashIcon, chevronLeft, eyeIcon } from './icons.js';
+import { keysFor } from '../../config/hotkeys.js';
 
 export const QUICK_MAX = 280;
 export const HELP = {
@@ -18,7 +20,7 @@ function h(tag, cls, text) {
 }
 const autosize = (ta) => { ta.style.height = 'auto'; ta.style.height = `${ta.scrollHeight}px`; };
 
-let editorMode = 'view'; // 'view' (rendered, type directly) | 'edit' (raw markdown) — session-scoped
+let editorMode = 'edit'; // 'edit' (raw markdown) | 'view' (rendered, type directly) — session-scoped
 
 // Rendered HTML (contenteditable) → markdown. Covers what marked produces for everyday notes.
 // ponytail: headings, emphasis, code, lists, quotes, links, hr; anything exotic degrades to text.
@@ -124,7 +126,8 @@ export function createNotesView(opts) {
   }
 
   function delBtn(card, host, restore) {
-    const b = h('button', 'ytx-notes-icon', '🗑');
+    const b = h('button', 'ytx-notes-icon ytx-notes-del');
+    b.appendChild(trashIcon());
     b.type = 'button';
     b.title = card.kind === 'note' ? 'Delete note' : 'Delete quick note';
     b.addEventListener('click', (e) => {
@@ -145,9 +148,10 @@ export function createNotesView(opts) {
 
   // Rendered markdown that turns into a textarea on click; back to rendered on blur.
   // With `wysiwyg`, the rendered HTML itself is contenteditable and is converted back to markdown.
-  function mdField(card, { cls, placeholder, max, onInput, wysiwyg }) {
+  function mdField(card, { cls, placeholder, max, onInput, wysiwyg, always }) {
     const box = h('div', cls);
     const show = () => {
+      if (always && !(wysiwyg && wysiwyg())) { edit(); return; }
       box.textContent = '';
       box.classList.remove('is-editing');
       if (wysiwyg && wysiwyg()) {
@@ -178,12 +182,12 @@ export function createNotesView(opts) {
         onChange(card);
         if (onInput) onInput();
       });
-      ta.addEventListener('keydown', (e) => e.stopPropagation()); // keep YouTube hotkeys out
-      ta.addEventListener('blur', show);
+      ta.addEventListener('keydown', (e) => { if (!e.altKey) e.stopPropagation(); }); // keep YouTube hotkeys out, let Alt+ ones through
+      if (!always) ta.addEventListener('blur', show);
       box.appendChild(ta);
       if (counter) box.appendChild(counter);
       tick();
-      ta.focus();
+      if (!always) ta.focus();
       return ta;
     };
     box.addEventListener('click', (e) => {
@@ -262,7 +266,9 @@ export function createNotesView(opts) {
   function renderEditor(card) {
     root.textContent = '';
     const bar = h('div', 'ytx-ed-bar');
-    const back = h('button', 'ytx-ed-back', '‹');
+    const back = h('button', 'ytx-ed-back');
+    back.appendChild(chevronLeft());
+    back.append('Notes');
     back.type = 'button';
     back.title = 'Back to all notes';
     back.addEventListener('click', () => { openId = null; refresh(); });
@@ -278,25 +284,21 @@ export function createNotesView(opts) {
     });
     const ed = h('div', 'ytx-ed');
     bar.append(back, title);
-    const body = mdField(card, { cls: 'ytx-ed-body', placeholder: 'Write here…', wysiwyg: () => editorMode === 'view' });
+    const body = mdField(card, { cls: 'ytx-ed-body', placeholder: 'Write here…', wysiwyg: () => editorMode === 'view', always: true });
     const foot = h('div', 'ytx-notes-foot');
-    // Mode toggle: view = type straight into the rendered note; edit = raw markdown.
+    // Mode toggle: edit = raw markdown textarea (stays a textarea, never flips on blur); view = type into the rendered note.
     const modes = h('span', 'ytx-ed-modes');
     const modeBtn = (key, glyph, tip) => {
-      const b = h('button', `ytx-ed-mode${editorMode === key ? ' is-on' : ''}`, glyph);
+      const b = h('button', `ytx-ed-mode${editorMode === key ? ' is-on' : ''}`);
+      b.append(glyph);
       b.type = 'button';
-      b.title = tip;
-      b.addEventListener('click', () => {
-        if (editorMode === key) return;
-        flush();
-        editorMode = key;
-        renderEditor(card);
-      });
+      b.title = `${tip} (${keysFor(key === 'edit' ? 'editMode' : 'viewMode')})`;
+      b.addEventListener('click', () => setMode(key));
       return b;
     };
     modes.append(
-      modeBtn('view', '◉', 'View mode: write directly into the rendered note'),
       modeBtn('edit', '</>', 'Edit mode: write raw markdown'),
+      modeBtn('view', eyeIcon(), 'View mode: write directly into the rendered note'),
     );
     foot.append(timeSlot(card), h('span', 'ytx-notes-spacer'), modes, delBtn(card, ed, () => refresh()));
     ed.append(bar, body.box, foot);
@@ -310,6 +312,14 @@ export function createNotesView(opts) {
     else { openId = null; renderList(); }
   }
 
+  // Hotkeys call this; re-renders the open editor in the new mode.
+  function setMode(mode) {
+    if (mode === editorMode) return;
+    flush();
+    editorMode = mode;
+    if (openId) refresh();
+  }
+
   // Commit any textarea / editable still focused (called before teardown and mode switches).
   function flush() {
     const ta = root.querySelector('textarea, [contenteditable="true"]');
@@ -317,5 +327,5 @@ export function createNotesView(opts) {
   }
 
   refresh();
-  return { root, refresh, flush };
+  return { root, refresh, flush, setMode, isEditing: () => !!openId };
 }

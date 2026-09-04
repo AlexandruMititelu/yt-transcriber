@@ -101,28 +101,37 @@
   gap: 8px;
 }
 
+/* Navigation-bar layout (HIG): leading back chevron + label in the tint color, title inline, hairline below. */
 .ytx-ed-bar {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   flex: none;
+  padding: 0 0 6px;
+  border-bottom: 1px solid var(--border);
 }
 
 .ytx-ed-back {
   flex: none;
-  width: 28px;
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
   height: 28px;
-  padding: 0;
-  font-size: 18px;
-  line-height: 1;
+  padding: 0 8px 0 2px;
   border: 0;
   border-radius: 8px;
   background: none;
   color: var(--accent);
   font: inherit;
-  font-size: 12.5px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
+}
+
+.ytx-ed-back .ytx-ico {
+  width: 18px;
+  height: 18px;
+  stroke-width: 2.5;
 }
 
 .ytx-ed-back:hover {
@@ -132,19 +141,20 @@
 .ytx-ed-title {
   flex: 1;
   min-width: 0;
-  padding: 6px 8px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface-2);
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
   color: var(--text);
   font: inherit;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
   outline: none;
 }
 
-.ytx-ed-title:focus {
-  border-color: var(--accent);
+.ytx-ed-title::placeholder {
+  color: var(--muted);
+  font-weight: 500;
 }
 
 .ytx-ed-body {
@@ -164,7 +174,6 @@
 
 .ytx-ed-body.is-editing {
   padding: 0;
-  border-color: var(--accent);
 }
 
 .ytx-ed-body [contenteditable] {
@@ -203,6 +212,12 @@
   background: var(--surface);
   color: var(--text);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+
+.ytx-ed-mode .ytx-ico {
+  width: 15px;
+  height: 15px;
+  vertical-align: -3px;
 }
 
 .ytx-ed-body .ytx-notes-ta {
@@ -329,6 +344,16 @@
 
 .ytx-notes-icon:hover {
   background: var(--code-bg, rgba(0, 0, 0, 0.05));
+}
+
+.ytx-notes-icon .ytx-ico {
+  width: 15px;
+  height: 15px;
+}
+
+.ytx-notes-del:hover {
+  color: #ff453a;
+  background: rgba(255, 69, 58, 0.12);
 }
 
 /* rendered markdown inside cards (panel has .ytx-md rules; the library gets these) */

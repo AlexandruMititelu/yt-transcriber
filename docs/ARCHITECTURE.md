@@ -20,6 +20,9 @@ src/lib/vault.js              (knowledge-base folder mirror: markdown builders/p
 src/ui/tokens.css             (design tokens for extension pages)
 src/ui/picker.js|css          (model + effort popover, shared)
 src/ui/chatbar.js|css         (chat switcher bar + confirm box, shared)
+src/ui/notes.js|css           (notes tab: quick notes + note editor, shared)
+src/ui/icons.js               (inline SVG icons: pin, trash, chevron, eye)
+config/hotkeys.js             (keyboard shortcuts: HOTKEYS list, hotkeyId(e), keysFor(id))
 content/yt.js                 (content script, CLASSIC script — no top-level import/export)
 content/yt.css                (panel styles, ALL rules scoped under #ytx-panel)
 page/app.html                 (library full page + settings; NO inline scripts/handlers — CSP)
@@ -132,6 +135,7 @@ export const DEFAULT_SETTINGS = {
   effort: 'off',                    // 'off'|'low'|'medium'|'high' — thinking/reasoning effort
   aboutMe: '', tone: '',            // free text, injected into the chat system prompt
   vaultDir: '',                     // knowledge base folder (Obsidian vault); '' = storage.local only
+  hotkeys: true,                    // all shortcuts on/off; the list itself is fixed in config/hotkeys.js
 }
 export async function getSettings()            // {...DEFAULT_SETTINGS, ...stored}; migrates v1 {provider, apiKey, model} → per-provider key + 'provider:model', drops legacy + notion keys
 export async function saveSettings(patch)      // merge + write; returns merged
@@ -330,9 +334,14 @@ Bootstrap: `(async () => { ... })()`. All lib access via
   `start = video.currentTime`, chip seeks, ✕ clears, color dot cycles 5 keep colors, 🗑 → `confirmBox`
   in place); note cards (green 2px outline in the list only, title + first sentence via `excerpt()`;
   click → the editor replaces the whole tab: "‹" top-left, full-width title input, body, footer with the
-  time slot, a view/edit mode toggle (◉ view = the rendered HTML is contenteditable and converted back to
-  markdown with `htmlToMd` on every input, re-rendered on blur; </> edit = raw markdown textarea; mode is
-  session-scoped) and 🗑; other tabs stay reachable; back returns to the grid). `@12:34` typed anywhere
+  time slot, an edit/view mode toggle (</> edit = permanent raw-markdown textarea, default, never flips
+  on blur, no focus ring; eye = view: the rendered HTML is contenteditable and converted back to markdown
+  with `htmlToMd` on every input, re-rendered on blur; mode is session-scoped; tooltips show Alt+E /
+  Alt+V) and a trash button (red on hover); other tabs stay reachable; the bar is a HIG-style nav bar:
+  chevron + "Notes" back button in the tint color, borderless bold title, hairline below).
+  Hotkeys (config/hotkeys.js, `settings.hotkeys` gate): Alt+↑/↓ cycle Transcript · Chat · Notes, Alt+E /
+  Alt+V set the editor mode via `notesView.setMode`. Handled in the panel's window keydown capture
+  listener and, on the library detail page, by a document listener replaced on every route. `@12:34` typed anywhere
   renders as a seek chip (panel) / time link (library), same pass as `[12:34]`. Every change → `onChange(card)` → debounced
   `db.saveVideo` + `vault.syncNote`; delete → `vault.removeNote`. `flush()` blurs an open textarea on teardown.
 - Theme: panel colors keyed off `document.documentElement.hasAttribute('dark')` — set/remove class
@@ -368,7 +377,8 @@ Views (hash routing: `#/`, `#/video/<id>`, `#/settings`):
 - **Settings `#/settings`**: form — Anthropic key, OpenAI key (type=password), About me, Tone,
   Knowledge base folder (text input + "Choose…" → `vault.pickFolder` native dialog); Save button
   (db.saveSettings + clearCachedModels) + "Test Anthropic/OpenAI key" (llm.chat tiny prompt → toast),
-  "Test host" (`vault.ping` → toast version/platform or error), "Export data": JSON of full storage →
+  "Test host" (`vault.ping` → toast version/platform or error), a "Keyboard shortcuts" checkbox with the
+  HOTKEYS table (kbd + description), "Export data": JSON of full storage →
   Blob download `yt-transcriber-export.json`. Inline help under the folder field explains the layout and
   the one-time `native/install.ps1` / `install.sh` step.
 

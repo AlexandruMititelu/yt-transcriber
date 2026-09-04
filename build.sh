@@ -13,7 +13,7 @@ m['version'] = f'{a}.{b}.{int(c) + 1}'
 open('manifest.json', 'w').write(json.dumps(m, indent=2) + '\n')
 print('version', m['version'])
 z = zipfile.ZipFile('yt-transcriber.xpi', 'w', zipfile.ZIP_DEFLATED)
-for root in ['manifest.json', 'background.js', 'content', 'page', 'src', 'vendor']:
+for root in ['manifest.json', 'background.js', 'content', 'page', 'src', 'vendor', 'config']:
     if os.path.isfile(root):
         z.write(root)
     else:

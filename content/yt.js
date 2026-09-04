@@ -33,9 +33,10 @@
 
   async function loadLibs() {
     if (L) return L;
-    const names = ['format', 'transcript', 'bus', 'db', 'llm', 'vault', 'picker', 'chatbar', 'notes', 'icons'];
+    const names = ['format', 'transcript', 'bus', 'db', 'llm', 'vault', 'picker', 'chatbar', 'notes', 'icons', 'hotkeys'];
     const UI = new Set(['picker', 'chatbar', 'notes', 'icons']);
-    const mods = await Promise.all(names.map((n) => import(url(UI.has(n) ? `src/ui/${n}.js` : `src/lib/${n}.js`))));
+    const pathFor = (n) => (n === 'hotkeys' ? 'config/hotkeys.js' : UI.has(n) ? `src/ui/${n}.js` : `src/lib/${n}.js`);
+    const mods = await Promise.all(names.map((n) => import(url(pathFor(n)))));
     // UMD vendors set globalThis.marked / globalThis.DOMPurify; mermaid loads lazily.
     await Promise.all([import(url('vendor/marked.min.js')), import(url('vendor/purify.min.js'))]);
     L = Object.fromEntries(names.map((n, i) => [n, mods[i]]));
@@ -219,6 +220,8 @@
       notes: h('div', 'ytx-view ytx-scroll ytx-notes'),
     };
     const tabBtns = {};
+    const TABS = ['transcript', 'chat', 'notes'];
+    let activeTab = 'transcript';
     for (const [key, label] of [['transcript', 'Transcript'], ['chat', 'Chat'], ['notes', 'Notes']]) {
       const b = h('button', 'ytx-tab', label);
       b.addEventListener('click', () => selectTab(key));
@@ -232,6 +235,7 @@
     panel.appendChild(body);
 
     function selectTab(key) {
+      activeTab = key;
       for (const k of Object.keys(views)) {
         tabBtns[k].classList.toggle('is-active', k === key);
         views[k].classList.toggle('is-active', k === key);
@@ -567,12 +571,24 @@
     // Window capture: fires before YouTube's own document-level key handlers, which can swallow
     // Enter/Escape. Escape is checked regardless of target: the textarea is disabled while busy,
     // so focus leaves the panel. ponytail: one dead listener per SPA nav, guarded by live().
+    let hotkeysOn = true;
+    L.db.getSettings().then((s) => { hotkeysOn = s.hotkeys !== false; }).catch(() => {});
     window.addEventListener('keydown', (e) => {
       if (!live()) return;
       if (e.key === 'Enter' && !e.shiftKey && e.target === chatTa) {
         e.preventDefault(); e.stopPropagation(); sendChat();
       } else if (e.key === 'Escape' && cancelChat) {
         e.preventDefault(); e.stopPropagation(); cancelChat();
+      }
+      if (!hotkeysOn) return;
+      const hk = L.hotkeys.hotkeyId(e);
+      if (!hk) return;
+      e.preventDefault(); e.stopPropagation();
+      if (hk === 'prevTab' || hk === 'nextTab') {
+        const i = TABS.indexOf(activeTab);
+        selectTab(TABS[(i + (hk === 'nextTab' ? 1 : TABS.length - 1)) % TABS.length]);
+      } else if (typeof notesView !== 'undefined') {
+        notesView.setMode(hk === 'editMode' ? 'edit' : 'view');
       }
     }, true);
 

@@ -6,6 +6,7 @@ import { createPicker } from '../src/ui/picker.js';
 import { createChatBar, confirmBox } from '../src/ui/chatbar.js';
 import { createNotesView } from '../src/ui/notes.js';
 import { pinIcon } from '../src/ui/icons.js';
+import { HOTKEYS, hotkeyId } from '../config/hotkeys.js';
 
 const $app = document.getElementById('app');
 const TS_RE = /(?:\[(?:\d+:)?\d{1,2}:\d{2}\]|@(?:\d+:)?\d{1,2}:\d{2})/g;
@@ -263,6 +264,22 @@ async function renderDetail(videoId) {
 
   $app.replaceChildren(header, seg, pane);
   show('Transcript');
+  // Hotkeys (one live handler; replaced on every route change).
+  const s1 = await db.getSettings();
+  const names = Object.keys(panes);
+  detailKeys = (e) => {
+    if (s1.hotkeys === false) return;
+    const hk = hotkeyId(e);
+    if (!hk) return;
+    e.preventDefault();
+    const cur = seg.querySelector('.seg-btn.active')?.dataset.tab || 'Transcript';
+    if (hk === 'prevTab' || hk === 'nextTab') {
+      const i = names.indexOf(cur);
+      show(names[(i + (hk === 'nextTab' ? 1 : names.length - 1)) % names.length]);
+    } else if (built.Notes?.__view) {
+      built.Notes.__view.setMode(hk === 'editMode' ? 'edit' : 'view');
+    }
+  };
   // Hydrate after first paint so a slow or missing host never blocks the page; rebuild panes on arrival.
   (async () => {
     const s0 = await db.getSettings();
@@ -487,7 +504,9 @@ function notesPane(video, disk) {
     onDelete: (card) => { dirty.delete(card); db.saveVideo(video); disk((s) => vault.removeNote(s, video, card)); },
   });
   // ponytail: no "@ time" stamp button here — the library page has no playing video to read time from.
-  return el('div', { class: 'notes' }, view.root);
+  const root = el('div', { class: 'notes' }, view.root);
+  root.__view = view; // hotkeys reach the editor through the cached pane
+  return root;
 }
 
 // ---------- settings ----------
@@ -505,6 +524,8 @@ async function renderSettings() {
   const tone = el('textarea', { class: 'input', rows: 3,
     placeholder: 'e.g. Terse, no fluff, bullet points, dry humor OK.' });
   tone.value = s.tone;
+  const hotkeys = el('input', { type: 'checkbox' });
+  hotkeys.checked = s.hotkeys !== false;
   const vaultDir = el('input', { class: 'input', placeholder: 'C:\\Users\\you\\Obsidian\\Vault' });
   vaultDir.value = s.vaultDir;
   const chooseBtn = el('button', {
@@ -528,6 +549,7 @@ async function renderSettings() {
     aboutMe: aboutMe.value,
     tone: tone.value,
     vaultDir: vaultDir.value.trim().replace(/[\\/]+$/, ''),
+    hotkeys: hotkeys.checked,
   });
 
   // Save is blue only while the form differs from what is stored.
@@ -544,6 +566,7 @@ async function renderSettings() {
   }, 'Save');
   const syncSave = () => { saveBtn.disabled = JSON.stringify(formValues()) === saved; };
   for (const f of [anthropicKey, openaiKey, aboutMe, tone, vaultDir]) f.addEventListener('input', syncSave);
+  hotkeys.addEventListener('change', syncSave);
   syncSave();
 
   const testBtn = (provider, label) => {
@@ -613,12 +636,20 @@ async function renderSettings() {
           el('code', {}, 'YT-transcriber/'), ' inside it, and files there are the source of truth. ',
           'Needs the native host once: run ', el('code', {}, 'native\\install.ps1'), ' (Windows) or ',
           el('code', {}, 'native/install.sh'), ', restart the browser, then Test host.')),
+      el('div', { class: 'field' },
+        el('label', { class: 'field-check' }, hotkeys, el('span', { class: 'field-label' }, 'Keyboard shortcuts')),
+        el('table', { class: 'hotkeys' }, HOTKEYS.map((h) => el('tr', {}, el('td', {}, el('kbd', {}, h.keys)), el('td', {}, h.desc)))),
+        el('span', { class: 'field-help' }, 'Fixed for now: turn them all on or off here. Defined in config/hotkeys.js.')),
       el('div', { class: 'settings-actions' }, saveBtn, testBtn('anthropic', 'Anthropic'), testBtn('openai', 'OpenAI'), testHostBtn, exportBtn)));
 }
 
 // ---------- router ----------
 
+let detailKeys = null; // installed by renderDetail, cleared on route change
+document.addEventListener('keydown', (e) => { if (detailKeys) detailKeys(e); });
+
 function route() {
+  detailKeys = null;
   const hash = location.hash || '#/';
   const p = hash.startsWith('#/video/') ? renderDetail(hash.slice('#/video/'.length))
     : hash === '#/settings' ? renderSettings()
