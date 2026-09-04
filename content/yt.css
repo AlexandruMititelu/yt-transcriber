@@ -290,6 +290,9 @@
 #ytx-panel .ytx-row.is-current {
   background: var(--accent-soft);
 }
+#ytx-panel .ytx-row { user-select: text; }
+#ytx-panel .ytx-time { cursor: pointer; }
+#ytx-panel .ytx-time:hover { color: var(--accent); }
 #ytx-panel .ytx-cue { border-radius: 3px; text-underline-offset: 3px; text-decoration-color: var(--muted); }
 #ytx-panel .ytx-cue:hover { text-decoration: underline; }
 #ytx-panel .ytx-cue.is-now { color: var(--accent); text-decoration: underline; text-decoration-color: var(--accent); }

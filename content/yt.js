@@ -375,7 +375,7 @@
       r.cueEls = cues.map((c, k) => {
         const span = h('span', 'ytx-cue');
         highlight(span, c.text);
-        span.addEventListener('click', (e) => { e.stopPropagation(); seek(c.start); });
+        span.addEventListener('dblclick', (e) => { e.stopPropagation(); getSelection()?.removeAllRanges(); seek(c.start); });
         el.append(span, k < cues.length - 1 ? ' ' : '');
         return span;
       });
@@ -511,8 +511,13 @@
         // Actions live at the end of the text (inline), so they never cover words.
         const textEl = h('div', 'ytx-text');
         rows.push({ start: seg.start, el: row, text: seg.text, cues: seg.cues, textEl, acts });
-        row.append(h('span', 'ytx-time', fmtTime(seg.start)), textEl);
-        row.addEventListener('click', () => seek(seg.start));
+        // Single click selects text (copy a phrase without leaving); double click or the timestamp seeks.
+        const time = h('span', 'ytx-time', fmtTime(seg.start));
+        time.title = 'Jump here';
+        time.addEventListener('click', (e) => { e.stopPropagation(); seek(seg.start); });
+        row.title = 'Double-click to jump here';
+        row.append(time, textEl);
+        row.addEventListener('dblclick', () => { getSelection()?.removeAllRanges(); seek(seg.start); });
         row.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); seek(seg.start); } });
         trList.appendChild(row);
       }
