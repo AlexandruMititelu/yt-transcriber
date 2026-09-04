@@ -18,21 +18,26 @@ const THINKING_BUDGET = { low: 4000, medium: 12000, high: 32000 }; // pre-4.6 mo
 const ADAPTIVE_RE = /claude-(opus|sonnet)-4-[6-9]|claude-(opus|sonnet)-5|claude-(fable|mythos)/;
 const ALWAYS_THINKS_RE = /claude-(fable|mythos)/;
 
-export const PROMPT_CAP = 24000;
-
-// Max prompt chars for a model's context window. ponytail: substring heuristic (~3.5 chars/token,
-// 60% of the window reserved for the prompt), matched first-hit-wins; extend when a model overflows.
-const CONTEXT_CAPS = [
-  ['claude-', 420000],  // 200k tokens
-  ['gpt-5', 840000],    // 400k tokens
-  ['gpt-4.1', 2000000], // 1M tokens
-  ['gpt-4o', 268000],   // 128k tokens
-  ['o1', 268000], ['o3', 268000], ['o4', 268000],
+// Context window (tokens) by model id, first hit wins. ponytail: name heuristics; extend when a model
+// overflows ("prompt is too long" 400). 1M: Claude Opus/Sonnet 4.6+, 5.x, Fable/Mythos, GPT-4.1, GPT-5.5+.
+const WINDOWS = [
+  [/claude-(opus|sonnet)-4-[6-9]|claude-(opus|sonnet)-5|claude-(fable|mythos)/, 1e6],
+  [/claude-/, 200000],
+  [/gpt-4\.1|gpt-5\.[5-9]/, 1e6],
+  [/gpt-5/, 400000],
+  [/gpt-4o|^o[134]/, 128000],
 ];
-export function contextCap(modelId) {
-  const row = CONTEXT_CAPS.find(([k]) => String(modelId || '').includes(k));
-  return row ? row[1] : PROMPT_CAP;
+export const DEFAULT_WINDOW = 128000;
+export function contextWindow(modelId) {
+  const row = WINDOWS.find(([re]) => re.test(String(modelId || '')));
+  return row ? row[1] : DEFAULT_WINDOW;
 }
+export const CHARS_PER_TOKEN = 3.5;
+// Max prompt chars: 60% of the window, rest for history + reply.
+export function contextCap(modelId) {
+  return Math.round(contextWindow(modelId) * 0.6 * CHARS_PER_TOKEN);
+}
+export const PROMPT_CAP = contextCap('');
 
 // Share of the transcript that fits under cap (1 = all of it).
 export function promptCoverage(segments, cap = PROMPT_CAP) {
@@ -132,7 +137,11 @@ export function parseResult(provider, json) {
     const truncated = json.stop_reason === 'max_tokens';
     return {
       text: texts.map((b) => b.text).join('') + sourcesBlock(cites) + (truncated ? TRUNCATED : ''),
-      usage: { in: u.input_tokens ?? 0, out: u.output_tokens ?? 0, cacheRead: u.cache_read_input_tokens ?? 0 },
+      // `in` = whole prompt (Anthropic reports uncached, cache-read and cache-write separately; OpenAI's prompt_tokens already includes cached).
+      usage: {
+        in: (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0),
+        out: u.output_tokens ?? 0, cacheRead: u.cache_read_input_tokens ?? 0,
+      },
       truncated,
     };
   }
@@ -161,9 +170,10 @@ export function estimateCost(modelId, usage) {
   const cached = usage.cacheRead || 0;
   return ((usage.in - cached) * pin + cached * pin * 0.1 + usage.out * pout) / 1e6;
 }
+export const fmtK = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(n % 1e6 ? 1 : 0)}M` : n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : String(n));
 export function fmtUsage(modelId, usage) {
   if (!usage) return '';
-  const k = (n) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : String(n));
+  const k = fmtK;
   const cost = estimateCost(modelId, usage);
   return `${k(usage.in)} in · ${k(usage.out)} out${cost != null ? ` · $${cost < 0.01 ? cost.toFixed(4) : cost.toFixed(3)}` : ''}`;
 }

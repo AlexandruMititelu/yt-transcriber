@@ -83,6 +83,8 @@
 .ytx-chat-ta::placeholder { color: var(--muted); }
 .ytx-chat-tools { display: flex; align-items: center; gap: 6px; }
 .ytx-chat-spacer { flex: 1; }
+.ytx-chat-ctx { padding-left: 8px; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; cursor: default; }
+.ytx-chat-ctx.is-warn { color: #ff9f0a; }
 .ytx-chat-tools .ytx-picker { padding: 0; margin: 0; }
 .ytx-chat-tools .ytx-picker-trigger { height: 26px; padding: 0 8px; border-color: transparent; background: none; }
 .ytx-chat-tools .ytx-picker-trigger:hover, .ytx-chat-tools .ytx-picker-trigger.is-open { background: var(--surface); }

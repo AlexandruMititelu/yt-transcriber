@@ -89,7 +89,7 @@ test('buildSystemPrompt hard-caps long transcripts with marker', () => {
     end: i * 20 + 20,
     text: 'lorem ipsum dolor sit amet consectetur adipiscing elit '.repeat(2),
   }));
-  const p = llm.buildSystemPrompt({ title: 'T', channel: 'C', segments });
+  const p = llm.buildSystemPrompt({ title: 'T', channel: 'C', segments, cap: 24000 });
   assert.ok(p.length <= 24100, `prompt length ${p.length} exceeds 24100`);
   assert.ok(p.endsWith('[transcript truncated]'));
   assert.ok(p.includes('T'));
@@ -196,9 +196,13 @@ test('buildRequest anthropic 4.6+/5: adaptive thinking + output_config.effort, n
 });
 
 test('contextCap: by model family, unknown/empty falls back to PROMPT_CAP', () => {
-  assert.equal(llm.contextCap('claude-sonnet-5'), 420000);
-  assert.equal(llm.contextCap('gpt-5.1'), 840000);
-  assert.equal(llm.contextCap(''), 24000);
+  assert.equal(llm.contextWindow('claude-sonnet-5'), 1e6);
+  assert.equal(llm.contextWindow('claude-haiku-4-5'), 200000);
+  assert.equal(llm.contextWindow('gpt-5.1'), 400000);
+  assert.equal(llm.contextWindow('gpt-4.1-mini'), 1e6);
+  assert.equal(llm.contextWindow(''), 128000);
+  assert.equal(llm.contextCap('claude-sonnet-5'), 2100000);
+  assert.equal(llm.PROMPT_CAP, 268800);
 });
 
 test('buildSystemPrompt honours cap', () => {
@@ -288,7 +292,7 @@ test('assembleAnthropic rebuilds the non-streaming shape (text, citations, usage
   assert.equal(got.join(''), 'Hello');
   const r = llm.parseResult('anthropic', json);
   assert.equal(r.text, 'Hello\n\nSources:\n- [A](https://a.io)\n\n*[Reply cut off: hit the length limit]*');
-  assert.deepEqual(r.usage, { in: 100, out: 7, cacheRead: 80 });
+  assert.deepEqual(r.usage, { in: 180, out: 7, cacheRead: 80 }); // in = uncached + cached
   assert.equal(r.truncated, true);
   const o = llm.parseResult('openai', llm.assembleOpenai([
     { choices: [{ delta: { content: 'a' } }] }, { choices: [{ delta: { content: 'b' }, finish_reason: 'stop' }] }, { choices: [], usage: { prompt_tokens: 5, completion_tokens: 2 } },
@@ -298,6 +302,7 @@ test('assembleAnthropic rebuilds the non-streaming shape (text, citations, usage
 });
 
 test('fmtUsage shows tokens, and a $ estimate only for priced models', () => {
+  assert.equal(llm.fmtK(1e6), '1M'); assert.equal(llm.fmtK(400000), '400k');
   assert.equal(llm.fmtUsage('claude-sonnet-4-6', { in: 12000, out: 300, cacheRead: 0 }), '12k in · 300 out · $0.041');
   assert.equal(llm.fmtUsage('claude-sonnet-5', { in: 1200, out: 30 }), '1.2k in · 30 out');
 });

@@ -241,7 +241,9 @@ export function parseResult(provider, json)     // → { text, usage: {in, out, 
 export function assembleAnthropic(events, onText?) / assembleOpenai(chunks, onText?)  // SSE events → the non-streaming JSON shape
 export function estimateCost(modelId, usage)    // USD or null (PRICES table by substring; cache reads at 10%)
 export function fmtUsage(modelId, usage)        // "12k in · 300 out · $0.041" ($ only when priced)
-export const PROMPT_CAP = 24000; export function contextCap(modelId)             // max prompt chars by model family (claude 420k, gpt-5 840k, gpt-4.1 2M, gpt-4o/o* 268k, unknown 24000)
+export function contextWindow(modelId)   // tokens by model id: 1M (Claude Opus/Sonnet 4.6+, 5.x, Fable/Mythos, GPT-4.1, GPT-5.5+), 200k other Claude, 400k GPT-5, 128k gpt-4o/o*, DEFAULT_WINDOW 128k
+export const CHARS_PER_TOKEN = 3.5; export function contextCap(modelId)  // max prompt chars = 60% of the window × 3.5; PROMPT_CAP = contextCap('')
+export const fmtK = (n) => '1.2k' | '400k' | '1M'
 export function promptCoverage(segments, cap = PROMPT_CAP)  // share of the transcript that fits (1 = all)
 
 export function buildSystemPrompt({ title, channel, segments, aboutMe = '', tone = '', webSearch = false, cap = PROMPT_CAP })
@@ -414,7 +416,10 @@ Bootstrap: `(async () => { ... })()`. All lib access via
   layout cost). User bubbles: plain text only. The list auto-scrolls only while the user
   is at the bottom; otherwise a "↓ New reply" pill appears. Empty chat shows a hint and, for long videos, the share
   of the transcript that fits the prompt (`llm.promptCoverage` with `llm.contextCap(model)`; re-rendered when the
-  picker's `onChange` fires). Assistant content rendered via `renderMd` =
+  picker's `onChange` fires). Context meter `.ytx-chat-ctx` at the left of the composer tools: last reply's
+  `usage.in + usage.out` / `llm.contextWindow(model)` (an estimate `~N` from the system prompt's chars/3.5 before any
+  reply); orange above 80%. `usage.in` is the whole prompt on both providers (Anthropic uncached + cache read + cache
+  write summed in `parseResult`). Assistant content rendered via `renderMd` =
   `src/ui/markdown.js` `renderMarkdown(text, {onSeek | timeHref})`: marked → DOMPurify (img forbidden) → links
   target=_blank → `[12:34]` / `@12:34` time chips (button that seeks on the watch page, link to url&t= in the
   library) → copy button + language tag on every code block → mermaid fences rendered lazily

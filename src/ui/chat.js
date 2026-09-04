@@ -64,10 +64,23 @@ export function createChatView(opts) {
   const pill = h('div', 'ytx-chat-pill');
   const tools = h('div', 'ytx-chat-tools');
   let lastSettings = null; // cached for the empty-state hint; picker's onChange keeps it fresh
-  tools.append(h('span', 'ytx-chat-spacer'), createPicker({
+  const ctx = h('span', 'ytx-chat-ctx');
+  tools.append(ctx, h('span', 'ytx-chat-spacer'), createPicker({
     isLive: live,
-    onChange: (s) => { lastSettings = s; if (!cur()?.messages.length) refresh(); },
+    onChange: (s) => { lastSettings = s; if (!cur()?.messages.length) refresh(); else paintCtx(); },
   }), webBtn, sendBtn);
+  const modelId = () => (lastSettings ? llm.parseModel(lastSettings.model).id : '');
+  // Context meter: last reply's real usage, else a chars/3.5 estimate of the system prompt.
+  function paintCtx() {
+    const id = modelId();
+    const win = llm.contextWindow(id);
+    const last = [...(cur()?.messages ?? [])].reverse().find((m) => m.usage);
+    const used = last ? last.usage.in + last.usage.out
+      : Math.round(llm.buildSystemPrompt({ title: video.title, channel: video.channel, segments: segments(), cap: llm.contextCap(id) }).length / llm.CHARS_PER_TOKEN);
+    ctx.textContent = `${last ? '' : '~'}${llm.fmtK(used)} / ${llm.fmtK(win)}`;
+    ctx.title = (last ? 'Context used by the last reply' : 'Estimated prompt size') + ` (${Math.round(100 * used / win)}% of the model's window)`;
+    ctx.classList.toggle('is-warn', used / win > 0.8);
+  }
   pill.append(ta, tools);
   composer.append(presets, pill);
 
@@ -184,14 +197,14 @@ export function createChatView(opts) {
       const empty = h('div', 'ytx-chat-empty');
       empty.append(h('div', 'ytx-chat-empty-title', 'Ask anything about this video'),
         h('div', 'ytx-chat-empty-hint', 'Answers cite timestamps you can click. Pick a preset below or type your own.'));
-      const cap = lastSettings ? llm.contextCap(llm.parseModel(lastSettings.model).id) : llm.PROMPT_CAP;
-      const cov = llm.promptCoverage(segments(), cap);
+      const cov = llm.promptCoverage(segments(), llm.contextCap(modelId()));
       if (cov < 1) empty.append(h('div', 'ytx-chat-empty-warn', `Long video: only the first ${Math.round(cov * 100)}% of the transcript fits the prompt.`));
       list.append(empty);
     } else {
       for (const m of c.messages) list.append(bubble(m));
     }
     renderPresets();
+    paintCtx();
     list.scrollTop = list.scrollHeight;
     newPill.classList.remove('is-on');
   }
