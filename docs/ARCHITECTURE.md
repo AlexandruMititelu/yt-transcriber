@@ -529,8 +529,10 @@ Views (hash routing: `#/`, `#/video/<id>`, `#/settings`):
   each of its tags, "Untagged" otherwise), Tags pop-up (every library tag as coloured `tagChip`s with counts, click
   toggles it in `libTags`; filter = video carries ALL selected tags; "Clear filter"; label shows the selection, `.on`
   when active), video count (all session-scoped). All: a "Pinned" section first (when any), then "Everything
-  else" (or one section per group key). Pinned: only pinned videos (empty hint otherwise). Video card = `.card-wrap`
-  holding the `<a class=card>` (title, channel, relative date, badges: N segments · N messages · N notes) and a
+  else" (or one section per group key). Pinned: only pinned videos (empty hint otherwise). Video card = `.card-wrap.card`
+  holding the `<a class=card-link>` (title, channel, relative date), a tag row (`cardTags`: coloured chips + a dashed
+  "+" that opens `createTagEditor` in a `.card-tagpop` popover, saves + `vault.syncTags` in place, no repaint),
+  badges (N segments · N messages · N notes) and a
   separate actions row (pin + ⌫ delete, faint until hover/focus, never nested in the link). Delete → `confirmBox`
   overlay on the card (library record only; vault files stay). The pin is yellow when pinned and toggles
   `vault.pin` / `vault.unpin` on the full record (`togglePin`). Click → detail.
