@@ -94,11 +94,18 @@ export async function fetchTranscript(videoId, { fetchFn = fetch } = {}) {
       videoId,
     }),
   });
-  const track = pickTrack(extractTracks(await res.json()));
+  const pr = await res.json();
+  const track = pickTrack(extractTracks(pr));
   if (!track) throw new Error('no-captions');
   const u = new URL(track.baseUrl);
   u.searchParams.set('fmt', 'json3');
   const text = await (await fetchFn(u.toString())).text();
   if (!text) throw new Error('no-captions');
-  return { lang: track.lang, trackName: track.name, segments: parseJson3(JSON.parse(text)) };
+  return {
+    lang: track.lang,
+    trackName: track.name,
+    segments: parseJson3(JSON.parse(text)),
+    title: pr?.videoDetails?.title ?? '',
+    channel: pr?.videoDetails?.author ?? '',
+  };
 }

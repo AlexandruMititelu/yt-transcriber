@@ -421,6 +421,16 @@
   margin: 10px 0 6px;
   font-size: 13px;
   font-weight: 700;
+}
+
+#ytx-panel .ytx-md h1 { font-size: 18px; letter-spacing: -0.2px; }
+#ytx-panel .ytx-md h2 { font-size: 15.5px; }
+#ytx-panel .ytx-md h3 { font-size: 14px; }
+#ytx-panel .ytx-md h4,
+#ytx-panel .ytx-md h5,
+#ytx-panel .ytx-md h6 {
+  font-size: 13px;
+  color: var(--muted);
   line-height: 1.3;
 }
 

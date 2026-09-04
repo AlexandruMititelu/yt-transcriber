@@ -196,8 +196,20 @@ export function pinToMd(video) {
 
 const join = (...parts) => parts.join('/');
 export const rootDir = (settings) => join(String(settings.vaultDir).replace(/[\\/]+$/, ''), ROOT_NAME);
+// A title is real only once YouTube's SPA navigation has filled it in; "YouTube" (bare document.title)
+// or blank must never become a folder name. Freeze the folder only from a real title.
+export function cleanTitle(title) {
+  const t = String(title ?? '').replace(/\s*-\s*YouTube\s*$/i, '').trim();
+  return /^youtube$/i.test(t) ? '' : t;
+}
+export const hasTitle = (video) => !!cleanTitle(video.title);
+
 function videoFolder(video) {
-  if (!video.folder) video.folder = safeName(video.title, video.videoId);
+  if (!video.folder) {
+    const t = cleanTitle(video.title);
+    if (!t) throw new Error('no-title');
+    video.folder = safeName(t, video.videoId);
+  }
   return video.folder;
 }
 const videoDirAt = (settings, video, pinned) =>
@@ -313,6 +325,7 @@ export async function unpin(settings, video) {
 // (first run after enabling the vault). Mutates `video`; caller saves. Throws if the host is missing.
 export async function hydrate(settings, video) {
   if (!enabled(settings)) return;
+  if (!video.folder && !hasTitle(video)) return; // nothing on disk can belong to a video we can't name yet
   // Where the folder actually lives decides pinned state (moving it in Obsidian pins/unpins).
   const inPinned = await dirExists(videoDirAt(settings, video, true));
   if (inPinned && !video.pinned) video.pinned = { at: Date.now(), dir: videoDirAt(settings, video, true) };

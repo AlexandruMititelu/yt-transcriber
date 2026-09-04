@@ -130,11 +130,23 @@
   }
 
   function scrapeMeta() {
-    const title =
-      document.querySelector('h1 yt-formatted-string')?.textContent?.trim() ||
-      document.title.replace(/\s*-\s*YouTube\s*$/, '').trim();
+    const title = L.vault.cleanTitle(
+      document.querySelector('ytd-watch-metadata h1 yt-formatted-string, h1 yt-formatted-string')?.textContent ||
+      document.title,
+    );
     const channel = document.querySelector('#owner #channel-name a')?.textContent?.trim() || '';
     return { title, channel };
+  }
+
+  // On SPA navigation the h1 / document.title lag behind the URL; poll briefly for the real title.
+  async function waitForMeta(myGen, timeout = 6000) {
+    const deadline = Date.now() + timeout;
+    let meta = scrapeMeta();
+    while (!meta.title && Date.now() < deadline && myGen === gen) {
+      await new Promise((r) => setTimeout(r, 200));
+      meta = scrapeMeta();
+    }
+    return meta;
   }
 
   async function waitFor(sel, myGen, timeout = 20000) {
@@ -173,10 +185,10 @@
     if (!secondary || !live()) return;
 
     const { fmtTime } = L.format;
-    const meta = scrapeMeta();
+    const meta = await waitForMeta(myGen);
     const video = (await L.db.getVideo(videoId)) ?? L.db.blankVideo(videoId, meta.title, meta.channel);
     if (!live()) return;
-    if (!video.title && meta.title) video.title = meta.title;
+    if (!L.vault.hasTitle(video) && meta.title) video.title = meta.title;
     if (!video.channel && meta.channel) video.channel = meta.channel;
 
     const save = () => L.db.saveVideo(video).catch((e) => console.warn('[ytx] save failed', e));
@@ -372,6 +384,9 @@
           segments: t.segments,
           grouped: L.transcript.groupSegments(t.segments),
         };
+        // The player response carries the authoritative title; use it when the DOM scrape came up empty.
+        if (!L.vault.hasTitle(video) && L.vault.cleanTitle(t.title)) video.title = L.vault.cleanTitle(t.title);
+        if (!video.channel && t.channel) video.channel = t.channel;
         await save();
         renderTranscript();
       } catch (e) {
@@ -588,6 +603,7 @@
         const i = TABS.indexOf(activeTab);
         selectTab(TABS[(i + (hk === 'nextTab' ? 1 : TABS.length - 1)) % TABS.length]);
       } else if (typeof notesView !== 'undefined') {
+        selectTab('notes');
         notesView.setMode(hk === 'editMode' ? 'edit' : 'view');
       }
     }, true);

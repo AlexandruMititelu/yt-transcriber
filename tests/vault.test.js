@@ -205,3 +205,23 @@ test('hydrate is a no-op without vaultDir', async () => {
   await vault.hydrate({ vaultDir: '' }, v);
   assert.equal(v.notes.cards.length, 1);
 });
+
+test('cleanTitle / videoFolder: the placeholder "YouTube" title never becomes a folder', async () => {
+  assert.equal(vault.cleanTitle('YouTube'), '');
+  assert.equal(vault.cleanTitle('youtube'), '');
+  assert.equal(vault.cleanTitle(' - YouTube'), '');
+  assert.equal(vault.cleanTitle('Real title - YouTube'), 'Real title');
+  assert.equal(vault.cleanTitle(''), '');
+  files.clear();
+  const v = db.blankVideo('abc', 'YouTube');
+  const card = { id: 'n', kind: 'quick', text: 'x', start: null, color: 0, ts: 1 };
+  v.notes.cards.push(card);
+  await assert.rejects(vault.syncNote(settings, v, card), /no-title/);
+  assert.equal(v.folder, null, 'folder not frozen');
+  assert.equal(files.size, 0, 'nothing written');
+  await vault.hydrate(settings, v);
+  assert.equal(v.folder, null, 'hydrate waits for a real title too');
+  v.title = 'Now real';
+  await vault.syncNote(settings, v, card);
+  assert.equal(v.folder, 'Now real');
+});

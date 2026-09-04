@@ -128,6 +128,8 @@ test('fetchTranscript with injected fetchFn', async () => {
     lang: 'en',
     trackName: 'English (auto)',
     segments: [{ start: 0, dur: 1, text: 'hi' }],
+    title: 'brace } inside "quoted { string" \\ test', // videoDetails.title from the player response
+    channel: '',
   });
 });
 

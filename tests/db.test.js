@@ -162,3 +162,13 @@ test('getVideo migrates v2 notes: overview → a note card, untyped cards → qu
   assert.equal(got.notes.cards[1].title, 'Overview');
   assert.equal(got.notes.cards[1].text, 'big picture');
 });
+
+test('getVideo heals records that froze the "YouTube" placeholder as title/folder', async () => {
+  store.clear();
+  const v = db.blankVideo('yt', 'YouTube');
+  v.folder = 'YouTube';
+  store.set('video:yt', v);
+  const got = await db.getVideo('yt');
+  assert.equal(got.title, '');
+  assert.equal(got.folder, null);
+});

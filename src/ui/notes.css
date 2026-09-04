@@ -222,9 +222,16 @@
 
 .ytx-ed-body .ytx-notes-ta {
   height: 100%;
-  min-height: 120px;
+  min-height: 100%;
   padding: 10px 12px;
+  overflow-y: auto;
 }
+
+/* library page has no #ytx-panel heading rules */
+.ytx-notes .ytx-md h1 { font-size: 18px; margin: 10px 0 6px; }
+.ytx-notes .ytx-md h2 { font-size: 15.5px; margin: 10px 0 6px; }
+.ytx-notes .ytx-md h3 { font-size: 14px; margin: 10px 0 6px; }
+.ytx-notes .ytx-md h4, .ytx-notes .ytx-md h5, .ytx-notes .ytx-md h6 { font-size: 13px; margin: 10px 0 6px; color: var(--muted); }
 
 /* shared */
 .ytx-notes-ta {

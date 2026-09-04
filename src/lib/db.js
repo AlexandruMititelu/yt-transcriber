@@ -87,6 +87,8 @@ function migrateVideo(v) {
       : [];
     v = { ...rest, chats, activeChatId: chats[0]?.id ?? null, pinned: null, folder: null };
   }
+  if (/^youtube$/i.test(String(v.title ?? '').trim())) v = { ...v, title: '' };
+  if (/^youtube$/i.test(String(v.folder ?? ''))) v = { ...v, folder: null };
   const notes = { ...(v.notes ?? {}) };
   notes.cards = (notes.cards ?? []).map((c) => ({ kind: 'quick', title: '', ...c }));
   if (typeof notes.overview === 'string') {

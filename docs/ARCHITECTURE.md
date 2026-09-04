@@ -123,7 +123,8 @@ export async function fetchTranscript(videoId, { fetchFn = fetch } = {})
 //    (watch-page baseUrls return empty bodies since 2025; ANDROID InnerTube URLs work without a PO token)
 // 2. extractTracks → pickTrack; none → throw Error('no-captions')
 // 3. GET track.baseUrl with fmt param set to json3 → .text(); empty → throw Error('no-captions'); else JSON.parse → parseJson3
-// 4. → { lang, trackName: name, segments }   (segments = raw parseJson3 output, NOT grouped)
+// 4. → { lang, trackName: name, segments, title, channel }   (segments = raw parseJson3 output, NOT grouped;
+//      title/channel = videoDetails.title/author — the panel uses them when the DOM scrape was empty)
 ```
 
 ## src/lib/db.js — storage.local, keys: `settings`, `video:<videoId>`, `models:<provider>`
@@ -304,7 +305,11 @@ Bootstrap: `(async () => { ... })()`. All lib access via
   toast pointing at Settings), ⧉ library (`bus.call({type:'open-library'})`).
 - Apple-style segmented control tabs: **Transcript | Chat | Notes**.
 - Data: `db.getVideo(id) ?? db.blankVideo(id, title, channel)` — title/channel scraped from DOM
-  (`h1 yt-formatted-string` / `#owner #channel-name a`, fallback `document.title`).
+  (`h1 yt-formatted-string` / `#owner #channel-name a`, fallback `document.title`), polled up to 6s
+  (`waitForMeta`) because both lag the URL on SPA navigation; everything passes `vault.cleanTitle`, so a
+  bare "YouTube" is treated as no title. `vault.videoFolder` throws `no-title` rather than freezing a
+  placeholder; `hydrate` returns early; `db.getVideo` heals stored records whose title/folder is "YouTube".
+  The transcript fetch also returns `videoDetails.title`, applied when the scrape was empty.
   Transcript auto-fetched on first open (spinner state), stored with BOTH raw `segments` and
   `grouped: groupSegments(segments)`; saved via db.saveVideo.
 - **Transcript tab**: sticky "Follow" toggle at the top: on `timeupdate` of the page `<video>` the row whose
@@ -342,7 +347,10 @@ Bootstrap: `(async () => { ... })()`. All lib access via
   Hotkeys (config/hotkeys.js, `settings.hotkeys` gate): Alt+↑/↓ cycle Transcript · Chat · Notes, Alt+E /
   Alt+V set the editor mode via `notesView.setMode`. Handled in the panel's window keydown capture
   listener and, on the library detail page, by a document listener replaced on every route. `@12:34` typed anywhere
-  renders as a seek chip (panel) / time link (library), same pass as `[12:34]`. Every change → `onChange(card)` → debounced
+  renders as a seek chip (panel) / time link (library), same pass as `[12:34]`. While typing,
+  `normalizeStamps` rewrites `@now` to the current video time and `@2:17` to `@02:17` (caret preserved).
+  Clicking empty space in the editor body focuses the field (`focusField`); `setMode` always focuses it,
+  so Alt+E / Alt+V land in the editor from anywhere on the page. Every change → `onChange(card)` → debounced
   `db.saveVideo` + `vault.syncNote`; delete → `vault.removeNote`. `flush()` blurs an open textarea on teardown.
 - Theme: panel colors keyed off `document.documentElement.hasAttribute('dark')` — set/remove class
   `ytx-dark` on `#ytx-panel`; watch with MutationObserver on `<html>` attributes. (Autochromatic:

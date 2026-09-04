@@ -72,6 +72,20 @@ export function excerpt(text) {
   return first.length > QUICK_MAX ? `${first.slice(0, QUICK_MAX - 1)}…` : first;
 }
 
+// Timestamp text conventions inside notes: `@now` → current video time; `@2:17` → `@02:17` (mm:ss, or h:mm:ss).
+export function stampFmt(sec) {
+  const s = Math.max(0, Math.floor(sec || 0));
+  const hh = Math.floor(s / 3600);
+  const mm = String(Math.floor((s % 3600) / 60)).padStart(2, '0');
+  const ss = String(s % 60).padStart(2, '0');
+  return hh ? `${hh}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+export function normalizeStamps(text, nowSec) {
+  let out = String(text);
+  if (nowSec != null) out = out.replace(/@now\b/gi, `@${stampFmt(nowSec)}`);
+  return out.replace(/@(\d{1,2}):(\d{2})(?![:\d])/g, (_, m, s) => `@${m.padStart(2, '0')}:${s}`);
+}
+
 export function newCard(kind) {
   return { id: crypto.randomUUID(), kind, title: '', text: '', start: null, color: 0, ts: Date.now() };
 }
@@ -158,7 +172,11 @@ export function createNotesView(opts) {
         const md = card.text.trim() ? renderMd(card.text) : h('div', 'ytx-md');
         md.contentEditable = 'true';
         md.setAttribute('data-placeholder', placeholder);
-        md.addEventListener('input', () => { card.text = htmlToMd(md); onChange(card); if (onInput) onInput(); });
+        md.addEventListener('input', () => {
+          card.text = normalizeStamps(htmlToMd(md), opts.currentTime ? opts.currentTime() : null);
+          onChange(card);
+          if (onInput) onInput();
+        });
         md.addEventListener('keydown', (e) => e.stopPropagation());
         md.addEventListener('blur', show); // normalize: re-render from the markdown we stored
         box.appendChild(md);
@@ -175,8 +193,15 @@ export function createNotesView(opts) {
       ta.value = card.text;
       if (max) ta.maxLength = max;
       const counter = max ? h('div', 'ytx-notes-count') : null;
-      const tick = () => { if (counter) counter.textContent = `${ta.value.length}/${max}`; autosize(ta); };
+      const tick = () => { if (counter) counter.textContent = `${ta.value.length}/${max}`; if (!always) autosize(ta); };
       ta.addEventListener('input', () => {
+        const before = ta.value;
+        const fixed = normalizeStamps(before, opts.currentTime ? opts.currentTime() : null);
+        if (fixed !== before) {
+          const caret = ta.selectionStart + (fixed.length - before.length);
+          ta.value = fixed;
+          ta.selectionStart = ta.selectionEnd = caret;
+        }
         card.text = max ? ta.value.slice(0, max) : ta.value;
         tick();
         onChange(card);
@@ -191,13 +216,31 @@ export function createNotesView(opts) {
       return ta;
     };
     box.addEventListener('click', (e) => {
-      if (box.classList.contains('is-editing')) return;
-      if (wysiwyg && wysiwyg()) return;
       if (e.target.closest('a, button')) return;
+      if (box.classList.contains('is-editing') || (wysiwyg && wysiwyg())) {
+        if (e.target === box) focusField(box); // padding / empty space below the text
+        return;
+      }
       edit();
     });
     show();
     return { box, edit, show };
+  }
+
+  // Focus the editable in `box` with the caret at the end.
+  function focusField(box) {
+    const f = box.querySelector('textarea, [contenteditable="true"]');
+    if (!f) return;
+    f.focus();
+    if (f.tagName === 'TEXTAREA') f.selectionStart = f.selectionEnd = f.value.length;
+    else {
+      const r = document.createRange();
+      r.selectNodeContents(f);
+      r.collapse(false);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(r);
+    }
   }
 
   /* ---- list ---- */
@@ -312,12 +355,15 @@ export function createNotesView(opts) {
     else { openId = null; renderList(); }
   }
 
-  // Hotkeys call this; re-renders the open editor in the new mode.
+  // Hotkeys call this; re-renders the open editor in the new mode and puts the caret in it.
   function setMode(mode) {
-    if (mode === editorMode) return;
-    flush();
-    editorMode = mode;
-    if (openId) refresh();
+    if (mode !== editorMode) {
+      flush();
+      editorMode = mode;
+      if (openId) refresh();
+    }
+    const body = root.querySelector('.ytx-ed-body');
+    if (body) focusField(body);
   }
 
   // Commit any textarea / editable still focused (called before teardown and mode switches).
