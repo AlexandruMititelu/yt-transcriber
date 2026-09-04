@@ -3,6 +3,7 @@
 import { http, stream } from './bus.js';
 import * as db from './db.js';
 import { fmtTime } from './format.js';
+import { createIndex } from './search.js';
 
 export const PROVIDERS = ['anthropic', 'openai'];
 export const DEFAULT_MODELS = { anthropic: 'claude-sonnet-5', openai: 'gpt-5.1' };
@@ -33,9 +34,11 @@ export function contextWindow(modelId) {
   return row ? row[1] : DEFAULT_WINDOW;
 }
 export const CHARS_PER_TOKEN = 3.5;
-// Max prompt chars: 60% of the window, rest for history + reply.
+// Max transcript chars in the prompt: 20% of the window. Past that the model searches the transcript
+// (transcriptTools) instead: cheaper per turn and recall degrades well before the window fills (context rot).
+export const PROMPT_SHARE = 0.2;
 export function contextCap(modelId) {
-  return Math.round(contextWindow(modelId) * 0.6 * CHARS_PER_TOKEN);
+  return Math.round(contextWindow(modelId) * PROMPT_SHARE * CHARS_PER_TOKEN);
 }
 export const PROMPT_CAP = contextCap('');
 
@@ -76,15 +79,72 @@ export function webSearchTool(modelId) {
   return { type, name: 'web_search', max_uses: 5 };
 }
 
-export function buildRequest({ provider, apiKey, model, system, messages, maxTokens = 4096, effort = 'off', webSearch = false, streaming = false }) {
+// "12:34" | "1:02:03" | 754 → seconds
+export const parseTime = (v) => {
+  if (typeof v === 'number') return Math.max(0, v);
+  const p = String(v ?? '').trim().split(':').map(Number);
+  return p.length && !p.some(isNaN) ? Math.max(0, p.reduce((a, n) => a * 60 + n, 0)) : 0;
+};
+
+const READ_MAX = 600; // seconds per read_transcript call (~150 lines)
+// Transcript bigger than the prompt cap: the model pulls what it needs. → { defs, run(name, input) → string }
+export function transcriptTools(segments) {
+  const idx = createIndex(segments);
+  const line = (s) => `[${fmtTime(s.start)}] ${s.text}`;
+  const defs = [
+    {
+      name: 'search_transcript',
+      description: 'Keyword search over the whole transcript (BM25, exact words only, no synonyms). Returns the best matching passages with timestamps. Run several narrow queries and try synonyms; then read_transcript around the hits for context.',
+      input_schema: { type: 'object', properties: { query: { type: 'string', description: 'Words to look for' } }, required: ['query'] },
+    },
+    {
+      name: 'read_transcript',
+      description: `Read the transcript verbatim between two times, at most ${READ_MAX / 60} minutes per call.`,
+      input_schema: {
+        type: 'object',
+        properties: { from: { type: 'string', description: 'Start, "h:mm:ss" or seconds' }, to: { type: 'string', description: 'End, "h:mm:ss" or seconds' } },
+        required: ['from', 'to'],
+      },
+    },
+  ];
+  const run = (name, input = {}) => {
+    if (name === 'search_transcript') {
+      const hits = idx.search(String(input.query ?? '')).sort((a, b) => a.start - b.start);
+      return hits.length ? hits.map(line).join('\n') : 'No matches. Try other words.';
+    }
+    if (name === 'read_transcript') {
+      const from = parseTime(input.from);
+      const to = Math.min(parseTime(input.to), from + READ_MAX);
+      const rows = segments.filter((s) => s.end > from && s.start < to);
+      return rows.length ? rows.map(line).join('\n') : 'Nothing in that range.';
+    }
+    return `Unknown tool ${name}`;
+  };
+  return { defs, run };
+}
+
+// UI messages {role, content, image?} → provider content. `image` is a data: URL (frame capture).
+export function toApiMessages(provider, messages) {
+  return messages.map(({ role, content, image }) => {
+    if (!image) return { role, content };
+    const [, mediaType, data] = /^data:([^;]+);base64,(.*)$/.exec(image) ?? [, 'image/jpeg', ''];
+    const img = provider === 'anthropic'
+      ? { type: 'image', source: { type: 'base64', media_type: mediaType, data } }
+      : { type: 'image_url', image_url: { url: image } };
+    return { role, content: [img, { type: 'text', text: content }] };
+  });
+}
+
+export function buildRequest({ provider, apiKey, model, system, messages, maxTokens = 4096, effort = 'off', webSearch = false, streaming = false, tools = null }) {
   const m = model || DEFAULT_MODELS[provider];
   const think = EFFORTS.includes(effort) && effort !== 'off';
   if (provider === 'anthropic') {
     // The system prompt (whole transcript) is identical every turn: cache it, ~90% cheaper multi-turn.
     const sys = system ? [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }] : undefined;
-    const body = { model: m, max_tokens: maxTokens, system: sys, messages };
+    const body = { model: m, max_tokens: maxTokens, system: sys, messages: toApiMessages(provider, messages) };
     if (streaming) body.stream = true;
-    if (webSearch) body.tools = [webSearchTool(m)];
+    const t = [...(webSearch ? [webSearchTool(m)] : []), ...(tools ?? [])];
+    if (t.length) body.tools = t;
     if (ADAPTIVE_RE.test(m)) {
       if (think) {
         body.thinking = { type: 'adaptive' };
@@ -101,8 +161,9 @@ export function buildRequest({ provider, apiKey, model, system, messages, maxTok
     return { url: 'https://api.anthropic.com/v1/messages', headers: anthropicHeaders(apiKey), body };
   }
   if (provider === 'openai') {
-    const body = { model: m, messages: [{ role: 'system', content: system }, ...messages] };
+    const body = { model: m, messages: [{ role: 'system', content: system }, ...toApiMessages(provider, messages)] };
     if (think) body.reasoning_effort = effort;
+    if (tools?.length) body.tools = tools.map((d) => ({ type: 'function', function: { name: d.name, description: d.description, parameters: d.input_schema } }));
     if (webSearch) body.web_search_options = {}; // Chat Completions built-in web search
     if (streaming) { body.stream = true; body.stream_options = { include_usage: true }; }
     return {
@@ -178,6 +239,8 @@ export function fmtUsage(modelId, usage) {
   return `${k(usage.in)} in · ${k(usage.out)} out${cost != null ? ` · $${cost < 0.01 ? cost.toFixed(4) : cost.toFixed(3)}` : ''}`;
 }
 
+const safeJson = (s) => { try { return JSON.parse(s || '{}'); } catch { return {}; } };
+
 // Anthropic SSE events → the same JSON shape a non-streaming call returns. Pure; fed by chat().
 export function assembleAnthropic(events, onText) {
   const out = { content: [], stop_reason: null, usage: {} };
@@ -189,6 +252,12 @@ export function assembleAnthropic(events, onText) {
       const d = ev.delta ?? {};
       if (d.type === 'text_delta') { b.text = (b.text ?? '') + d.text; if (onText) onText(d.text); }
       else if (d.type === 'citations_delta') (b.citations ??= []).push(d.citation);
+      else if (d.type === 'thinking_delta') b.thinking = (b.thinking ?? '') + d.thinking;
+      else if (d.type === 'signature_delta') b.signature = d.signature;
+      else if (d.type === 'input_json_delta') b._json = (b._json ?? '') + d.partial_json;
+    } else if (ev.type === 'content_block_stop') {
+      const b = out.content[ev.index];
+      if (b && '_json' in b) { b.input = safeJson(b._json); delete b._json; }
     } else if (ev.type === 'message_delta') {
       if (ev.delta?.stop_reason) out.stop_reason = ev.delta.stop_reason;
       Object.assign(out.usage, ev.usage ?? {});
@@ -207,13 +276,20 @@ export function assembleOpenai(chunks, onText) {
     const ch = c.choices?.[0];
     if (ch?.delta?.content) { msg.content += ch.delta.content; if (onText) onText(ch.delta.content); }
     if (ch?.delta?.annotations) msg.annotations.push(...ch.delta.annotations);
+    for (const tc of ch?.delta?.tool_calls ?? []) {
+      const cur = (msg.tool_calls ??= [])[tc.index] ??= { id: '', type: 'function', function: { name: '', arguments: '' } };
+      if (tc.id) cur.id = tc.id;
+      if (tc.function?.name) cur.function.name += tc.function.name;
+      if (tc.function?.arguments) cur.function.arguments += tc.function.arguments;
+    }
     if (ch?.finish_reason) finish = ch.finish_reason;
     if (c.usage) usage = c.usage;
   }
   return { choices: [{ message: msg, finish_reason: finish }], usage };
 }
 
-export function buildSystemPrompt({ title, channel, segments, aboutMe = '', tone = '', webSearch = false, cap = PROMPT_CAP }) {
+// retrieval: transcript left out, model gets duration + chapters and the transcript tools instead.
+export function buildSystemPrompt({ title, channel, segments, aboutMe = '', tone = '', webSearch = false, cap = PROMPT_CAP, retrieval = false, duration = 0, chapters = [] }) {
   const lines = (segments ?? [])
     .map((s) => `[${fmtTime(s.start)}] ${s.text}`)
     .join('\n');
@@ -232,6 +308,15 @@ export function buildSystemPrompt({ title, channel, segments, aboutMe = '', tone
   }
   if (aboutMe.trim()) prompt += `About the user:\n${aboutMe.trim()}\n\n`;
   if (tone.trim()) prompt += `Tone of voice:\n${tone.trim()}\n\n`;
+  if (retrieval) {
+    prompt +=
+      `The transcript (${fmtTime(duration)} long) is too big to include here. Use search_transcript to find passages by ` +
+      'keywords (several narrow queries, try synonyms), then read_transcript to read verbatim around the hits. ' +
+      'Search before answering anything about specific content; for overviews, read the chapters in turn. ' +
+      'Say so when a search finds nothing.\n\n' +
+      (chapters.length ? 'Chapters:\n' + chapters.map((c) => `[${fmtTime(c.start)}] ${c.title}`).join('\n') : 'No chapters.');
+    return prompt;
+  }
   prompt += 'Transcript:\n' + lines;
   if (prompt.length <= cap) return prompt;
   return prompt.slice(0, cap) + '\n[transcript truncated]';
@@ -268,22 +353,54 @@ async function request(provider, req, { onText, signal } = {}) {
   }
 }
 
-// → { text, usage }. `onText(delta)` streams the reply; `signal` (AbortSignal) stops it.
-export async function chat({ settings, system, messages, maxTokens, onText, signal }) {
+// → { text, usage, model }. `onText(delta)` streams the reply; `signal` (AbortSignal) stops it.
+// `tools` = transcriptTools(): the model may call them; rounds are bounded. `onTool(name, input)` for status.
+export async function chat({ settings, system, messages, maxTokens, onText, signal, tools = null, onTool }) {
   const { provider, id } = parseModel(settings.model);
   const apiKey = keyFor(settings, provider);
   if (!apiKey) throw new Error('no-api-key');
   const effort = supportsEffort(provider, id) ? settings.effort : 'off';
   const webSearch = !!settings.webSearch;
-  const req = buildRequest({ provider, apiKey, model: id, system, messages, maxTokens, effort, webSearch, streaming: !!onText });
+  const req = buildRequest({ provider, apiKey, model: id, system, messages, maxTokens, effort, webSearch, streaming: !!onText, tools: tools?.defs });
   let data = await request(provider, req, { onText, signal });
-  // Server-side tools may pause after ~10 search iterations: re-send with the partial assistant turn
-  // appended (no extra user message) and the server resumes. Bounded so a stuck loop can't run forever.
-  for (let i = 0; provider === 'anthropic' && data?.stop_reason === 'pause_turn' && i < 3; i++) {
-    const body = { ...req.body, messages: [...req.body.messages, { role: 'assistant', content: data.content }] };
-    data = await request(provider, { ...req, body }, { onText, signal });
+  const msgs = [...req.body.messages];
+  const usage = { in: 0, out: 0, cacheRead: 0 }; // ponytail: summed over rounds; `in` over-counts context by earlier rounds
+  const pre = []; // text the model wrote before a tool call
+  const add = (d) => { const u = parseResult(provider, d); for (const k in usage) usage[k] += u.usage[k]; return u; };
+  // Anthropic: pause_turn (server-side web search) → resend the partial turn; tool_use → run our tools.
+  // OpenAI: tool_calls → run, append `tool` messages. 10 rounds max so a stuck loop can't run forever.
+  for (let i = 0; i < 10; i++) {
+    if (provider === 'anthropic') {
+      const stop = data?.stop_reason;
+      if (stop !== 'pause_turn' && !(stop === 'tool_use' && tools)) break;
+      const u = add(data);
+      if (u.text) pre.push(u.text);
+      msgs.push({ role: 'assistant', content: data.content });
+      if (stop === 'tool_use') {
+        const results = [];
+        for (const b of data.content.filter((b) => b.type === 'tool_use')) {
+          onTool?.(b.name, b.input ?? {});
+          results.push({ type: 'tool_result', tool_use_id: b.id, content: String(await tools.run(b.name, b.input ?? {})) });
+        }
+        msgs.push({ role: 'user', content: results });
+      }
+    } else {
+      const msg = data?.choices?.[0]?.message;
+      if (!msg?.tool_calls?.length || !tools) break;
+      const u = add(data);
+      if (u.text) pre.push(u.text);
+      msgs.push(msg);
+      for (const c of msg.tool_calls) {
+        const input = safeJson(c.function?.arguments);
+        onTool?.(c.function?.name, input);
+        msgs.push({ role: 'tool', tool_call_id: c.id, content: String(await tools.run(c.function?.name, input)) });
+      }
+    }
+    data = await request(provider, { ...req, body: { ...req.body, messages: msgs } }, { onText, signal });
   }
-  const out = parseResult(provider, data);
+  const out = add(data);
+  out.usage = usage;
+  if (pre.length) out.text = [...pre, out.text].filter(Boolean).join('\n\n');
   out.model = id;
   return out;
 }

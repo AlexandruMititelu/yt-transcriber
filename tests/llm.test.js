@@ -201,8 +201,8 @@ test('contextCap: by model family, unknown/empty falls back to PROMPT_CAP', () =
   assert.equal(llm.contextWindow('gpt-5.1'), 400000);
   assert.equal(llm.contextWindow('gpt-4.1-mini'), 1e6);
   assert.equal(llm.contextWindow(''), 128000);
-  assert.equal(llm.contextCap('claude-sonnet-5'), 2100000);
-  assert.equal(llm.PROMPT_CAP, 268800);
+  assert.equal(llm.contextCap('claude-sonnet-5'), 700000);
+  assert.equal(llm.PROMPT_CAP, 89600);
 });
 
 test('buildSystemPrompt honours cap', () => {
@@ -313,4 +313,96 @@ test('chat retries once on 429 then succeeds', async () => {
   const r = await llm.chat({ settings: { anthropicKey: 'k', model: 'anthropic:claude-x' }, system: 's', messages: [] });
   assert.equal(r.text, 'ok');
   assert.equal(n, 2);
+});
+
+test('transcriptTools: search ranks by rare words, read is bounded to 10 min and parses h:mm:ss', () => {
+  const segs = Array.from({ length: 200 }, (_, i) => ({ start: i * 20, end: i * 20 + 20, text: `filler words about the video number ${i}` }));
+  segs[150].text = 'gradient checkpointing saves memory during training';
+  segs[151].text = 'checkpointing again';
+  const t = llm.transcriptTools(segs);
+  assert.deepEqual(t.defs.map((d) => d.name), ['search_transcript', 'read_transcript']);
+  const hits = t.run('search_transcript', { query: 'memory checkpointing' });
+  assert.ok(hits.startsWith('[50:00] gradient checkpointing'), hits);
+  assert.ok(hits.includes('[50:20]'));
+  assert.equal(t.run('search_transcript', { query: 'zzz' }), 'No matches. Try other words.');
+  const read = t.run('read_transcript', { from: '0:10:00', to: '1:00:00' }).split('\n');
+  assert.equal(read[0], '[10:00] filler words about the video number 30');
+  assert.equal(read.length, 30); // capped at 600s
+  assert.equal(t.run('read_transcript', { from: 99999, to: 99999 }), 'Nothing in that range.');
+  assert.equal(llm.parseTime('1:02:03'), 3723);
+});
+
+test('buildSystemPrompt retrieval mode: no transcript, chapters + duration + tool instructions', () => {
+  const p = llm.buildSystemPrompt({ title: 'T', channel: 'C', segments: [{ start: 0, end: 5, text: 'SECRET' }], retrieval: true, duration: 7200, chapters: [{ start: 60, title: 'Intro' }] });
+  assert.ok(!p.includes('SECRET'));
+  assert.ok(p.includes('2:00:00') && p.includes('[1:00] Intro') && p.includes('search_transcript'));
+});
+
+test('toApiMessages: data: URL images become provider blocks, plain messages untouched', () => {
+  const msgs = [{ role: 'user', content: 'hi' }, { role: 'user', content: 'what', image: 'data:image/jpeg;base64,AAAA' }];
+  const a = llm.toApiMessages('anthropic', msgs);
+  assert.deepEqual(a[0], { role: 'user', content: 'hi' });
+  assert.deepEqual(a[1].content[0], { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: 'AAAA' } });
+  assert.equal(a[1].content[1].text, 'what');
+  assert.equal(llm.toApiMessages('openai', msgs)[1].content[0].image_url.url, 'data:image/jpeg;base64,AAAA');
+});
+
+test('chat runs transcript tools: Anthropic tool_use round trip, usage summed', async () => {
+  const sent = [];
+  let n = 0;
+  globalThis.browser.runtime.sendMessage = async (msg) => {
+    sent.push(msg);
+    n++;
+    if (n === 1) return { ok: true, data: { stop_reason: 'tool_use', usage: { input_tokens: 10, output_tokens: 1 }, content: [{ type: 'text', text: 'Searching.' }, { type: 'tool_use', id: 't1', name: 'search_transcript', input: { query: 'cats' } }] } };
+    return { ok: true, data: { stop_reason: 'end_turn', usage: { input_tokens: 20, output_tokens: 2 }, content: [{ type: 'text', text: 'Cats at 0:00.' }] } };
+  };
+  const tools = { defs: [{ name: 'search_transcript', description: 'd', input_schema: {} }], run: (name, input) => `${name}:${input.query}` };
+  const calls = [];
+  const out = await llm.chat({ settings: { anthropicKey: 'k', model: 'anthropic:claude-sonnet-5', effort: 'off' }, system: 's', messages: [{ role: 'user', content: 'cats?' }], tools, onTool: (n, i) => calls.push([n, i.query]) });
+  assert.equal(out.text, 'Searching.\n\nCats at 0:00.');
+  assert.deepEqual(out.usage, { in: 30, out: 3, cacheRead: 0 });
+  assert.deepEqual(calls, [['search_transcript', 'cats']]);
+  assert.equal(sent[0].body.tools[0].name, 'search_transcript');
+  const m = sent[1].body.messages;
+  assert.equal(m.length, 3);
+  assert.deepEqual(m[2].content, [{ type: 'tool_result', tool_use_id: 't1', content: 'search_transcript:cats' }]);
+});
+
+test('chat runs transcript tools: OpenAI tool_calls round trip', async () => {
+  const sent = [];
+  let n = 0;
+  globalThis.browser.runtime.sendMessage = async (msg) => {
+    sent.push(msg);
+    n++;
+    if (n === 1) return { ok: true, data: { choices: [{ finish_reason: 'tool_calls', message: { role: 'assistant', content: null, tool_calls: [{ id: 'c1', type: 'function', function: { name: 'read_transcript', arguments: '{"from":"0:00","to":"1:00"}' } }] } }] } };
+    return { ok: true, data: { choices: [{ finish_reason: 'stop', message: { role: 'assistant', content: 'ok' } }] } };
+  };
+  const tools = { defs: [{ name: 'read_transcript', description: 'd', input_schema: { type: 'object' } }], run: (name, input) => `${input.from}-${input.to}` };
+  const out = await llm.chat({ settings: { openaiKey: 'k', model: 'openai:gpt-5', effort: 'off' }, system: 's', messages: [{ role: 'user', content: 'q' }], tools });
+  assert.equal(out.text, 'ok');
+  assert.equal(sent[0].body.tools[0].function.name, 'read_transcript');
+  const m = sent[1].body.messages;
+  assert.equal(m.at(-1).role, 'tool');
+  assert.equal(m.at(-1).content, '0:00-1:00');
+  assert.equal(m.at(-1).tool_call_id, 'c1');
+});
+
+test('assemblers: Anthropic tool_use json + thinking signature, OpenAI tool_calls deltas', () => {
+  const a = llm.assembleAnthropic([
+    { type: 'content_block_start', index: 0, content_block: { type: 'thinking', thinking: '' } },
+    { type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'hm' } },
+    { type: 'content_block_delta', index: 0, delta: { type: 'signature_delta', signature: 'sig' } },
+    { type: 'content_block_start', index: 1, content_block: { type: 'tool_use', id: 't', name: 'search_transcript', input: {} } },
+    { type: 'content_block_delta', index: 1, delta: { type: 'input_json_delta', partial_json: '{"que' } },
+    { type: 'content_block_delta', index: 1, delta: { type: 'input_json_delta', partial_json: 'ry":"x"}' } },
+    { type: 'content_block_stop', index: 1 },
+    { type: 'message_delta', delta: { stop_reason: 'tool_use' }, usage: { output_tokens: 3 } },
+  ]);
+  assert.deepEqual(a.content[0], { type: 'thinking', thinking: 'hm', signature: 'sig' });
+  assert.deepEqual(a.content[1].input, { query: 'x' });
+  const o = llm.assembleOpenai([
+    { choices: [{ delta: { tool_calls: [{ index: 0, id: 'c1', function: { name: 'read_', arguments: '{"a"' } }] } }] },
+    { choices: [{ delta: { tool_calls: [{ index: 0, function: { name: 'transcript', arguments: ':1}' } }] }, finish_reason: 'tool_calls' }] },
+  ]);
+  assert.deepEqual(o.choices[0].message.tool_calls[0], { id: 'c1', type: 'function', function: { name: 'read_transcript', arguments: '{"a":1}' } });
 });

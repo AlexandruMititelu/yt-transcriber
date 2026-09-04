@@ -16,12 +16,13 @@ src/lib/transcript.js         (pure + fetch pipeline, ESM)
 src/lib/bus.js                (runtime message helpers, ESM)
 src/lib/db.js                 (storage.local wrapper, ESM)
 src/lib/llm.js                (provider-agnostic LLM service, ESM)
+src/lib/search.js             (BM25 over transcript groups, pure)
 src/lib/vault.js              (knowledge-base folder mirror: markdown builders/parsers + disk sync, ESM)
 src/ui/tokens.css             (design tokens for extension pages)
 src/ui/picker.js|css          (model + effort popover, shared)
 src/ui/chatbar.js|css         (chat switcher bar + confirm box, shared)
 src/ui/notes.js|css           (notes tab: quick notes + note editor, shared)
-src/ui/chat.js|css            (chat tab: streaming, stop/retry, presets, usage, edit&resend, shared)
+src/ui/chat.js|css            (chat tab: streaming, stop/retry, presets, usage, frame capture, context meter, shared)
 src/ui/markdown.js|css        (markdown → DOM: sanitize, time chips, code copy, mermaid, shared)
 src/ui/toast.js|css           (toaster: createToaster(host) → toast(msg, {link, action, error, ms}), shared)
 src/ui/icons.js               (inline SVG icons: pin, trash, chevrons, eye, globe, camera, search, plus, copy, chat, refresh, library, gear, check — NO emoji/glyph icons anywhere, see .claude/skills/ui)
@@ -242,21 +243,35 @@ export function assembleAnthropic(events, onText?) / assembleOpenai(chunks, onTe
 export function estimateCost(modelId, usage)    // USD or null (PRICES table by substring; cache reads at 10%)
 export function fmtUsage(modelId, usage)        // "12k in · 300 out · $0.041" ($ only when priced)
 export function contextWindow(modelId)   // tokens by model id: 1M (Claude Opus/Sonnet 4.6+, 5.x, Fable/Mythos, GPT-4.1, GPT-5.5+), 200k other Claude, 400k GPT-5, 128k gpt-4o/o*, DEFAULT_WINDOW 128k
-export const CHARS_PER_TOKEN = 3.5; export function contextCap(modelId)  // max prompt chars = 60% of the window × 3.5; PROMPT_CAP = contextCap('')
+export const CHARS_PER_TOKEN = 3.5; export const PROMPT_SHARE = 0.2
+export function contextCap(modelId)  // max transcript chars in the prompt = 20% of the window × 3.5; PROMPT_CAP = contextCap('')
+export const parseTime = (v) => seconds   // 754 | "12:34" | "1:02:03"
+export function transcriptTools(segments)  // → { defs: [search_transcript{query}, read_transcript{from,to}], run(name, input) → string }
+// search = BM25 top 8 groups (src/lib/search.js) as `[m:ss] text` lines in time order, 'No matches. Try other words.' when empty;
+// read = verbatim groups overlapping [from, to], to capped at from + 600s. Used only when promptCoverage < 1.
+export function toApiMessages(provider, messages)  // {role, content, image?} → provider shape; image (data: URL) → Anthropic base64 image block / OpenAI image_url, text after it
 export const fmtK = (n) => '1.2k' | '400k' | '1M'
 export function promptCoverage(segments, cap = PROMPT_CAP)  // share of the transcript that fits (1 = all)
 
-export function buildSystemPrompt({ title, channel, segments, aboutMe = '', tone = '', webSearch = false, cap = PROMPT_CAP })
+export function buildSystemPrompt({ title, channel, segments, aboutMe = '', tone = '', webSearch = false, cap = PROMPT_CAP, retrieval = false, duration = 0, chapters = [] })
+// retrieval: transcript left out; instead "[the transcript (h:mm:ss) is too big] use search_transcript … then read_transcript …"
+// plus the chapter list `[m:ss] title` (or 'No chapters.'). Callers set retrieval = promptCoverage(segments, cap) < 1.
 // webSearch adds a paragraph: when to search (facts beyond the transcript), focused queries reusing the
 // video's exact terms, several narrow searches, say what was found and where.
 // Persona: assistant for THIS video. Includes title/channel, then optional
 // 'About the user:\n<aboutMe>' and 'Tone of voice:\n<tone>' sections (skipped when blank),
 // then timestamped transcript lines `[m:ss] text` from grouped segments. Whole prompt
-// hard-capped at 24000 chars with '\n[transcript truncated]' (transcript is last, so it truncates).
+// hard-capped at `cap` chars with '\n[transcript truncated]' (safety only: retrieval mode kicks in first).
 // States: may answer with markdown; may draw diagrams in ```mermaid fenced blocks;
 // cite timestamps like [12:34] when referencing the video; never use em dashes / '--'.
 
-export async function chat({ settings, system, messages, maxTokens, onText?, signal? })   // → { text, usage, model }
+export async function chat({ settings, system, messages, maxTokens, onText?, signal?, tools?, onTool? })   // → { text, usage, model }
+// tools = transcriptTools(...): defs go in the request (Anthropic `tools`, OpenAI `type: function`); the loop runs
+// them: Anthropic stop_reason 'tool_use' → assistant turn appended + user turn of tool_result blocks; OpenAI
+// finish_reason 'tool_calls' → assistant message + one `tool` message per call; pause_turn as before. 10 rounds max.
+// onTool(name, input) fires before each run (UI status). usage summed over rounds; text the model wrote before a
+// tool call is kept in front of the final text. assembleAnthropic also keeps thinking/signature and tool_use input
+// (input_json_delta → JSON on content_block_stop); assembleOpenai merges tool_calls deltas by index.
 // parseModel(settings.model) → provider/id; apiKey = keyFor(settings, provider); none → throw Error('no-api-key').
 // buildRequest(..., effort: settings.effort, webSearch: settings.webSearch, streaming: !!onText).
 // onText → bus.stream (deltas as they arrive, assembled into the plain JSON); else bus.http. One retry after 2s on
@@ -397,7 +412,7 @@ Bootstrap: `(async () => { ... })()`. All lib access via
   and prefills `> [m:ss] text`).
   States: loading / error (`transcript.explainFailure(e)`, retry button) / list.
 - **Chat tab** (`src/ui/chat.js` `createChatView({video, save, disk, renderMd, toast, isLive, onSynced, segments,
-  settingsAction})` → `{root, refresh, toggleWeb, cancel, focus, prefill, isBusy}`, shared with the library): chat bar
+  settingsAction, onFrame?})` → `{root, refresh, toggleWeb, cancel, focus, prefill, isBusy}`, shared with the library): chat bar
   (`src/ui/chatbar.js`: a macOS-style pop-up button showing the current chat title; its popover lists the chats with a
   checkmark, then "+ New chat", then Rename / Delete chat (red); double-click the trigger also renames) + message list +
   composer. Composer = one pill: preset chips above (`settings.prompts` via config/prompts.js `parsePrompts`, only while
@@ -413,10 +428,16 @@ Bootstrap: `(async () => { ... })()`. All lib access via
   streamed text as a message marked "*[stopped]*". Errors → inline system bubble with Retry (re-runs the same
   messages, nothing retyped); no-api-key → "Add your API key in Settings" + the host's `settingsAction()`.
   Assistant bubbles: copy button top-right, token usage `fmtUsage` shown under the bubble on hover (absolute, no
-  layout cost). User bubbles: plain text only. The list auto-scrolls only while the user
-  is at the bottom; otherwise a "↓ New reply" pill appears. Empty chat shows a hint and, for long videos, the share
-  of the transcript that fits the prompt (`llm.promptCoverage` with `llm.contextCap(model)`; re-rendered when the
-  picker's `onChange` fires). Context meter `.ytx-chat-ctx` at the left of the composer tools: last reply's
+  layout cost). User bubbles: plain text, plus the captured frame `<img>` and an `@m:ss` label when the message has
+  `image`/`sec`. Camera button (when `onFrame` is given, i.e. the watch page; between the picker and the globe):
+  `onFrame()` → `{dataUrl, sec, embed?}` shown as a thumbnail chip above the textarea with ✕; Send attaches it to
+  the user message (`image` = data: URL sent to the model via `toApiMessages`, `sec`, `embed` = Obsidian embed when
+  the vault saved it) and a blank text becomes "What is shown in this frame?". The list auto-scrolls only while the
+  user is at the bottom; otherwise a "↓ New reply" pill appears. Long transcripts: when
+  `llm.promptCoverage(segments, llm.contextCap(model)) < 1` the system prompt is built with `retrieval: true`
+  (duration + chapters, no transcript) and `llm.chat` gets `tools: llm.transcriptTools(segments)`; the pending bubble
+  shows "Searching transcript: q" / "Reading transcript a to b" from `onTool`. Empty chat then says the model will
+  search the transcript instead (re-rendered when the picker's `onChange` fires). Context meter `.ytx-chat-ctx` at the left of the composer tools: last reply's
   `usage.in + usage.out` / `llm.contextWindow(model)` (an estimate `~N` from the system prompt's chars/3.5 before any
   reply); orange above 80%. `usage.in` is the whole prompt on both providers (Anthropic uncached + cache read + cache
   write summed in `parseResult`). Assistant content rendered via `renderMd` =

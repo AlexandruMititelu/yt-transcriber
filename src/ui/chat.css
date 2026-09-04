@@ -30,6 +30,8 @@
 }
 .ytx-msg-user { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 4px; }
 .ytx-msg-user .ytx-msg-text { white-space: pre-wrap; }
+.ytx-msg-img { display: block; max-width: 100%; border-radius: 8px; margin: 0 0 6px; }
+.ytx-msg-at { display: inline-block; margin-bottom: 4px; font-family: var(--font-mono); font-size: 11px; opacity: 0.8; }
 .ytx-msg-assistant { align-self: flex-start; background: var(--surface-2); border-bottom-left-radius: 4px; padding-right: 30px; }
 .ytx-msg-pending { color: var(--muted); }
 .ytx-msg-status { display: block; }
@@ -78,8 +80,18 @@
 .ytx-chat-ta {
   width: 100%; min-height: 34px; max-height: 160px; margin: 0; padding: 8px 8px 4px;
   border: 0; outline: none; resize: none; background: none; color: var(--text);
-  font-family: var(--font-mono); font-size: 12.5px; line-height: 1.4; overflow-y: auto;
+  font-family: var(--font-mono); font-size: 12.5px; line-height: 1.4; overflow-y: auto; scrollbar-width: none;
 }
+.ytx-chat-ta::-webkit-scrollbar { display: none; }
+.ytx-chat-attach { display: flex; align-items: center; gap: 8px; padding: 6px 6px 2px; }
+.ytx-chat-attach[hidden] { display: none; }
+.ytx-chat-attach-img { height: 44px; border-radius: 6px; border: 1px solid var(--border); }
+.ytx-chat-attach-at { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+.ytx-chat-attach-x {
+  width: 20px; height: 20px; border: 0; border-radius: 50%; background: var(--surface); color: var(--muted);
+  font: inherit; font-size: 11px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+}
+.ytx-chat-attach-x:hover { background: var(--accent); color: #fff; }
 .ytx-chat-ta::placeholder { color: var(--muted); }
 .ytx-chat-tools { display: flex; align-items: center; gap: 6px; }
 .ytx-chat-spacer { flex: 1; }

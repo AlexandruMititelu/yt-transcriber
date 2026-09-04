@@ -105,6 +105,9 @@ test('chat markdown = Obsidian callouts; roundtrips headings/rules/quotes/blank 
   assert.equal(vault.parseChat('---\ncreated: "2026-09-04T11:38:02.236Z"\n---\n').createdAt, Date.parse('2026-09-04T11:38:02.236Z'), 'legacy ISO still parses');
   assert.deepEqual(back.messages, chat.messages);
   assert.deepEqual(vault.parseChat('# empty\n').messages, []);
+  const withFrame = vault.chatToMd(video, { ...chat, messages: [{ role: 'user', content: 'what is this', ts: t1, embed: '![[attachments/1-05.jpg]]', image: 'data:...' }] });
+  assert.ok(withFrame.includes('> ![[attachments/1-05.jpg]]\n> what is this'));
+  assert.deepEqual(vault.parseChat(withFrame).messages[0], { role: 'user', ts: t1, content: 'what is this', embed: '![[attachments/1-05.jpg]]' });
   const legacy = '# t\n\n<!-- ytx:user ts=1 -->\n### You\n\nhi\n\n<!-- ytx:assistant ts=2 -->\n### Assistant\n\nyo\n';
   assert.deepEqual(vault.parseChat(legacy).messages, [{ role: 'user', ts: 1, content: 'hi' }, { role: 'assistant', ts: 2, content: 'yo' }]);
 });

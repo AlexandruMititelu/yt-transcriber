@@ -514,6 +514,7 @@
       isLive: live,
       onSynced,
       segments: () => video.transcript?.grouped ?? [],
+      onFrame: () => chatFrame().catch((e) => { toast(`Frame: ${e.message}`); return null; }),
       settingsAction: () => {
         const b = h('button', 'ytx-btn', 'Open library');
         b.addEventListener('click', () => L.bus.call({ type: 'open-library' }).catch(() => {}));
@@ -563,7 +564,7 @@
 
     /* ---- notes tab (shared view: src/ui/notes.js) ---- */
     // Frame capture: current video frame → <video>/attachments/<m-ss>.jpg in the vault, embed pasted into the note.
-    async function captureFrame() {
+    function grabFrame() {
       const v = document.querySelector('video');
       if (!v || !v.videoWidth) { toast('No video frame yet'); return null; }
       const c = document.createElement('canvas');
@@ -571,13 +572,23 @@
       c.width = w;
       c.height = Math.round(v.videoHeight * (w / v.videoWidth));
       c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
-      let dataUrl;
-      try { dataUrl = c.toDataURL('image/jpeg', 0.85); } catch { toast('Frame capture blocked by the player'); return null; }
+      try { return { dataUrl: c.toDataURL('image/jpeg', 0.85), sec: v.currentTime }; } catch { toast('Frame capture blocked by the player'); return null; }
+    }
+    async function captureFrame() {
+      const f = grabFrame();
+      if (!f) return null;
       const s = await L.db.getSettings();
       if (!L.vault.enabled(s)) { toast('Set the knowledge base folder in Library › Settings to save frames'); return null; }
-      const sec = v.currentTime;
-      const embed = await L.vault.saveFrame(s, video, dataUrl, sec);
-      return { embed, sec };
+      const embed = await L.vault.saveFrame(s, video, f.dataUrl, f.sec);
+      return { embed, sec: f.sec };
+    }
+    // Chat camera: the frame goes to the model; saved to the vault too when a folder is set.
+    async function chatFrame() {
+      const f = grabFrame();
+      if (!f) return null;
+      const s = await L.db.getSettings();
+      if (L.vault.enabled(s)) f.embed = await L.vault.saveFrame(s, video, f.dataUrl, f.sec).catch(() => undefined);
+      return f;
     }
     notesView = L.notes.createNotesView({
       video,

@@ -146,7 +146,7 @@ export function chatToMd(video, chat) {
   }, chat.fm);
   const body = chat.messages.map((m) => {
     // A content line that looks like a callout header would parse as a new message: escape the bracket.
-    const lines = String(m.content).replace(/\s+$/, '').split('\n')
+    const lines = ((m.embed ? m.embed + '\n' : '') + String(m.content)).replace(/\s+$/, '').split('\n')
       .map((l) => l.replace(TAG_ESC, '\\[!$1]'))
       .map((l) => (l ? `> ${l}` : '>'));
     return `> [!${ROLE_TAG[m.role] || m.role}] ${ROLE_WORD[m.role] || m.role} · ${localStamp(m.ts)}\n${lines.join('\n')}\n`;
@@ -169,7 +169,10 @@ function parseCallouts(body) {
       cur = null; // first non-quoted line closes the callout
     }
   }
-  return messages.map(({ role, ts, lines }) => ({ role, ts, content: lines.join('\n').replace(/\s+$/, '') }));
+  return messages.map(({ role, ts, lines }) => {
+    const embed = /^!\[\[attachments\/[^\]]+\]\]$/.test(lines[0] ?? '') ? lines.shift() : null; // frame capture (chat camera)
+    return { role, ts, content: lines.join('\n').replace(/\s+$/, ''), ...(embed ? { embed } : {}) };
+  });
 }
 
 function parseMarkers(body) {

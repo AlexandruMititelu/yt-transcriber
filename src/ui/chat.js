@@ -3,9 +3,10 @@
 import * as db from '../lib/db.js';
 import * as llm from '../lib/llm.js';
 import * as vault from '../lib/vault.js';
+import { fmtTime } from '../lib/format.js';
 import { createPicker } from './picker.js';
 import { createChatBar, confirmBox } from './chatbar.js';
-import { globeIcon, copyIcon, checkIcon } from './icons.js';
+import { globeIcon, copyIcon, checkIcon, cameraIcon } from './icons.js';
 import { keysFor } from '../../config/hotkeys.js';
 import { PROMPTS, parsePrompts } from '../../config/prompts.js';
 
@@ -61,6 +62,34 @@ export function createChatView(opts) {
     toast(on ? 'Web search on' : 'Web search off');
   }
   webBtn.addEventListener('click', toggleWeb);
+  // Frame capture (watch page only): opts.onFrame() → {dataUrl, sec, embed?} | null, attached to the next message.
+  let frame = null;
+  const attach = h('div', 'ytx-chat-attach');
+  attach.hidden = true;
+  function setFrame(f) {
+    frame = f;
+    attach.textContent = '';
+    attach.hidden = !f;
+    if (!f) return;
+    const img = h('img', 'ytx-chat-attach-img');
+    img.src = f.dataUrl;
+    img.alt = 'Captured frame';
+    const x = h('button', 'ytx-chat-attach-x', '✕');
+    x.type = 'button';
+    x.title = 'Remove frame';
+    x.setAttribute('aria-label', 'Remove frame');
+    x.addEventListener('click', () => setFrame(null));
+    attach.append(img, h('span', 'ytx-chat-attach-at', `@${fmtTime(f.sec)}`), x);
+  }
+  const camBtn = h('button', 'ytx-chat-web ytx-chat-cam');
+  camBtn.type = 'button';
+  camBtn.title = 'Attach the current video frame';
+  camBtn.setAttribute('aria-label', 'Attach the current video frame');
+  camBtn.appendChild(cameraIcon());
+  camBtn.addEventListener('click', async () => {
+    const f = await opts.onFrame();
+    if (f && live()) { setFrame(f); ta.focus(); }
+  });
   const pill = h('div', 'ytx-chat-pill');
   const tools = h('div', 'ytx-chat-tools');
   let lastSettings = null; // cached for the empty-state hint; picker's onChange keeps it fresh
@@ -70,13 +99,19 @@ export function createChatView(opts) {
     onChange: (s) => { lastSettings = s; if (!cur()?.messages.length) refresh(); else paintCtx(); },
   }), webBtn, sendBtn);
   const modelId = () => (lastSettings ? llm.parseModel(lastSettings.model).id : '');
+  // Transcript past the model's cap → left out of the prompt, model searches it with llm.transcriptTools.
+  const retrieval = (id) => llm.promptCoverage(segments(), llm.contextCap(id)) < 1;
+  const sysPrompt = (id, s = {}) => llm.buildSystemPrompt({
+    title: video.title, channel: video.channel, segments: segments(), aboutMe: s.aboutMe, tone: s.tone,
+    webSearch: !!s.webSearch, cap: llm.contextCap(id), retrieval: retrieval(id),
+    duration: video.transcript?.duration ?? 0, chapters: video.transcript?.chapters ?? [],
+  });
   // Context meter: last reply's real usage, else a chars/3.5 estimate of the system prompt.
   function paintCtx() {
     const id = modelId();
     const win = llm.contextWindow(id);
     const last = [...(cur()?.messages ?? [])].reverse().find((m) => m.usage);
-    const used = last ? last.usage.in + last.usage.out
-      : Math.round(llm.buildSystemPrompt({ title: video.title, channel: video.channel, segments: segments(), cap: llm.contextCap(id) }).length / llm.CHARS_PER_TOKEN);
+    const used = last ? last.usage.in + last.usage.out : Math.round(sysPrompt(id).length / llm.CHARS_PER_TOKEN);
     ctx.textContent = `${last ? '' : '~'}${llm.fmtK(used)} / ${llm.fmtK(win)}`;
     ctx.title = (last ? 'Context used by the last reply' : 'Estimated prompt size') + ` (${Math.round(100 * used / win)}% of the model's window)`;
     ctx.classList.toggle('is-warn', used / win > 0.8);
@@ -168,6 +203,8 @@ export function createChatView(opts) {
       el.append(renderMd(m.content), copyBtn(m.content));
       if (m.usage) el.append(h('span', 'ytx-msg-usage', llm.fmtUsage(m.model, m.usage)));
     } else {
+      if (m.image) { const img = h('img', 'ytx-msg-img'); img.src = m.image; img.alt = 'Captured frame'; el.append(img); }
+      if (m.sec != null) el.append(h('span', 'ytx-msg-at', `@${fmtTime(m.sec)}`));
       el.append(h('div', 'ytx-msg-text', m.content));
     }
     return el;
@@ -197,8 +234,7 @@ export function createChatView(opts) {
       const empty = h('div', 'ytx-chat-empty');
       empty.append(h('div', 'ytx-chat-empty-title', 'Ask anything about this video'),
         h('div', 'ytx-chat-empty-hint', 'Answers cite timestamps you can click. Pick a preset below or type your own.'));
-      const cov = llm.promptCoverage(segments(), llm.contextCap(modelId()));
-      if (cov < 1) empty.append(h('div', 'ytx-chat-empty-warn', `Long video: only the first ${Math.round(cov * 100)}% of the transcript fits the prompt.`));
+      if (retrieval(modelId())) empty.append(h('div', 'ytx-chat-empty-warn', 'Long video: the transcript does not fit this model, so it will search the transcript instead. Slower, but nothing is cut off.'));
       list.append(empty);
     } else {
       for (const m of c.messages) list.append(bubble(m));
@@ -279,18 +315,16 @@ export function createChatView(opts) {
       const settings = await db.getSettings();
       lastSettings = settings;
       if (settings.webSearch) status.textContent = 'Thinking… (web search on)';
+      const id = llm.parseModel(settings.model).id;
       const reply = await llm.chat({
         settings,
-        system: llm.buildSystemPrompt({
-          title: video.title,
-          channel: video.channel,
-          segments: segments(),
-          aboutMe: settings.aboutMe,
-          tone: settings.tone,
-          webSearch: !!settings.webSearch,
-          cap: llm.contextCap(llm.parseModel(settings.model).id),
-        }),
-        messages: chat.messages.map(({ role, content }) => ({ role, content })),
+        system: sysPrompt(id, settings),
+        tools: retrieval(id) ? llm.transcriptTools(segments()) : null,
+        onTool: (name, input) => {
+          if (streamed) return;
+          status.textContent = name === 'search_transcript' ? `Searching transcript: ${input.query ?? ''}` : `Reading transcript ${input.from ?? ''} to ${input.to ?? ''}`;
+        },
+        messages: chat.messages.map(({ role, content, image }) => ({ role, content, image })),
         signal: ctl.signal,
         onText: (delta) => {
           if (myGen !== gen || !live()) return;
@@ -332,11 +366,14 @@ export function createChatView(opts) {
 
   async function send(text = ta.value) {
     text = String(text).trim();
-    if (!text || busy) return;
+    if (busy || (!text && !frame)) return;
     ta.value = '';
     autosize(ta);
     const chat = ensureChat();
-    chat.messages.push({ role: 'user', content: text, ts: Date.now() });
+    const m = { role: 'user', content: text || 'What is shown in this frame?', ts: Date.now() };
+    if (frame) Object.assign(m, { image: frame.dataUrl, sec: frame.sec, ...(frame.embed ? { embed: frame.embed } : {}) });
+    setFrame(null);
+    chat.messages.push(m);
     chat.updatedAt = Date.now();
     await save().catch((e) => console.warn('[ytx] save failed', e)); // a failed write must not wedge busy
     if (!live()) return;
