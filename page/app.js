@@ -274,15 +274,64 @@ function videoCard(v) {
       }
     },
   }, pinIcon());
+  wrap.classList.add('card');
   wrap.append(
-    el('a', { class: 'card', href: `#/video/${v.videoId}` },
+    el('a', { class: 'card-link', href: `#/video/${v.videoId}` },
       el('div', { class: 'card-title' }, v.title || v.videoId),
-      el('div', { class: 'card-meta' }, [v.channel, relTime(v.updatedAt)].filter(Boolean).join(' · ')),
-      v.tags?.length ? el('div', { class: 'ytx-tag-row card-tags' }, v.tags.map((t) => tagChip(t))) : null,
-      el('div', { class: 'card-badges' },
-        `${v.counts.segments} segments · ${v.counts.messages} messages · ${v.counts.cards} notes`)),
+      el('div', { class: 'card-meta' }, [v.channel, relTime(v.updatedAt)].filter(Boolean).join(' · '))),
+    cardTags(v, wrap),
+    el('div', { class: 'card-badges' },
+      `${v.counts.segments} segments · ${v.counts.messages} messages · ${v.counts.cards} notes`),
     el('div', { class: 'card-actions' }, pin, del));
   return wrap;
+}
+
+// Tag row on a card: chips + a "+" that opens the tag editor in a popover (no page repaint, no flicker).
+let openTagPop = null;
+function cardTags(v, wrap) {
+  const row = el('div', { class: 'ytx-tag-row card-tags' });
+  const add = el('button', { class: 'card-tag-add', type: 'button', title: 'Add tag', 'aria-label': 'Add tag' }, '+');
+  const paint = () => row.replaceChildren(...(v.tags ?? []).map((t) => tagChip(t)), add);
+  add.onclick = async (e) => {
+    e.stopPropagation();
+    if (openTagPop?.wrap === wrap) return openTagPop.close();
+    openTagPop?.close();
+    const all = [...new Set((await db.listVideos()).flatMap((x) => x.tags ?? []))].sort();
+    const pop = el('div', { class: 'card-tagpop' });
+    const ed = createTagEditor({
+      get: () => v.tags ?? [],
+      set: async (tags) => {
+        v.tags = tags;
+        paint();
+        ed.refresh();
+        const video = await db.getVideo(v.videoId);
+        if (!video) return;
+        video.tags = tags;
+        video.kept = true;
+        await db.saveVideo(video);
+        db.getSettings().then((st) => vault.syncTags(st, video)).catch((err) => toast(`Knowledge base: ${err.message}`));
+        tagCounts = new Map();
+        for (const x of await db.listVideos()) for (const t of x.tags ?? []) tagCounts.set(t, (tagCounts.get(t) || 0) + 1);
+      },
+      suggest: () => all,
+    });
+    pop.append(ed.root);
+    const onDown = (ev) => { if (!pop.contains(ev.target) && ev.target !== add) close(); };
+    const onKey = (ev) => { if (ev.key === 'Escape') { ev.stopPropagation(); close(); } };
+    function close() {
+      pop.remove();
+      window.removeEventListener('pointerdown', onDown, true);
+      window.removeEventListener('keydown', onKey, true);
+      if (openTagPop?.wrap === wrap) openTagPop = null;
+    }
+    wrap.append(pop);
+    window.addEventListener('pointerdown', onDown, true);
+    window.addEventListener('keydown', onKey, true);
+    openTagPop = { wrap, close };
+    ed.focus();
+  };
+  paint();
+  return row;
 }
 
 // ---------- video detail ----------

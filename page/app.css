@@ -66,14 +66,30 @@ button:disabled { opacity: 0.5; cursor: default; }
   background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 14px 16px;
   color: var(--text);
-  transition: box-shadow 0.15s ease, transform 0.15s ease;
+  transition: box-shadow 0.15s ease;
 }
-.card:hover { box-shadow: var(--shadow); transform: translateY(-1px); }
+.card:hover { box-shadow: var(--shadow); }
+.card-link { display: block; color: inherit; }
+.card-link:hover .card-title { color: var(--accent); }
+.card-tags { margin: 0 0 8px; align-items: center; }
+.card-tag-add {
+  width: 20px; height: 20px; border: 1px dashed var(--muted); border-radius: 999px; padding: 0;
+  background: none; color: var(--muted); font: inherit; font-size: 13px; line-height: 1; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; opacity: 0.6;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+}
+.card:hover .card-tag-add, .card-tag-add:focus-visible { opacity: 1; }
+.card-tag-add:hover { background: var(--accent); border-color: var(--accent); color: #fff; opacity: 1; }
+.card-tagpop {
+  position: absolute; left: 12px; right: 12px; top: 100%; margin-top: -8px; z-index: 20; padding: 10px;
+  border: 1px solid var(--border); border-radius: 12px; background: var(--surface);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 12px 32px rgba(0, 0, 0, 0.18);
+}
 .card-title {
   font-weight: 600; margin-bottom: 4px; padding-right: 60px;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
-.card-meta { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+.card-meta { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
 .card-badges { color: var(--muted); font-family: var(--font-mono); font-size: 11px; }
 .card-actions { position: absolute; top: 8px; right: 8px; display: flex; gap: 2px; }
 .card-del, .card-pin { opacity: 0.35; transition: opacity 0.15s ease; width: 28px; height: 28px; font-size: 14px; }
@@ -154,7 +170,6 @@ kbd { font-family: var(--font-mono); font-size: 11.5px; padding: 1px 6px; border
 .lib-tag-menu { padding: 6px 8px 8px; max-width: 360px; }
 .lib-tag-empty { padding: 8px 10px; color: var(--muted); font-size: 12.5px; }
 .lib-tagdd.on { color: var(--accent); border-color: var(--accent); }
-.card-tags { margin-bottom: 8px; }
 .detail-head .ytx-tags { margin-top: 6px; max-width: 420px; }
 .lib-tools .segmented { margin: 0; }
 .lib-search { flex: 1; min-width: 180px; width: auto; border-radius: 999px; padding: 6px 14px; }
@@ -218,5 +233,5 @@ kbd { font-family: var(--font-mono); font-size: 11.5px; padding: 1px 6px; border
 .field-col { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
 .field-col textarea { width: 100%; }
 .icon-btn .ytx-ico { width: 18px; height: 18px; }
-.card-del .ytx-ico { width: 15px; height: 15px; }
+.card-del .ytx-ico, .card-pin .ytx-ico { width: 15px; height: 15px; }
 .card-del:hover { color: #ff453a; }
