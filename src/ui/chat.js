@@ -160,7 +160,7 @@ export function createChatView(opts) {
     onDelete: () => {
       const c = cur();
       if (!c) return;
-      list.replaceChildren(confirmBox({
+      const box = confirmBox({
         text: `Delete "${c.title}"? This removes it from the knowledge base too.`,
         onCancel: refresh,
         onConfirm: () => {
@@ -171,7 +171,10 @@ export function createChatView(opts) {
           disk((s) => vault.removeChat(s, video, c));
           refresh();
         },
-      }));
+      });
+      box.addEventListener('keydown', (e) => { if (e.key === 'Escape' || (e.key === 'Backspace' && e.altKey)) { e.preventDefault(); e.stopPropagation(); refresh(); } });
+      list.replaceChildren(box);
+      box.querySelector('.ytx-confirm-danger')?.focus(); // Enter deletes, Esc / Alt+Backspace keeps
     },
   });
   root.append(bar.root, list, newPill, composer);
@@ -432,5 +435,6 @@ export function createChatView(opts) {
     focus: () => ta.focus(),
     prefill: (text) => { ta.value = text; autosize(ta); ta.focus(); ta.selectionStart = ta.selectionEnd = ta.value.length; },
     isBusy: () => busy,
+    openChats: () => bar.open(),
   };
 }

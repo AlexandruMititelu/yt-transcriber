@@ -10,7 +10,8 @@ function h(tag, cls, text) {
 }
 
 // { chats: () => [{id,title}], activeId: () => id, onSelect(id), onNew(), onRename(title), onDelete() }
-// → { root, refresh() }
+// → { root, refresh(), open() }  open() = keyboard mode: menu with the current chat focused; arrows move,
+//   Enter opens a chat, Alt+Enter deletes the focused chat (host confirms), Esc closes.
 export function createChatBar({ chats, activeId, onSelect, onNew, onRename, onDelete }) {
   const root = h('div', 'ytx-chatbar');
   const trigger = h('button', 'ytx-chatbar-trigger');
@@ -39,7 +40,9 @@ export function createChatBar({ chats, activeId, onSelect, onNew, onRename, onDe
     const cur = current();
     const list = chats();
     for (const c of list) {
-      menu.append(row(c.title, { checked: cur?.id === c.id }, () => { closeMenu(); onSelect(c.id); refresh(); }));
+      const r = row(c.title, { checked: cur?.id === c.id }, () => { closeMenu(); onSelect(c.id); refresh(); });
+      r.dataset.chat = c.id;
+      menu.append(r);
     }
     if (list.length) menu.append(h('div', 'ytx-chatbar-sep'));
     menu.append(row('New chat', { icon: '+' }, () => { closeMenu(); onNew(); refresh(); }));
@@ -55,13 +58,28 @@ export function createChatBar({ chats, activeId, onSelect, onNew, onRename, onDe
   }
 
   const onDoc = (e) => { if (!e.composedPath().includes(root)) closeMenu(); };
-  const onKey = (e) => { if (e.key === 'Escape') closeMenu(); };
-  function openMenu() {
+  const onKey = (e) => {
+    if (e.key === 'Escape') { closeMenu(); trigger.focus(); return; }
+    const rows = [...menu.querySelectorAll('.ytx-chatbar-item:not(:disabled)')];
+    const i = rows.indexOf(document.activeElement);
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault(); e.stopPropagation();
+      rows[i < 0 ? 0 : (i + (e.key === 'ArrowDown' ? 1 : rows.length - 1)) % rows.length]?.focus();
+    } else if (e.key === 'Enter' && e.altKey && document.activeElement?.dataset.chat) {
+      e.preventDefault(); e.stopPropagation();
+      const id = document.activeElement.dataset.chat;
+      closeMenu();
+      if (id !== activeId()) { onSelect(id); refresh(); }
+      onDelete();
+    }
+  };
+  function openMenu({ keyboard = false } = {}) {
     renderMenu();
     menu.classList.add('is-open');
     trigger.classList.add('is-open');
     window.addEventListener('pointerdown', onDoc, true);
     window.addEventListener('keydown', onKey, true);
+    if (keyboard) (menu.querySelector(`[data-chat="${CSS.escape(activeId() ?? '')}"]`) ?? menu.querySelector('.ytx-chatbar-item'))?.focus();
   }
   function closeMenu() {
     menu.classList.remove('is-open');
@@ -104,7 +122,7 @@ export function createChatBar({ chats, activeId, onSelect, onNew, onRename, onDe
   trigger.addEventListener('dblclick', (e) => { e.stopPropagation(); closeMenu(); startRename(); });
 
   refresh();
-  return { root, refresh };
+  return { root, refresh, open: () => (menu.classList.contains('is-open') ? closeMenu() : openMenu({ keyboard: true })) };
 }
 
 // Inline confirmation: { text, confirmLabel = 'Delete', onConfirm, onCancel } → element

@@ -679,7 +679,7 @@
       } else if (hk === 'webSearch') {
         if (activeTab === 'chat') toggleWeb(); // only meaningful while chatting
       } else if (hk === 'focusChat') {
-        selectTab('chat'); chatView.focus();
+        selectTab('chat'); chatView.openChats();
       } else if (hk === 'findTranscript') {
         selectTab('transcript'); search.focus();
       } else if (hk === 'newNote') {
@@ -687,7 +687,8 @@
       } else if (hk === 'quickNote') {
         selectTab('notes'); notesView.addNote('quick');
       } else if (hk === 'toggleNote') {
-        selectTab('notes'); notesView.toggle();
+        if (activeTab === 'chat') chatView.focus();
+        else { selectTab('notes'); notesView.toggle(); }
       } else if (hk === 'deleteNote') {
         selectTab('notes'); notesView.focusDelete();
       } else if (hk === 'tags') {

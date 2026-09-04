@@ -476,13 +476,14 @@ async function renderDetail(videoId) {
     } else if (hk === 'webSearch') {
       if (cur === 'Chat') built.Chat?.__toggleWeb?.();
     } else if (hk === 'focusChat') {
-      show('Chat'); built.Chat?.__focus?.();
+      show('Chat'); built.Chat?.__openChats?.();
     } else if (hk === 'findTranscript') {
       show('Transcript'); built.Transcript?.querySelector?.('.tr-search')?.focus();
     } else if (hk === 'newNote' || hk === 'quickNote') {
       show('Notes'); built.Notes?.__view?.addNote(hk === 'quickNote' ? 'quick' : 'note');
     } else if (hk === 'toggleNote') {
-      show('Notes'); built.Notes?.__view?.toggle();
+      if (cur === 'Chat') built.Chat?.__focus?.();
+      else { show('Notes'); built.Notes?.__view?.toggle(); }
     } else if (hk === 'deleteNote') {
       show('Notes'); built.Notes?.__view?.focusDelete();
     } else if (hk === 'tags') {
@@ -601,6 +602,7 @@ function chatPane(video, disk) {
   root.__toggleWeb = view.toggleWeb;
   root.__cancel = view.cancel;
   root.__focus = view.focus;
+  root.__openChats = view.openChats;
   return root;
 }
 
