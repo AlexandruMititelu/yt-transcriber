@@ -188,15 +188,25 @@
       await save();
       if (live()) toast('Saved to library');
     });
-    const refetchBtn = h('button', 'ytx-icon-btn');
+    const refetchBtn = h('button', 'ytx-icon-btn ytx-tr-refetch'); // lives in the transcript toolbar
     refetchBtn.appendChild(L.icons.refreshIcon());
     refetchBtn.title = 'Refetch transcript';
     refetchBtn.setAttribute('aria-label', 'Refetch transcript');
+    // Archive: moves the video folder under YT-transcriber/Archive (unarchive moves it back).
+    const archiveBtn = h('button', 'ytx-icon-btn ytx-archive');
+    archiveBtn.appendChild(L.icons.archiveIcon());
+    const paintArchive = () => {
+      archiveBtn.classList.toggle('is-on', !!video.archived);
+      archiveBtn.title = video.archived ? 'Archived (in YT-transcriber/Archive). Click to unarchive' : 'Archive: move this video into YT-transcriber/Archive';
+      archiveBtn.setAttribute('aria-pressed', video.archived ? 'true' : 'false');
+    };
+    paintArchive();
+    archiveBtn.setAttribute('aria-label', 'Archive');
     const pinBtn = h('button', 'ytx-icon-btn ytx-pin');
     pinBtn.appendChild(L.icons.pinIcon());
     const paintPin = () => {
       pinBtn.classList.toggle('is-on', !!video.pinned);
-      pinBtn.title = video.pinned ? 'Pinned (in YT-transcriber/pinned). Click to unpin' : 'Pin: move this video into YT-transcriber/pinned';
+      pinBtn.title = video.pinned ? 'Pinned (in YT-transcriber/Pinned). Click to unpin' : 'Pin: move this video into YT-transcriber/Pinned';
     };
     paintPin();
     pinBtn.setAttribute('aria-label', 'Pin');
@@ -241,7 +251,7 @@
     });
     document.addEventListener('click', (e) => { if (!tagWrap.contains(e.target)) tagPop.classList.remove('is-open'); }, true);
     paintTags();
-    header.append(addBtn, tagWrap, refetchBtn, pinBtn, libraryBtn);
+    header.append(addBtn, tagWrap, archiveBtn, pinBtn, libraryBtn);
     panel.appendChild(header);
 
     const tabsBar = h('div', 'ytx-tabs');
@@ -294,6 +304,25 @@
 
     /* ---- header actions ---- */
     refetchBtn.addEventListener('click', () => loadTranscript(true));
+    archiveBtn.addEventListener('click', async () => {
+      archiveBtn.disabled = true;
+      try {
+        const settings = await L.db.getSettings();
+        const was = !!video.archived;
+        if (was) await L.vault.unarchive(settings, video);
+        else await L.vault.archive(settings, video);
+        video.kept = true;
+        await save();
+        if (!live()) return;
+        paintArchive();
+        paintPin();
+        toast(was ? 'Unarchived' : 'Archived');
+      } catch (e) {
+        if (live()) toast(e.message === 'no-vault' ? 'Set the knowledge base folder in Library › Settings' : `Archive failed: ${e.message}`);
+      } finally {
+        archiveBtn.disabled = false;
+      }
+    });
     libraryBtn.addEventListener('click', () => L.bus.call({ type: 'open-library' }).catch(() => {}));
     // Toggle: pin moves the video folder under YT-transcriber/pinned (with a summary .md); unpin moves it back.
     pinBtn.addEventListener('click', async () => {
@@ -306,6 +335,7 @@
         await save();
         if (!live()) return;
         paintPin();
+        paintArchive();
         toast(wasPinned ? 'Unpinned' : 'Pinned to knowledge base');
       } catch (e) {
         if (live()) toast(e.message === 'no-vault' ? 'Set the knowledge base folder in Library › Settings' : `Pin failed: ${e.message}`);
@@ -380,7 +410,7 @@
     const followBtn = h('button', 'ytx-follow', 'Follow');
     followBtn.title = 'Highlight and scroll to the part of the transcript being played';
     followBtn.setAttribute('aria-pressed', 'false');
-    bar.append(search, trackWrap, copyAll, followBtn);
+    bar.append(search, trackWrap, refetchBtn, copyAll, followBtn);
     function paintFollow() { followBtn.classList.toggle('is-on', followOn); followBtn.setAttribute('aria-pressed', followOn ? 'true' : 'false'); }
     // Query matches are wrapped in <mark>; text nodes are built by hand (never innerHTML).
     function highlight(el, text) {

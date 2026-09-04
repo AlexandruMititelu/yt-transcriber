@@ -1,8 +1,8 @@
 // Knowledge-base folder (Obsidian vault) mirror. Disk is the source of truth when settings.vaultDir is set:
 //   <vaultDir>/YT-transcriber/<video>/notes/<note>.md  one file per card (quick note or note)
 //   <vaultDir>/YT-transcriber/<video>/chats/<chat>.md  one file per chat
-//   <vaultDir>/YT-transcriber/pinned/<video>/...       the same tree, moved here while the video is pinned,
-//                                                      plus <video>/<video>.md (title, url, transcript)
+//   <vaultDir>/YT-transcriber/Pinned/<video>/...       the same tree, moved here while the video is pinned
+//   <vaultDir>/YT-transcriber/Archive/<video>/...      … or archived (one location at a time; the hub note is stamped)
 // Pure builders/parsers are exported for tests; async ops go through the native host (bus.native).
 
 import { native } from './bus.js';
@@ -10,7 +10,10 @@ import { parseTagList } from './tags.js';
 import { fmtTime } from './format.js';
 
 export const ROOT_NAME = 'YT-transcriber';
-export const PINNED_DIR = 'pinned';
+export const PINNED_DIR = 'Pinned';
+export const ARCHIVE_DIR = 'Archive';
+const LOCS = ['', PINNED_DIR, ARCHIVE_DIR];
+export const locOf = (video) => (video.archived ? ARCHIVE_DIR : video.pinned ? PINNED_DIR : '');
 
 export const enabled = (settings) => !!(settings && settings.vaultDir);
 
@@ -208,10 +211,10 @@ export function parseChat(md) {
   return out;
 }
 
-const HUB_KEYS = new Set(['ytx', 'id', 'url', 'title', 'channel', 'duration', 'length', 'lang', 'saved', 'pinned', 'tags']);
+const HUB_KEYS = new Set(['ytx', 'id', 'url', 'title', 'channel', 'duration', 'length', 'lang', 'saved', 'pinned', 'archived', 'tags']);
 // `tags` from a hub note's front matter in whatever spelling Obsidian left it (flow list, block list, plain).
 export const tagsOf = (meta, raw) => ('tags' in raw ? parseTagList(raw.tags.includes('\n') ? raw.tags : meta.tags) : null);
-const hubMeta = (video, pinnedAt) => ({
+const hubMeta = (video, pinnedAt, archivedAt) => ({
   ytx: 'video',
   id: video.videoId,
   url: video.url,
@@ -222,12 +225,13 @@ const hubMeta = (video, pinnedAt) => ({
   lang: video.transcript?.lang,
   saved: iso(video.savedAt),
   pinned: pinnedAt ? iso(pinnedAt) : undefined,
+  archived: archivedAt ? iso(archivedAt) : undefined,
   tags: video.tags?.length ? video.tags : undefined,
 });
 
 // <video>/<video>.md — the hub note every video gets: title, link, chapters, link to Transcript.md.
 // Body is the user's after the first write; pin/unpin only touch the front matter.
-export function videoToMd(video, { pinnedAt = video.pinned?.at } = {}) {
+export function videoToMd(video, { pinnedAt = video.pinned?.at, archivedAt = video.archived?.at } = {}) {
   const lines = [`# ${video.title || video.videoId}`, '', `[Watch on YouTube](${video.url})`];
   if (video.channel) lines.push(`Channel: ${video.channel}`);
   if (video.transcript?.duration) lines.push(`Length: ${fmtTime(video.transcript.duration)}`);
@@ -238,29 +242,33 @@ export function videoToMd(video, { pinnedAt = video.pinned?.at } = {}) {
     for (const c of chapters) lines.push(`- [${fmtTime(c.start)}](${video.url}&t=${Math.floor(c.start)}s) ${c.title}`);
   }
   lines.push('', '## Notes', '');
-  return frontmatter(hubMeta(video, pinnedAt)) + lines.join('\n') + '\n';
+  return frontmatter(hubMeta(video, pinnedAt, archivedAt)) + lines.join('\n') + '\n';
 }
 
 // Re-stamp our front matter on an existing hub note, keeping the body and any user keys verbatim.
 // Tags on disk win (edited in Obsidian) unless the caller is writing a tag change (`tagsFromApp`).
-export function restampHub(md, video, { pinnedAt, tagsFromApp = false } = {}) {
+export function restampHub(md, video, { pinnedAt = video.pinned?.at, archivedAt = video.archived?.at, tagsFromApp = false } = {}) {
   const { meta, body, raw } = parseFrontmatter(md);
   const disk = tagsOf(meta, raw);
   if (disk && !tagsFromApp) video.tags = disk;
-  return frontmatter(hubMeta(video, pinnedAt), extraOf(raw, HUB_KEYS)) + body;
+  return frontmatter(hubMeta(video, pinnedAt, archivedAt), extraOf(raw, HUB_KEYS)) + body;
 }
 
 // Legacy name kept for callers/tests: the pin summary is now the hub note with `pinned:` set.
 export const pinToMd = (video) => videoToMd(video, { pinnedAt: Date.now() });
 
-// YT-transcriber/Index.md: one line per video folder, pinned first. Built from what is on disk.
+// YT-transcriber/Index.md: one line per video folder: Pinned first, then All, Archive last. Built from what is on disk.
 export function indexToMd(entries) {
-  const row = (e) => `- [[${e.pinned ? `${PINNED_DIR}/` : ''}${e.folder}/${e.folder}|${e.title || e.folder}]]${e.channel ? ` · ${e.channel}` : ''}${e.tags?.length ? ' ' + e.tags.map((t) => `#${t}`).join(' ') : ''}`;
-  const pinned = entries.filter((e) => e.pinned);
-  const rest = entries.filter((e) => !e.pinned);
+  const locFor = (e) => e.loc ?? (e.pinned ? PINNED_DIR : '');
+  const row = (e) => `- [[${locFor(e) ? `${locFor(e)}/` : ''}${e.folder}/${e.folder}|${e.title || e.folder}]]${e.channel ? ` · ${e.channel}` : ''}${e.tags?.length ? ' ' + e.tags.map((t) => `#${t}`).join(' ') : ''}`;
+  const pinned = entries.filter((e) => locFor(e) === PINNED_DIR);
+  const archived = entries.filter((e) => locFor(e) === ARCHIVE_DIR);
+  const rest = entries.filter((e) => !locFor(e));
   const lines = ['# YT Transcriber', ''];
+  const sectioned = pinned.length || archived.length;
   if (pinned.length) lines.push('## Pinned', '', ...pinned.map(row), '');
-  lines.push(rest.length && pinned.length ? '## All' : '', ...(rest.length && pinned.length ? [''] : []), ...rest.map(row));
+  lines.push(rest.length && sectioned ? '## All' : '', ...(rest.length && sectioned ? [''] : []), ...rest.map(row));
+  if (archived.length) lines.push('', '## Archive', '', ...archived.map(row));
   return frontmatter({ ytx: 'index', updated: iso(Date.now()) }) + lines.filter((l, i, arr) => !(l === '' && arr[i - 1] === '')).join('\n') + '\n';
 }
 
@@ -284,9 +292,9 @@ function videoFolder(video) {
   }
   return video.folder;
 }
-const videoDirAt = (settings, video, pinned) =>
-  pinned ? join(rootDir(settings), PINNED_DIR, videoFolder(video)) : join(rootDir(settings), videoFolder(video));
-export const videoDir = (settings, video) => videoDirAt(settings, video, !!video.pinned);
+// loc = '' (root) | PINNED_DIR | ARCHIVE_DIR
+const videoDirAt = (settings, video, loc) => (loc ? join(rootDir(settings), loc, videoFolder(video)) : join(rootDir(settings), videoFolder(video)));
+export const videoDir = (settings, video) => videoDirAt(settings, video, locOf(video));
 const notesDir = (settings, video) => join(videoDir(settings, video), 'notes');
 const chatsDir = (settings, video) => join(videoDir(settings, video), 'chats');
 const hubPath = (settings, video) => join(videoDir(settings, video), `${videoFolder(video)}.md`);
@@ -331,7 +339,7 @@ export async function syncTags(settings, video) {
   await ensureDirs(settings, video);
   const path = hubPath(settings, video);
   const { content } = await io(settings, { op: 'read', path });
-  if (content != null) await io(settings, { op: 'write', path, content: restampHub(content, video, { pinnedAt: video.pinned?.at, tagsFromApp: true }) });
+  if (content != null) await io(settings, { op: 'write', path, content: restampHub(content, video, { tagsFromApp: true }) });
   // Children inherit: rewrite every note and chat file, restamp Transcript.md.
   for (const c of video.notes.cards) await syncNote(settings, video, c);
   for (const c of video.chats) await syncChat(settings, video, c);
@@ -341,19 +349,35 @@ export async function syncTags(settings, video) {
   await refreshIndex(settings).catch(() => {});
 }
 
-// Scan root + pinned/ for hub notes and rewrite Index.md.
+// Older vaults have a lowercase `pinned/`: rename it once (Windows is case-insensitive, so `Pinned` already resolves,
+// but the listing must show the proper name and Linux/macOS need the real rename).
+const casedRoots = new Set();
+async function fixCase(settings) {
+  const root = rootDir(settings);
+  if (casedRoots.has(root)) return;
+  casedRoots.add(root);
+  const { entries } = await io(settings, { op: 'list', path: root });
+  for (const e of entries) {
+    const want = LOCS.find((l) => l && l.toLowerCase() === e.name.toLowerCase());
+    if (e.dir && want && e.name !== want) await io(settings, { op: 'rename', from: join(root, e.name), to: join(root, want) }).catch(() => {});
+  }
+}
+
+// Scan root + Pinned/ + Archive/ for hub notes and rewrite Index.md.
 export async function refreshIndex(settings) {
   if (!enabled(settings)) return;
+  await fixCase(settings);
   const entries = [];
-  for (const pinned of [true, false]) {
-    const base = pinned ? join(rootDir(settings), PINNED_DIR) : rootDir(settings);
+  const special = new Set(LOCS.filter(Boolean).map((l) => l.toLowerCase()));
+  for (const loc of LOCS) {
+    const base = loc ? join(rootDir(settings), loc) : rootDir(settings);
     const { entries: ents } = await io(settings, { op: 'list', path: base });
     for (const e of ents) {
-      if (!e.dir || (!pinned && e.name === PINNED_DIR)) continue;
+      if (!e.dir || (!loc && special.has(e.name.toLowerCase()))) continue;
       const { content } = await io(settings, { op: 'read', path: join(base, e.name, `${e.name}.md`) });
       if (content == null) continue;
       const { meta, raw } = parseFrontmatter(content);
-      entries.push({ folder: e.name, pinned, title: meta.title || e.name, channel: meta.channel || '', tags: tagsOf(meta, raw) ?? [] });
+      entries.push({ folder: e.name, loc, pinned: loc === PINNED_DIR, title: meta.title || e.name, channel: meta.channel || '', tags: tagsOf(meta, raw) ?? [] });
     }
   }
   entries.sort((a, b) => String(a.title).localeCompare(String(b.title)));
@@ -464,39 +488,33 @@ async function dirExists(settings, dir) {
   return entries.length > 0;
 }
 
-// Pin = move the whole video folder under pinned/ and drop a summary .md inside it. Unpin moves it back.
-export async function pin(settings, video) {
+// Move the whole video folder between root / Pinned / Archive; the hub note gets `pinned:` / `archived:` stamped.
+async function moveTo(settings, video, loc) {
   if (!enabled(settings)) throw new Error('no-vault');
-  const from = videoDirAt(settings, video, false);
-  const to = videoDirAt(settings, video, true);
-  if (await dirExists(settings, from)) await io(settings, { op: 'rename', from, to });
-  video.pinned = { at: Date.now(), dir: to };
+  await fixCase(settings);
+  const from = videoDir(settings, video);
+  const to = videoDirAt(settings, video, loc);
+  if (from !== to && (await dirExists(settings, from))) await io(settings, { op: 'rename', from, to });
+  const now = Date.now();
+  video.pinned = loc === PINNED_DIR ? { at: now, dir: to } : null;
+  video.archived = loc === ARCHIVE_DIR ? { at: now, dir: to } : null;
   video.transcriptFile = null; // moved with the folder; re-stamp under the new path
   video.hubFile = null;
-  await ensureDirs(settings, video);
-  await stampHub(settings, video, video.pinned.at);
+  if (loc) await ensureDirs(settings, video);
+  await stampHub(settings, video);
   await refreshIndex(settings).catch(() => {});
   return to;
 }
+export const pin = (settings, video) => moveTo(settings, video, PINNED_DIR);
+export const unpin = (settings, video) => moveTo(settings, video, '');
+export const archive = (settings, video) => moveTo(settings, video, ARCHIVE_DIR);
+export const unarchive = (settings, video) => moveTo(settings, video, '');
 
-async function stampHub(settings, video, pinnedAt) {
+async function stampHub(settings, video) {
   const path = hubPath(settings, video);
   const { content } = await io(settings, { op: 'read', path });
-  await io(settings, { op: 'write', path, content: content == null ? videoToMd(video, { pinnedAt }) : restampHub(content, video, { pinnedAt }) });
+  await io(settings, { op: 'write', path, content: content == null ? videoToMd(video) : restampHub(content, video) });
   video.hubFile = path;
-}
-
-export async function unpin(settings, video) {
-  if (!enabled(settings)) throw new Error('no-vault');
-  const from = videoDirAt(settings, video, true);
-  const to = videoDirAt(settings, video, false);
-  if (await dirExists(settings, from)) await io(settings, { op: 'rename', from, to });
-  video.pinned = null;
-  video.transcriptFile = null;
-  video.hubFile = null;
-  await stampHub(settings, video, null);
-  await refreshIndex(settings).catch(() => {});
-  return to;
 }
 
 // Disk → record. Files win for anything that has a file; local items without a file get written
@@ -504,10 +522,14 @@ export async function unpin(settings, video) {
 export async function hydrate(settings, video) {
   if (!enabled(settings)) return;
   if (!video.folder && !hasTitle(video)) return; // nothing on disk can belong to a video we can't name yet
-  // Where the folder actually lives decides pinned state (moving it in Obsidian pins/unpins).
-  const inPinned = await dirExists(settings, videoDirAt(settings, video, true));
-  if (inPinned && !video.pinned) video.pinned = { at: Date.now(), dir: videoDirAt(settings, video, true) };
-  else if (!inPinned && video.pinned && (await dirExists(settings, videoDirAt(settings, video, false)))) video.pinned = null;
+  // Where the folder actually lives decides pinned / archived state (moving it in Obsidian does the same).
+  await fixCase(settings);
+  let where = null;
+  for (const loc of [ARCHIVE_DIR, PINNED_DIR, '']) if (await dirExists(settings, videoDirAt(settings, video, loc))) { where = loc; break; }
+  if (where != null && where !== locOf(video)) {
+    video.pinned = where === PINNED_DIR ? { at: video.pinned?.at || Date.now(), dir: videoDirAt(settings, video, where) } : null;
+    video.archived = where === ARCHIVE_DIR ? { at: video.archived?.at || Date.now(), dir: videoDirAt(settings, video, where) } : null;
+  }
   const nDir = notesDir(settings, video);
   const cDir = chatsDir(settings, video);
   const [noteFiles, chatFiles] = await Promise.all([listMd(settings, nDir), listMd(settings, cDir)]);

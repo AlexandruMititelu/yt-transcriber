@@ -455,8 +455,10 @@
 #ytx-panel .ytx-tr-item:hover { background: var(--accent); color: #fff; }
 #ytx-panel .ytx-tr-item.is-on { font-weight: 600; color: var(--accent); }
 #ytx-panel .ytx-tr-item.is-on:hover { color: #fff; }
-#ytx-panel .ytx-tr-copy { width: 30px; height: 30px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface-2); }
-#ytx-panel .ytx-tr-copy:hover { color: var(--text); border-color: var(--muted); }
+#ytx-panel .ytx-tr-copy, #ytx-panel .ytx-tr-refetch { width: 30px; height: 30px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface-2); }
+#ytx-panel .ytx-tr-copy:hover, #ytx-panel .ytx-tr-refetch:hover { color: var(--text); border-color: var(--muted); }
+#ytx-panel .ytx-tr-refetch .ytx-ico { width: 14px; height: 14px; }
+#ytx-panel .ytx-archive.is-on { color: var(--accent); }
 
 #ytx-panel .ytx-chapter {
   display: flex;

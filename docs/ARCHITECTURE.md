@@ -322,7 +322,9 @@ When `settings.vaultDir` is set, files on disk are the source of truth. Layout:
                           time, start, link (url&t=Ns), color, created) + text; all dates local `YYYY-MM-DD HH:mm:ss`.
                           Any OTHER front-matter key (tags, aliases, cssclasses, lists…) is kept verbatim across writes.
                           Files without front matter (hand-written in Obsidian) = notes titled by filename.
-  pinned/<video>/         the same tree while the video is pinned (pin = rename the folder here, unpin =
+  Archive/<video>/        the same tree while archived (`archive`/`unarchive` = rename; hub note stamped `archived:`;
+                          Index.md lists them last under "## Archive"; the library shows them in a collapsed section)
+  Pinned/<video>/         the same tree while the video is pinned (pin = rename the folder here, unpin =
                           rename back; moving it by hand in Obsidian is detected on hydrate)
     chats/<chat>.md       front matter (ytx: chat, id (uuid), title, video, created, updated) + "# title" + messages,
                           each an Obsidian callout: "> [!info] You · YYYY-MM-DD HH:mm:ss" (user, blue) or
@@ -363,7 +365,8 @@ export async function removeNote(settings, video, card)
 export async function syncChat(settings, video, chat)           // → 'written' | 'reloaded'; skips empty chats with no file
 export function transcriptToMd(video) / syncTranscript(settings, video)  // <video>/Transcript.md, once per location (called from ensureDirs)
 export async function removeChat(settings, video, chat)
-export async function pin(settings, video)                      // throws Error('no-vault') when disabled; moves the folder under pinned/, restamps the hub note with pinned:, refreshes Index.md
+export async function pin(settings, video)                      // throws Error('no-vault') when disabled; moves the folder under Pinned/, restamps the hub note with pinned:, refreshes Index.md
+export async function archive(settings, video) / unarchive        // same via moveTo(loc): one location at a time ('' | PINNED_DIR 'Pinned' | ARCHIVE_DIR 'Archive'); locOf(video); fixCase renames a legacy lowercase pinned/ once
 export async function unpin(settings, video)                    // moves the folder back, restamps the hub note without pinned:, refreshes Index.md
 export async function hydrate(settings, video)                  // disk → record (see below); no-op when disabled; throws when host missing
 export async function syncTags(settings, video)                 // tag edit in the app → ensureDirs, restamp hub (tagsFromApp), refreshIndex
@@ -371,7 +374,7 @@ export const tagsOf = (meta, raw) => string[] | null           // hub front-matt
 ```
 All async ops are no-ops when `enabled(settings)` is false (except `pin`, which throws `no-vault`).
 
-`hydrate`: first decides pinned state from where the folder lives (pinned/ wins). Then lists `notes/` and
+`hydrate`: first decides pinned/archived state from where the folder lives (Archive/, then Pinned/, then root). Then lists `notes/` and
 `chats/`. Every `.md` there becomes a card/chat (identity = the `id` uuid in front matter, so a rename in
 Obsidian keeps the same card/chat; file name is the fallback for files without one); items
 whose file disappeared are dropped; local items with NO `file` yet are written (first run after enabling).

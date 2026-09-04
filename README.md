@@ -61,7 +61,8 @@ Layout inside the vault:
     notes/<first line>.md     quick note (front matter: kind, time, link, color)
     notes/<title>.md          note (front matter: kind, title, link, tags inherited from the video)
     chats/<chat title>.md     one file per chat (one callout per message: you = blue info, assistant = purple example)
-  pinned/<video title>/       the same tree while pinned (hub note gets `pinned:`)
+  Pinned/<video title>/       the same tree while pinned (hub note gets `pinned:`)
+  Archive/<video title>/      the same tree while archived (hub note gets `archived:`)
 ```
 
 Files win: when you open a video, the extension re-reads these folders. Edit a note in Obsidian and the
@@ -69,7 +70,7 @@ panel shows it; delete a file and the note/chat is gone; rename a chat or note f
 Tags, aliases or any other front-matter keys you add in Obsidian are kept. If a file changes on disk while
 the panel is open, the panel reloads it instead of overwriting (toast "Changed in Obsidian").
 A markdown file you write by hand in `notes/` becomes a note titled by its filename. Move a video folder
-into or out of `pinned/` and the pin state follows. The hub note's body is yours: pin/unpin only touch its
+into or out of `Pinned/` or `Archive/` and the pin/archive state follows (an old lowercase `pinned/` is renamed once). The hub note's body is yours: pin/unpin only touch its
 front matter.
 Notes and chats you had before setting the folder are written out the first time each video is opened.
 
@@ -88,7 +89,9 @@ Transcripts and settings live in the browser profile's `storage.local` — on th
 - **Quotes**: select text in a chat reply or a transcript row and Ctrl + right-click: Copy, Copy as quote, or Quote in a new note. The quote is a blockquote that links back: `[12:34](url&t=)` for transcript, `[[chats/<chat>|Chat: title]] · Assistant · 13:31` for chat (a wiki link Obsidian resolves; in the app it opens that chat)
 - **+** (header) saves the video to the library without notes or chats; just watching never creates an entry
 - **Tags**: the tag button in the panel header (and the **+** under the title in the Library, also on every card) tags the video; they land in the hub note's front matter as `tags:` and on its Index.md line as `#tags`, so Obsidian's tag pane, search and graph see them. Edit them in Obsidian and the app picks them up. Suggestions come from tags you already used. Library cards show them; the **Tags** pop-up in the toolbar lists every tag with counts, click to filter (several = all must match), and the grouping pop-up can group the library **By tag** next to **By channel**; search matches tags too. Every child file (notes, chats, Transcript.md) inherits the video's tags in its front matter, so `#ml` in Obsidian finds them all. A note's own tags are inline `#tags` in its text, like anywhere in Obsidian: type them, or press the **+** in the note's footer to pick from known tags (it appends `#tag` to the text, ✕ removes it); the notes tab shows them as chips and a filter row
-- **Pin** (top right) moves the video's folder into `YT-transcriber/pinned/` and turns yellow; press again to unpin. Pinned videos sit at the top of the Library, and every card has a pin
+- **Pin** (top right) moves the video's folder into `YT-transcriber/Pinned/` and turns yellow; press again to unpin. Pinned videos sit at the top of the Library, and every card has a pin
+- **Archive** (box icon next to the pin, also on cards and in the detail view) moves the folder into `YT-transcriber/Archive/`; archived videos leave the main list and sit in a collapsed "Archived" section at the bottom of the Library, last in Index.md. Pinning an archived video unarchives it and vice versa
+- **Refetch transcript** (⟳) sits in the transcript toolbar
 - **⧉** opens the Library: browse saved videos, reopen transcript/chat/notes, delete, settings
 
 ## Ship to Zen (from WSL)

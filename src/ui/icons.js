@@ -34,3 +34,4 @@ export const checkIcon = () => svg('<path d="M5 12l5 5L20 7"/>', 'ytx-ico ytx-ic
 export const arrowUpIcon = () => svg('<path d="M12 19V5"/><path d="M5 12l7-7 7 7"/>', 'ytx-ico ytx-ico-arrow-up');
 export const stopIcon = () => svg('<rect x="6" y="6" width="12" height="12" rx="2"/>', 'ytx-ico ytx-ico-stop');
 export const tagIcon = () => svg('<path d="M3 12V4h8l9 9-8 8-9-9z"/><circle cx="7.5" cy="8.5" r="1.5"/>', 'ytx-ico ytx-ico-tag');
+export const archiveIcon = () => svg('<rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11h14V8"/><path d="M10 12h4"/>', 'ytx-ico ytx-ico-archive');

@@ -8,7 +8,7 @@ import { createNotesView } from '../src/ui/notes.js';
 import { createChatView } from '../src/ui/chat.js';
 import { renderMarkdown, setDark } from '../src/ui/markdown.js';
 import { createToaster } from '../src/ui/toast.js';
-import { pinIcon, chevronDown, copyIcon, gearIcon, chevronLeft, trashIcon } from '../src/ui/icons.js';
+import { pinIcon, chevronDown, copyIcon, gearIcon, chevronLeft, trashIcon, archiveIcon } from '../src/ui/icons.js';
 import { createTagEditor, tagChip } from '../src/ui/tags.js';
 import { attachQuoteMenu } from '../src/ui/quote.js';
 import { configureTagColors } from '../src/lib/tags.js';
@@ -88,6 +88,7 @@ const renderMdFor = (video) => (text) => renderMarkdown(text, { timeHref: (sec) 
 
 let libQuery = '';
 let libSort = 'recent'; // 'recent' | 'title' | 'channel'
+let libArchiveOpen = false; // archived section expanded
 let libTags = new Set(); // tag filter: a video must carry every selected tag
 let libGroup = 'none'; // 'none' | 'channel' | 'tag'
 let libShell = null; // header + tools, built once per visit to #/ — only the body inside .lib-stage repaints
@@ -210,8 +211,9 @@ async function paintLibrary(transition = 'fade') {
   for (const v of all) for (const t of v.tags ?? []) tagCounts.set(t, (tagCounts.get(t) || 0) + 1);
   if (libSort === 'title') vids = [...vids].sort((a, b) => (a.title || '').localeCompare(b.title || ''));
   else if (libSort === 'channel') vids = [...vids].sort((a, b) => (a.channel || '').localeCompare(b.channel || '') || b.updatedAt - a.updatedAt);
-  const pinned = vids.filter((v) => v.pinned);
-  const rest = vids.filter((v) => !v.pinned);
+  const archived = vids.filter((v) => v.archived);
+  const pinned = vids.filter((v) => v.pinned && !v.archived);
+  const rest = vids.filter((v) => !v.pinned && !v.archived);
   const section = (title, list) => el('section', { class: 'lib-section' },
     title ? el('h2', { class: 'lib-title' }, title) : null,
     el('div', { class: 'grid' }, list.map(videoCard)));
@@ -232,10 +234,24 @@ async function paintLibrary(transition = 'fade') {
   } else {
     body = el('div', {},
       pinned.length ? section('Pinned', pinned) : null,
-      grouped(rest, pinned.length ? 'Everything else' : null));
+      grouped(rest, pinned.length ? 'Everything else' : null),
+      archived.length ? el('details', { class: 'lib-archive', open: libArchiveOpen ? '' : null, ontoggle: (e) => { libArchiveOpen = e.target.open; } },
+        el('summary', { class: 'lib-title' }, `Archived · ${archived.length}`),
+        el('div', { class: 'grid' }, archived.map(videoCard))) : null);
   }
   libShell.count.textContent = `${all.length} videos`;
   swapBody(body, transition);
+}
+
+async function toggleArchive(videoId) {
+  const video = await db.getVideo(videoId);
+  if (!video) return;
+  const settings = await db.getSettings();
+  if (video.archived) await vault.unarchive(settings, video);
+  else await vault.archive(settings, video);
+  video.kept = true;
+  await db.saveVideo(video);
+  toast(video.archived ? 'Archived' : 'Unarchived');
 }
 
 async function togglePin(videoId) {
@@ -278,6 +294,21 @@ function videoCard(v) {
       }
     },
   }, pinIcon());
+  const arc = el('button', {
+    class: `card-arc icon-btn${v.archived ? ' on' : ''}`, title: v.archived ? 'Unarchive' : 'Archive', 'aria-label': v.archived ? 'Unarchive' : 'Archive', 'aria-pressed': v.archived ? 'true' : 'false',
+    onclick: async () => {
+      arc.disabled = true;
+      try {
+        await toggleArchive(v.videoId);
+        renderLibrary();
+      } catch (err) {
+        arc.disabled = false;
+        toast(err.message === 'no-vault'
+          ? el('span', {}, 'Set the knowledge base folder in ', el('a', { href: '#/settings' }, 'Settings'))
+          : `Archive failed: ${err.message}`);
+      }
+    },
+  }, archiveIcon());
   wrap.classList.add('card');
   wrap.append(
     el('a', { class: 'card-link', href: `#/video/${v.videoId}` },
@@ -286,7 +317,7 @@ function videoCard(v) {
     videoTagEditor(v).root,
     el('div', { class: 'card-badges' },
       `${v.counts.segments} segments · ${v.counts.messages} messages · ${v.counts.cards} notes`),
-    el('div', { class: 'card-actions' }, pin, del));
+    el('div', { class: 'card-actions' }, arc, pin, del));
   return wrap;
 }
 
@@ -343,11 +374,32 @@ async function renderDetail(videoId) {
 
   const tagEditor = videoTagEditor(video);
   const pinBtn = el('button', { class: 'icon-btn pin' }, pinIcon());
+  const arcBtn = el('button', { class: 'icon-btn arc' }, archiveIcon());
   const paintPin = () => {
     pinBtn.classList.toggle('on', !!video.pinned);
-    pinBtn.title = video.pinned ? 'Pinned (in YT-transcriber/pinned). Click to unpin' : 'Pin: move this video into YT-transcriber/pinned';
+    pinBtn.title = video.pinned ? 'Pinned (in YT-transcriber/Pinned). Click to unpin' : 'Pin: move this video into YT-transcriber/Pinned';
+    arcBtn.classList.toggle('on', !!video.archived);
+    arcBtn.title = video.archived ? 'Archived (in YT-transcriber/Archive). Click to unarchive' : 'Archive: move this video into YT-transcriber/Archive';
   };
   paintPin();
+  arcBtn.onclick = async () => {
+    arcBtn.disabled = true;
+    try {
+      const was = !!video.archived;
+      if (was) await vault.unarchive(await db.getSettings(), video);
+      else await vault.archive(await db.getSettings(), video);
+      video.kept = true;
+      await db.saveVideo(video);
+      paintPin();
+      toast(was ? 'Unarchived' : 'Archived');
+    } catch (err) {
+      toast(err.message === 'no-vault'
+        ? el('span', {}, 'Set the knowledge base folder in ', el('a', { href: '#/settings' }, 'Settings'))
+        : `Archive failed: ${err.message}`);
+    } finally {
+      arcBtn.disabled = false;
+    }
+  };
   pinBtn.onclick = async () => {
     pinBtn.disabled = true;
     try {
@@ -372,7 +424,7 @@ async function renderDetail(videoId) {
       el('a', { class: 'detail-title', href: video.url, target: '_blank' }, video.title || video.videoId),
       el('div', { class: 'detail-meta' }, video.channel || ''),
       tagEditor.root),
-    pinBtn);
+    arcBtn, pinBtn);
 
   const pane = el('div', { class: 'pane' });
   const panes = { Transcript: transcriptPane, Chat: chatPane, Notes: notesPane };

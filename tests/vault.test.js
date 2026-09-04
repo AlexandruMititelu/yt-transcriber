@@ -162,13 +162,13 @@ test('sync writes files under <vault>/YT-transcriber/<video>/{notes,chats}, rena
   assert.ok(v.pinned);
   assert.deepEqual([...files.keys()].sort(), [
     'C:\\Vault/YT-transcriber/Index.md',
-    'C:\\Vault/YT-transcriber/pinned/AB Title/AB Title.md',
-    'C:\\Vault/YT-transcriber/pinned/AB Title/Transcript.md',
-    'C:\\Vault/YT-transcriber/pinned/AB Title/chats/Greetings.md',
+    'C:\\Vault/YT-transcriber/Pinned/AB Title/AB Title.md',
+    'C:\\Vault/YT-transcriber/Pinned/AB Title/Transcript.md',
+    'C:\\Vault/YT-transcriber/Pinned/AB Title/chats/Greetings.md',
   ], 'whole video folder moved under pinned/, hub note stamped');
   chat.messages.push({ role: 'assistant', content: 'yo', ts: 2 });
   await vault.syncChat(settings, v, chat);
-  assert.ok(files.has('C:\\Vault/YT-transcriber/pinned/AB Title/chats/Greetings.md'), 'writes follow the pinned location');
+  assert.ok(files.has('C:\\Vault/YT-transcriber/Pinned/AB Title/chats/Greetings.md'), 'writes follow the pinned location');
   await vault.unpin(settings, v);
   assert.equal(v.pinned, null);
   assert.deepEqual([...files.keys()].sort(), ['C:\\Vault/YT-transcriber/AB Title/AB Title.md', 'C:\\Vault/YT-transcriber/AB Title/Transcript.md', 'C:\\Vault/YT-transcriber/AB Title/chats/Greetings.md', 'C:\\Vault/YT-transcriber/Index.md'], 'moved back, hub kept without pinned:');
@@ -211,7 +211,7 @@ test('hydrate: disk wins for files, local items without files get written, missi
 test('hydrate detects a folder moved into pinned/ by hand', async () => {
   files.clear();
   const v = db.blankVideo('abc', 'Vid');
-  files.set('C:\\Vault/YT-transcriber/pinned/Vid/notes/x.md', 'hi');
+  files.set('C:\\Vault/YT-transcriber/Pinned/Vid/notes/x.md', 'hi');
   await vault.hydrate(settings, v);
   assert.ok(v.pinned, 'pinned because the folder lives under pinned/');
   assert.equal(v.notes.cards[0].text, 'hi');
@@ -336,13 +336,13 @@ test('hub note + Index.md: written once per video, pin/unpin only restamp front 
   // user edits the hub body, adds a tag → pin keeps both
   writeDisk(hub, files.get(hub).replace('---\nytx', '---\ntags:\n  - talk\nytx').replace('## Notes\n', '## Notes\n\nmy thoughts\n'));
   await vault.pin(settings, video);
-  const pinnedHub = 'C:\\Vault/YT-transcriber/pinned/Hub video/Hub video.md';
+  const pinnedHub = 'C:\\Vault/YT-transcriber/Pinned/Hub video/Hub video.md';
   assert.ok(files.has(pinnedHub));
   assert.match(files.get(pinnedHub), /pinned: "\d{4}/);
   assert.match(files.get(pinnedHub), /tags: \[talk\]/); // tags are ours now: disk list read back, re-emitted as a flow list
   assert.deepEqual(video.tags, ['talk']);
   assert.match(files.get(pinnedHub), /my thoughts/);
-  assert.match(files.get('C:\\Vault/YT-transcriber/Index.md'), /## Pinned\n\n- \[\[pinned\/Hub video\/Hub video\|Hub video\]\]/);
+  assert.match(files.get('C:\\Vault/YT-transcriber/Index.md'), /## Pinned\n\n- \[\[Pinned\/Hub video\/Hub video\|Hub video\]\]/);
   await vault.unpin(settings, video);
   assert.ok(files.has(hub));
   assert.doesNotMatch(files.get(hub), /pinned:/);
@@ -373,4 +373,30 @@ test('hub note + Index.md: written once per video, pin/unpin only restamp front 
 test('legacy [!user]/[!assistant] callouts still parse to the right roles', () => {
   const back = vault.parseChat('# t\n\n> [!user] 2026-09-04 13:31:26\n> q\n\n> [!assistant] 2026-09-04 13:31:27\n> a\n');
   assert.deepEqual(back.messages.map((m) => [m.role, m.content]), [['user', 'q'], ['assistant', 'a']]);
+});
+
+test('archive moves the folder under Archive/, stamps archived:, Index.md lists it last; unarchive moves back', async () => {
+  files.clear(); mtimes.clear();
+  const video = db.blankVideo('arc1', 'Arc video');
+  const card = { id: 'c1', kind: 'quick', title: '', text: 'x', start: null, color: 0, ts: 1 };
+  video.notes.cards.push(card);
+  await vault.syncNote(settings, video, card);
+  await vault.archive(settings, video);
+  assert.ok(video.archived && !video.pinned);
+  const hub = 'C:\\Vault/YT-transcriber/Archive/Arc video/Arc video.md';
+  assert.ok(files.has(hub), 'folder moved under Archive/');
+  assert.match(files.get(hub), /archived: "\d{4}/);
+  assert.match(files.get('C:\\Vault/YT-transcriber/Index.md'), /## Archive\n\n- \[\[Archive\/Arc video\/Arc video\|Arc video\]\]/);
+  await vault.pin(settings, video); // archive → pinned directly
+  assert.ok(video.pinned && !video.archived);
+  assert.ok(files.has('C:\\Vault/YT-transcriber/Pinned/Arc video/Arc video.md'));
+  await vault.unarchive(settings, video);
+  assert.ok(!video.pinned && !video.archived);
+  assert.ok(files.has('C:\\Vault/YT-transcriber/Arc video/Arc video.md'));
+  assert.doesNotMatch(files.get('C:\\Vault/YT-transcriber/Arc video/Arc video.md'), /archived:|pinned:/);
+  // hydrate follows a folder moved into Archive/ by hand
+  files.set('C:\\Vault/YT-transcriber/Archive/Arc video/notes/x.md', files.get('C:\\Vault/YT-transcriber/Arc video/notes/x.md'));
+  for (const k of [...files.keys()]) if (k.startsWith('C:\\Vault/YT-transcriber/Arc video/')) files.delete(k);
+  await vault.hydrate(settings, video);
+  assert.ok(video.archived && !video.pinned, 'archived because the folder lives under Archive/');
 });
