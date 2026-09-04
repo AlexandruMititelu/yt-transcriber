@@ -5,9 +5,10 @@ export const HOTKEYS = [
   { id: 'viewMode', keys: 'Alt+V', desc: 'Note editor: view mode (rendered)' },
   { id: 'prevTab', keys: 'Alt+↑', desc: 'Previous tab (Transcript · Chat · Notes)' },
   { id: 'nextTab', keys: 'Alt+↓', desc: 'Next tab' },
+  { id: 'webSearch', keys: 'Alt+W', desc: 'Chat: toggle web search' },
 ];
 
-const BY_KEY = { e: 'editMode', v: 'viewMode', ArrowUp: 'prevTab', ArrowDown: 'nextTab' };
+const BY_KEY = { e: 'editMode', v: 'viewMode', w: 'webSearch', ArrowUp: 'prevTab', ArrowDown: 'nextTab' };
 
 // KeyboardEvent → hotkey id, or null. All shortcuts are Alt + key with no Ctrl/Meta/Shift.
 export function hotkeyId(e) {

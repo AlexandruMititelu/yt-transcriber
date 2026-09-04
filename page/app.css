@@ -33,8 +33,12 @@ button:disabled { opacity: 0.5; cursor: default; }
 .icon-btn:hover { background: var(--surface-2); color: var(--text); }
 .icon-btn.on { color: var(--accent); }
 .icon-btn.pin.on { color: #ffcc00; }
-.icon-btn.web.on { background: var(--surface-2); color: var(--accent); }
-.composer .icon-btn { margin-bottom: 4px; }
+.input-pill { flex: 1; display: flex; align-items: flex-end; gap: 4px; padding: 0 4px 0 6px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.input-pill textarea { background: none; border: 0; }
+.input-pill textarea:focus { border: 0; }
+.web-btn { width: 28px; height: 28px; margin-bottom: 6px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); }
+.web-btn:hover { color: var(--text); }
+.web-btn.on { color: var(--accent); background: rgba(0, 122, 255, 0.12); }
 .icon-btn.pin.on .ytx-ico-pin { fill: currentColor; }
 .ytx-md p { margin: 0 0 8px; }
 .ytx-md pre { background: var(--bg); border-radius: var(--radius-sm); padding: 8px; overflow-x: auto; }

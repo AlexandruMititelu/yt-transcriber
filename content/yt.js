@@ -410,22 +410,27 @@
     chatTa.rows = 1;
     const sendBtn = h('button', 'ytx-send', '↑');
     sendBtn.title = 'Send';
-    // Web search toggle (same setting as the picker's "Web search" row).
+    // Web search toggle lives inside the input pill (quiet icon; tinted when on). Alt+W toggles it too.
     const webBtn = h('button', 'ytx-web');
     webBtn.appendChild(L.icons.globeIcon());
+    const webKeys = L.hotkeys.keysFor('webSearch');
     const paintWeb = (on) => {
       webBtn.classList.toggle('is-on', !!on);
-      webBtn.title = on ? 'Web search on: the model can search the web and cite sources (click to turn off)' : 'Web search off (click to let the model search the web)';
+      webBtn.title = (on ? 'Web search on' : 'Web search off') + ` (${webKeys})`;
     };
     L.db.getSettings().then((s) => paintWeb(s.webSearch)).catch(() => {});
-    webBtn.addEventListener('click', async () => {
+    const toggleWeb = async () => {
       const s = await L.db.getSettings();
       const on = !s.webSearch;
       await L.db.saveSettings({ webSearch: on });
+      if (!live()) return;
       paintWeb(on);
       toast(on ? 'Web search on' : 'Web search off');
-    });
-    composer.append(chatTa, webBtn, sendBtn);
+    };
+    webBtn.addEventListener('click', toggleWeb);
+    const pill = h('div', 'ytx-input-pill');
+    pill.append(webBtn, chatTa);
+    composer.append(pill, sendBtn);
 
     const cur = () => video.chats.find((c) => c.id === video.activeChatId) ?? null;
     function ensureChat() {
@@ -620,6 +625,9 @@
       if (hk === 'prevTab' || hk === 'nextTab') {
         const i = TABS.indexOf(activeTab);
         selectTab(TABS[(i + (hk === 'nextTab' ? 1 : TABS.length - 1)) % TABS.length]);
+      } else if (hk === 'webSearch') {
+        selectTab('chat');
+        toggleWeb();
       } else if (typeof notesView !== 'undefined') {
         selectTab('notes');
         notesView.setMode(hk === 'editMode' ? 'edit' : 'view');

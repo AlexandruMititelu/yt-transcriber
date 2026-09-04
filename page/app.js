@@ -6,7 +6,7 @@ import { createPicker } from '../src/ui/picker.js';
 import { createChatBar, confirmBox } from '../src/ui/chatbar.js';
 import { createNotesView } from '../src/ui/notes.js';
 import { pinIcon, globeIcon } from '../src/ui/icons.js';
-import { HOTKEYS, hotkeyId } from '../config/hotkeys.js';
+import { HOTKEYS, hotkeyId, keysFor } from '../config/hotkeys.js';
 
 const $app = document.getElementById('app');
 const TS_RE = /(?:\[(?:\d+:)?\d{1,2}:\d{2}\]|@(?:\d+:)?\d{1,2}:\d{2})/g;
@@ -276,6 +276,9 @@ async function renderDetail(videoId) {
     if (hk === 'prevTab' || hk === 'nextTab') {
       const i = names.indexOf(cur);
       show(names[(i + (hk === 'nextTab' ? 1 : names.length - 1)) % names.length]);
+    } else if (hk === 'webSearch') {
+      show('Chat');
+      built.Chat?.__toggleWeb?.();
     } else if (built.Notes?.__view) {
       built.Notes.__view.setMode(hk === 'editMode' ? 'edit' : 'view');
     }
@@ -479,21 +482,24 @@ function chatPane(video, disk) {
     if (e.key === 'Escape' && cancel) cancel();
   });
   sendBtn.onclick = send;
-  const webBtn = el('button', { class: 'icon-btn web' }, globeIcon());
+  const webBtn = el('button', { class: 'web-btn' }, globeIcon());
   const paintWeb = (on) => {
     webBtn.classList.toggle('on', !!on);
-    webBtn.title = on ? 'Web search on (click to turn off)' : 'Web search off (click to let the model search the web)';
+    webBtn.title = (on ? 'Web search on' : 'Web search off') + ` (${keysFor('webSearch')})`;
   };
   db.getSettings().then((s) => paintWeb(s.webSearch));
-  webBtn.onclick = async () => {
+  const toggleWeb = async () => {
     const s = await db.getSettings();
     await db.saveSettings({ webSearch: !s.webSearch });
     paintWeb(!s.webSearch);
     toast(!s.webSearch ? 'Web search on' : 'Web search off');
   };
+  webBtn.onclick = toggleWeb;
   renderMsgs();
-  return el('div', { class: 'chat' }, bar.root, list,
-    el('div', { class: 'composer' }, input, webBtn, sendBtn), picker);
+  const root = el('div', { class: 'chat' }, bar.root, list,
+    el('div', { class: 'composer' }, el('div', { class: 'input-pill' }, webBtn, input), sendBtn), picker);
+  root.__toggleWeb = toggleWeb;
+  return root;
 }
 
 function notesPane(video, disk) {

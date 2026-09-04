@@ -520,13 +520,24 @@
   border-top: 1px solid var(--border);
 }
 
+#ytx-panel .ytx-input-pill {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  padding: 0 4px 0 6px;
+  border-radius: 18px;
+  background: var(--surface-2);
+}
+
 #ytx-panel .ytx-composer textarea {
   flex: 1;
+  min-width: 0;
   min-height: 34px;
   max-height: 96px;
-  padding: 8px 12px;
-  border-radius: 17px;
-  background: var(--surface-2);
+  padding: 8px 8px 8px 4px;
+  background: none;
   font-family: var(--font-mono);
   font-size: 12.5px;
   line-height: 1.4;
@@ -554,24 +565,30 @@
 
 #ytx-panel .ytx-web {
   flex: none;
-  width: 30px;
-  height: 30px;
-  margin-bottom: 2px;
-  border-radius: 50%;
+  width: 26px;
+  height: 26px;
+  margin-bottom: 4px;
+  border-radius: 8px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   color: var(--muted);
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+#ytx-panel .ytx-web .ytx-ico {
+  width: 17px;
+  height: 17px;
+  stroke-width: 1.8;
 }
 
 #ytx-panel .ytx-web:hover {
-  background: var(--surface-2);
   color: var(--text);
 }
 
 #ytx-panel .ytx-web.is-on {
-  background: var(--accent-soft);
   color: var(--accent);
+  background: var(--accent-soft);
 }
 
 #ytx-panel .ytx-send:disabled {
