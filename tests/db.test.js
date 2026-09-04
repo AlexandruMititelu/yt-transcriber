@@ -1,4 +1,5 @@
 import test from 'node:test';
+// pruneFrames covered below
 import assert from 'node:assert/strict';
 
 const store = new Map();
@@ -181,4 +182,18 @@ test('v2 settings keep model/effort/webSearch across getSettings (regression: mo
   assert.equal(s.effort, 'high');
   assert.equal(s.webSearch, true);
   assert.equal('notionToken' in s, false);
+});
+
+test('pruneFrames drops frame data URLs that already have a jpg in the vault', async () => {
+  const { pruneFrames, saveVideo, getVideo, blankVideo } = await import('../src/lib/db.js');
+  const v = blankVideo('pf1', 'T');
+  v.chats = [{ id: 'c', title: 'c', createdAt: 1, updatedAt: 1, messages: [
+    { role: 'user', content: 'a', ts: 1, image: 'data:x', embed: '![[attachments/0-01.jpg]]' },
+    { role: 'user', content: 'b', ts: 2, image: 'data:y' }, // no vault copy: must stay
+  ] }];
+  await saveVideo(v);
+  assert.equal(await pruneFrames(), 1);
+  const back = await getVideo('pf1');
+  assert.equal(back.chats[0].messages[0].image, undefined);
+  assert.equal(back.chats[0].messages[1].image, 'data:y');
 });

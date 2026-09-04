@@ -128,6 +128,20 @@ export async function deleteVideo(videoId) {
   await browser.storage.local.remove(`video:${videoId}`);
 }
 
+// Frames captured before the vault held the only copy: strip the data URL from every message that has its jpg
+// on disk (`embed`). → number of messages cleaned. Runs once per library open.
+export async function pruneFrames() {
+  const all = await browser.storage.local.get(null);
+  let n = 0;
+  for (const [k, v] of Object.entries(all)) {
+    if (!k.startsWith('video:') || !Array.isArray(v?.chats)) continue;
+    let dirty = false;
+    for (const c of v.chats) for (const m of c.messages ?? []) if (m.image && m.embed) { delete m.image; dirty = true; n++; }
+    if (dirty) await browser.storage.local.set({ [k]: v });
+  }
+  return n;
+}
+
 export async function listVideos() {
   const all = await browser.storage.local.get(null);
   return Object.entries(all)

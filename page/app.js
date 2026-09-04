@@ -210,7 +210,9 @@ function buildLibShell() {
   libShell = { stage, count };
 }
 
+let pruned = false;
 async function renderLibrary() {
+  if (!pruned) { pruned = true; db.pruneFrames().then((n) => { if (n) console.info(`[ytx] dropped ${n} frame copies from the browser DB (jpgs are in the vault)`); }).catch(() => {}); }
   const fresh = !libShell || !libShell.stage.isConnected;
   if (fresh) buildLibShell();
   await paintLibrary(fresh ? 'none' : 'fade');
@@ -624,6 +626,7 @@ function chatPane(video, disk) {
     toast,
     segments: () => video.transcript?.grouped ?? [],
     settingsAction: () => el('a', { href: '#/settings' }, 'Open Settings'),
+    readFrame: (file) => db.getSettings().then((s) => (vault.enabled(s) ? vault.readFrame(s, video, file) : null)),
     onNote: (text) => quoteToNote?.(text),
   });
   const root = el('div', { class: 'chat' }, view.root);

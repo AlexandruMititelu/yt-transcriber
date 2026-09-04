@@ -454,8 +454,9 @@ Bootstrap: `(async () => { ... })()`. All lib access via
   layout cost). User bubbles: plain text, plus the captured frame `<img>` and an `@m:ss` label when the message has
   `image`/`sec`. Camera button (when `onFrame` is given, i.e. the watch page; between the picker and the globe):
   `onFrame()` → `{dataUrl, sec, embed?}` shown as a thumbnail chip above the textarea with ✕; Send attaches it to
-  the user message (`image` = data: URL sent to the model via `toApiMessages`, `sec`, `embed` = Obsidian embed when
-  the vault saved it) and a blank text becomes "What is shown in this frame?". The list auto-scrolls only while the
+  the user message (`sec`; with a vault `embed` = the Obsidian embed and NO data URL is stored: `opts.readFrame(file)` → `vault.readFrame`
+  supplies it for the bubble and for `toApiMessages` at send time; without a vault `image` = data URL in the record;
+  `db.pruneFrames` strips leftover data URLs that have an `embed`, once per library open) and a blank text becomes "What is shown in this frame?". The list auto-scrolls only while the
   user is at the bottom; otherwise a "↓ New reply" pill appears. Long transcripts: when
   `llm.promptCoverage(segments, llm.contextCap(model)) < 1` the system prompt is built with `retrieval: true`
   (duration + chapters, no transcript) and `llm.chat` gets `tools: llm.transcriptTools(segments)`; history goes through

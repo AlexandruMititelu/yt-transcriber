@@ -635,6 +635,7 @@
       onSynced,
       segments: () => video.transcript?.grouped ?? [],
       onFrame: () => chatFrame().catch((e) => { toast(`Frame: ${e.message}`); return null; }),
+      readFrame: (file) => L.db.getSettings().then((s) => (L.vault.enabled(s) ? L.vault.readFrame(s, video, file) : null)),
       onNote: quoteToNote,
       settingsAction: () => {
         const b = h('button', 'ytx-btn', 'Open library');

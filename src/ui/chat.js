@@ -130,6 +130,10 @@ export function createChatView(opts) {
     return c;
   }
   const sync = (chat) => disk((s) => vault.syncChat(s, video, chat).then(onSynced));
+  // Frames: once the jpg is in the vault (`embed`), the data URL is not kept in the browser DB; it is read back
+  // through the host for display and for the model. opts.readFrame(embed) → data URL | null.
+  const embedFile = (embed) => /!\[\[([^\]|]+)/.exec(embed ?? '')?.[1] ?? null;
+  const frameOf = async (m) => m.image ?? (m.embed && opts.readFrame ? await opts.readFrame(embedFile(m.embed)).catch(() => null) : null);
   // Switching drops the empty, never-sent chat the user is leaving.
   function switchTo(id) {
     cancel();
@@ -223,7 +227,12 @@ export function createChatView(opts) {
       el.append(renderMd(m.content), copyBtn(m.content));
       if (m.usage) el.append(h('span', 'ytx-msg-usage', llm.fmtUsage(m.model, m.usage)));
     } else {
-      if (m.image) { const img = h('img', 'ytx-msg-img'); img.src = m.image; img.alt = 'Captured frame'; el.append(img); }
+      if (m.image || (m.embed && opts.readFrame)) {
+        const img = h('img', 'ytx-msg-img');
+        img.alt = 'Captured frame';
+        el.append(img);
+        frameOf(m).then((u) => { if (u) img.src = u; else img.remove(); });
+      }
       if (m.sec != null) el.append(h('span', 'ytx-msg-at', `@${fmtTime(m.sec)}`));
       el.append(h('div', 'ytx-msg-text', m.content));
     }
@@ -339,7 +348,8 @@ export function createChatView(opts) {
       if (settings.webSearch) status.textContent = 'Thinking… (web search on)';
       const id = llm.parseModel(settings.model).id;
       const system = sysPrompt(id, settings);
-      const fit = llm.fitHistory({ modelId: id, system, messages: chat.messages.map(({ role, content, image }) => ({ role, content, image })) });
+      const hist = await Promise.all(chat.messages.map(async (m) => ({ role: m.role, content: m.content, image: (await frameOf(m)) ?? undefined })));
+      const fit = llm.fitHistory({ modelId: id, system, messages: hist });
       if (fit.dropped) toast(`${fit.dropped} older message${fit.dropped > 1 ? 's' : ''} left out: this chat no longer fits ${id}`);
       const reply = await llm.chat({
         settings,
@@ -408,7 +418,8 @@ export function createChatView(opts) {
     autosize(ta);
     const chat = ensureChat();
     const m = { role: 'user', content: text || 'What is shown in this frame?', ts: Date.now() };
-    if (frame) Object.assign(m, { image: frame.dataUrl, sec: frame.sec, ...(frame.embed ? { embed: frame.embed } : {}) });
+    // With a vault the jpg on disk is the only copy; without one the data URL has to live in the record.
+    if (frame) Object.assign(m, { sec: frame.sec, ...(frame.embed && opts.readFrame ? { embed: frame.embed } : { image: frame.dataUrl }) });
     setFrame(null);
     chat.messages.push(m);
     chat.updatedAt = Date.now();
