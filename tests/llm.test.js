@@ -406,3 +406,18 @@ test('assemblers: Anthropic tool_use json + thinking signature, OpenAI tool_call
   ]);
   assert.deepEqual(o.choices[0].message.tool_calls[0], { id: 'c1', type: 'function', function: { name: 'read_transcript', arguments: '{"a":1}' } });
 });
+
+test('fitHistory drops oldest turns until the window fits, keeps the last, opens with a user turn', () => {
+  const big = 'x'.repeat(3.5 * 50000); // 50k tokens each
+  const msgs = [
+    { role: 'user', content: big }, { role: 'assistant', content: big },
+    { role: 'user', content: big }, { role: 'assistant', content: 'short' },
+    { role: 'user', content: 'last?' },
+  ];
+  const fit = llm.fitHistory({ modelId: 'claude-haiku-4-5', system: '', messages: msgs }); // 200k window → 144k budget
+  assert.equal(fit.dropped, 2);
+  assert.equal(fit.messages[0].role, 'user');
+  assert.equal(fit.messages.at(-1).content, 'last?');
+  assert.deepEqual(llm.fitHistory({ modelId: 'claude-sonnet-5', messages: msgs }).dropped, 0);
+  assert.equal(llm.fitHistory({ modelId: 'gpt-4o', messages: [{ role: 'user', content: big }, { role: 'user', content: big }, { role: 'user', content: big }] }).messages.length, 1);
+});

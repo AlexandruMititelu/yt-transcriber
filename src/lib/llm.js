@@ -123,6 +123,18 @@ export function transcriptTools(segments) {
   return { defs, run };
 }
 
+// Oldest turns dropped until system + history fit ~80% of the model's window (reserve for the reply).
+// ponytail: chars/3.5 estimate, 1600 tokens per image; the API's "prompt is too long" 400 is the backstop.
+export function fitHistory({ modelId, system = '', messages, reserve = 16000 }) {
+  const tokens = (m) => Math.ceil(String(m.content).length / CHARS_PER_TOKEN) + (m.image ? 1600 : 0);
+  const budget = contextWindow(modelId) * 0.8 - system.length / CHARS_PER_TOKEN - reserve;
+  const out = messages.slice();
+  let total = out.reduce((n, m) => n + tokens(m), 0);
+  while (out.length > 1 && total > budget) total -= tokens(out.shift());
+  while (out.length > 1 && out[0].role !== 'user') out.shift(); // history must open with a user turn
+  return { messages: out, dropped: messages.length - out.length };
+}
+
 // UI messages {role, content, image?} → provider content. `image` is a data: URL (frame capture).
 export function toApiMessages(provider, messages) {
   return messages.map(({ role, content, image }) => {

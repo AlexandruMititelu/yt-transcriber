@@ -318,15 +318,18 @@ export function createChatView(opts) {
       lastSettings = settings;
       if (settings.webSearch) status.textContent = 'Thinking… (web search on)';
       const id = llm.parseModel(settings.model).id;
+      const system = sysPrompt(id, settings);
+      const fit = llm.fitHistory({ modelId: id, system, messages: chat.messages.map(({ role, content, image }) => ({ role, content, image })) });
+      if (fit.dropped) toast(`${fit.dropped} older message${fit.dropped > 1 ? 's' : ''} left out: this chat no longer fits ${id}`);
       const reply = await llm.chat({
         settings,
-        system: sysPrompt(id, settings),
+        system,
         tools: retrieval(id) ? llm.transcriptTools(segments()) : null,
         onTool: (name, input) => {
           if (streamed) return;
           status.textContent = name === 'search_transcript' ? `Searching transcript: ${input.query ?? ''}` : `Reading transcript ${input.from ?? ''} to ${input.to ?? ''}`;
         },
-        messages: chat.messages.map(({ role, content, image }) => ({ role, content, image })),
+        messages: fit.messages,
         signal: ctl.signal,
         onText: (delta) => {
           if (myGen !== gen || !live()) return;

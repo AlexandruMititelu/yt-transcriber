@@ -249,6 +249,7 @@ export const parseTime = (v) => seconds   // 754 | "12:34" | "1:02:03"
 export function transcriptTools(segments)  // → { defs: [search_transcript{query}, read_transcript{from,to}], run(name, input) → string }
 // search = BM25 top 8 groups (src/lib/search.js) as `[m:ss] text` lines in time order, 'No matches. Try other words.' when empty;
 // read = verbatim groups overlapping [from, to], to capped at from + 600s. Used only when promptCoverage < 1.
+export function fitHistory({ modelId, system, messages, reserve = 16000 })  // → { messages, dropped }: oldest turns dropped until ~80% of the window minus system and reserve (chars/3.5, 1600/image), history opens with a user turn
 export function toApiMessages(provider, messages)  // {role, content, image?} → provider shape; image (data: URL) → Anthropic base64 image block / OpenAI image_url, text after it
 export const fmtK = (n) => '1.2k' | '400k' | '1M'
 export function promptCoverage(segments, cap = PROMPT_CAP)  // share of the transcript that fits (1 = all)
@@ -435,7 +436,9 @@ Bootstrap: `(async () => { ... })()`. All lib access via
   the vault saved it) and a blank text becomes "What is shown in this frame?". The list auto-scrolls only while the
   user is at the bottom; otherwise a "↓ New reply" pill appears. Long transcripts: when
   `llm.promptCoverage(segments, llm.contextCap(model)) < 1` the system prompt is built with `retrieval: true`
-  (duration + chapters, no transcript) and `llm.chat` gets `tools: llm.transcriptTools(segments)`; the pending bubble
+  (duration + chapters, no transcript) and `llm.chat` gets `tools: llm.transcriptTools(segments)`; history goes through
+  `llm.fitHistory` first (toast "N older messages left out: this chat no longer fits <model>" when it trims, e.g. after switching to a
+  smaller-window model); the pending bubble
   shows "Searching transcript: q" / "Reading transcript a to b" from `onTool`. Empty chat then says the model will
   search the transcript instead (re-rendered when the picker's `onChange` fires). Context meter `.ytx-chat-ctx` at the left of the composer tools: percent of the window,
   last reply's `usage.in + usage.out` / `llm.contextWindow(model)` (tokens in the tooltip) (an estimate `~N` from the system prompt's chars/3.5 before any
