@@ -42,7 +42,6 @@
 
 .ytx-notes-tags { margin: -2px 0 8px; }
 .ytx-notes-foot .ytx-tags-inline { flex: none; }
-.ytx-notes-foot .ytx-tags-pop { left: auto; right: 0; }
 
 .ytx-notes-grid {
   display: grid;

@@ -59,13 +59,27 @@ export function createTagEditor({ get, set, suggest, compact = false, chips: sho
 
   const onDown = (e) => { if (!root.contains(e.target)) close(); };
   const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+  // The popover is position: fixed at the "+" so scrolling containers (notes list, panel) can't clip it.
+  const onScroll = (e) => { if (!panel.contains(e.target)) close(); };
+  function place() {
+    if (!plus) return;
+    const r = plus.getBoundingClientRect();
+    const w = panel.offsetWidth || 260;
+    const hgt = panel.offsetHeight;
+    const left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8));
+    const above = up || r.bottom + 6 + hgt > window.innerHeight - 8;
+    panel.style.left = `${left}px`;
+    panel.style.top = above ? `${Math.max(8, r.top - 6 - hgt)}px` : `${r.bottom + 6}px`;
+  }
   function open() {
     input.value = '';
     refresh();
     panel.classList.add('is-open');
+    place();
     plus?.setAttribute('aria-expanded', 'true');
     window.addEventListener('pointerdown', onDown, true);
     window.addEventListener('keydown', onKey, true);
+    window.addEventListener('scroll', onScroll, true);
     input.focus();
   }
   function close() {
@@ -74,6 +88,7 @@ export function createTagEditor({ get, set, suggest, compact = false, chips: sho
     plus?.setAttribute('aria-expanded', 'false');
     window.removeEventListener('pointerdown', onDown, true);
     window.removeEventListener('keydown', onKey, true);
+    window.removeEventListener('scroll', onScroll, true);
   }
 
   const toggle = (t) => set(get().includes(t) ? get().filter((v) => v !== t) : [...get(), t]);

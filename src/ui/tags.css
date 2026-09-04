@@ -28,12 +28,11 @@
 .ytx-tags-plus .ytx-ico { width: 11px; height: 11px; stroke-width: 2.4; display: block; }
 .ytx-tags-plus:hover, .ytx-tags-plus[aria-expanded="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
 .ytx-tags-pop {
-  display: none; position: absolute; left: 0; top: calc(100% + 6px); z-index: 30; width: 260px; padding: 8px;
+  display: none; position: fixed; z-index: 2147483000; width: 260px; padding: 8px;
   flex-direction: column; gap: 6px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 12px 32px rgba(0, 0, 0, 0.18);
 }
 .ytx-tags-pop.is-open { display: flex; }
-.ytx-tags-pop.is-up { top: auto; bottom: calc(100% + 6px); }
 .ytx-tag.is-locked { opacity: 0.85; cursor: default; }
 .ytx-tag.is-locked:hover { background: hsl(var(--tag-h) 70% 48%); color: #fff; }
 .ytx-tags-inherited { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
