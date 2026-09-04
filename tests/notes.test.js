@@ -36,5 +36,7 @@ test('parsePrompts: "Label: text" lines, defaults when unset, none when empty', 
   assert.deepEqual(parsePrompts(undefined), PROMPTS);
   assert.deepEqual(parsePrompts(''), []);
   assert.deepEqual(parsePrompts('Sum: Summarize it\nbad line\nX: y: z'), [{ label: 'Sum', text: 'Summarize it' }, { label: 'X', text: 'y: z' }]);
-  assert.deepEqual(parsePrompts(promptsToText(PROMPTS)), PROMPTS);
+  assert.deepEqual(parsePrompts(promptsToText(PROMPTS)), PROMPTS); // legacy text still parses
+  assert.deepEqual(parsePrompts([{ label: ' Sum ', text: 'Summarize it' }, { label: '', text: 'x' }, { label: 'Y', text: '  ' }, null]), [{ label: 'Sum', text: 'Summarize it' }]);
+  assert.deepEqual(parsePrompts([]), []);
 });

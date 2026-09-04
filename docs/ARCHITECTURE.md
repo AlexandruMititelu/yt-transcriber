@@ -164,7 +164,7 @@ export const DEFAULT_SETTINGS = {
   noteMode: 'edit',                 // note editor default mode, persisted by setMode
   follow: false,                    // transcript Follow toggle, remembered
   lang: 'en',                       // preferred caption language prefix
-  prompts: undefined,               // chat presets, "Label: text" per line (config/prompts.js parsePrompts); undefined = defaults, '' = none
+  prompts: undefined,               // chat presets [{label, text}] (config/prompts.js parsePrompts; legacy "Label: text" lines still parse); undefined = defaults, [] = none
 }
 export async function getSettings()            // {...DEFAULT_SETTINGS, ...stored}; migrates v1 {provider, apiKey, model} → per-provider key + 'provider:model', drops legacy + notion keys
 export async function saveSettings(patch)      // merge + write; returns merged
@@ -547,7 +547,9 @@ Views (hash routing: `#/`, `#/video/<id>`, `#/settings`):
   like the panel; a `'reloaded'` sync result rebuilds the panes.
 - **Settings `#/settings`**: form — Anthropic key, OpenAI key (type=password with Show/Hide and a
   "● key set / ✓ key works / ✗ error" status), Appearance (Auto | Light | Dark, applied live), Caption language,
-  About me, Chat presets (textarea, one "Label: prompt" per line, Reset to defaults), Tone, Knowledge base folder (text input + "Choose…" → `vault.pickFolder` native dialog); Save button
+  About me, Chat presets (one row per preset: shortcut input + auto-growing prompt textarea + trash; "+ Add preset";
+  "Reset to defaults" opens a modal listing the defaults as shortcut/text rows with a warning that every current preset
+  is deleted, "Replace with defaults" confirms), Tone, Knowledge base folder (text input + "Choose…" → `vault.pickFolder` native dialog); Save button
   (blue only when dirty; db.saveSettings + clearCachedModels; leaving the page with unsaved edits saves them) +
   "Test Anthropic/OpenAI key" (llm.chat tiny prompt → toast), "Test host" (`vault.ping` → toast version/platform
   or error), a "Keyboard shortcuts" checkbox with the HOTKEYS table (kbd + description), "Export data": JSON of

@@ -12,7 +12,7 @@ import { pinIcon, chevronDown, copyIcon, gearIcon, chevronLeft, trashIcon } from
 import { createTagEditor, tagChip } from '../src/ui/tags.js';
 import { configureTagColors } from '../src/lib/tags.js';
 import { HOTKEYS, hotkeyId } from '../config/hotkeys.js';
-import { PROMPTS, promptsToText } from '../config/prompts.js';
+import { PROMPTS, parsePrompts } from '../config/prompts.js';
 
 const $app = document.getElementById('app');
 const toast = createToaster(document.body, { fixed: true });
@@ -575,9 +575,45 @@ async function renderSettings() {
   const themeValue = () => theme.querySelector('.active')?.dataset.v || 'auto';
   const lang = el('input', { class: 'input', placeholder: 'en', maxlength: '5' });
   lang.value = s.lang || 'en';
-  const prompts = el('textarea', { class: 'input mono', rows: 6, spellcheck: 'false', placeholder: promptsToText(PROMPTS) });
-  prompts.value = s.prompts ?? promptsToText(PROMPTS);
-  const resetPrompts = el('button', { class: 'btn', type: 'button', onclick: () => { prompts.value = promptsToText(PROMPTS); syncSave(); } }, 'Reset to defaults');
+  // Chat presets: one row per preset (shortcut = chip label, text = what it sends). "+" adds, trash removes,
+  // Reset shows the defaults in a modal and replaces everything on confirm.
+  let presets = parsePrompts(s.prompts).map((p) => ({ ...p }));
+  const presetList = el('div', { class: 'preset-list' });
+  const grow = (ta) => { ta.style.height = 'auto'; ta.style.height = `${ta.scrollHeight + 2}px`; };
+  function paintPresets() {
+    presetList.replaceChildren(...presets.map((p, i) => {
+      const label = el('input', { class: 'input preset-label', placeholder: 'Shortcut', maxlength: '40', 'aria-label': 'Preset shortcut', oninput: () => { p.label = label.value; syncSave(); } });
+      label.value = p.label;
+      const text = el('textarea', { class: 'input preset-text', rows: 2, placeholder: 'What it sends', 'aria-label': 'Preset prompt', oninput: () => { p.text = text.value; grow(text); syncSave(); } });
+      text.value = p.text;
+      const del = el('button', { class: 'icon-btn preset-del', type: 'button', title: 'Remove preset', 'aria-label': 'Remove preset', onclick: () => { presets.splice(i, 1); paintPresets(); syncSave(); } }, trashIcon());
+      const row = el('div', { class: 'preset-row' }, label, text, del);
+      requestAnimationFrame(() => grow(text));
+      return row;
+    }));
+  }
+  const addPreset = el('button', { class: 'btn', type: 'button', onclick: () => {
+    presets.push({ label: '', text: '' });
+    paintPresets();
+    presetList.lastElementChild?.querySelector('input')?.focus();
+    syncSave();
+  } }, '+ Add preset');
+  const resetPrompts = el('button', { class: 'btn', type: 'button', onclick: () => {
+    const close = () => overlay.remove();
+    const overlay = el('div', { class: 'modal-bg', onclick: (e) => { if (e.target === overlay) close(); } },
+      el('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'reset-presets-title' },
+        el('h3', { id: 'reset-presets-title' }, 'Reset chat presets?'),
+        el('p', { class: 'modal-warn' }, 'Every preset you have now is deleted and replaced by these:'),
+        el('div', { class: 'preset-list is-static' }, PROMPTS.map((p) => el('div', { class: 'preset-row' },
+          el('span', { class: 'preset-label-ro' }, p.label), el('span', { class: 'preset-text-ro' }, p.text)))),
+        el('div', { class: 'modal-row' },
+          el('button', { class: 'btn', type: 'button', onclick: close }, 'Cancel'),
+          el('button', { class: 'btn danger', type: 'button', onclick: () => { presets = PROMPTS.map((p) => ({ ...p })); paintPresets(); syncSave(); close(); } }, 'Replace with defaults'))));
+    overlay.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+    document.body.append(overlay);
+    overlay.querySelector('.btn')?.focus();
+  } }, 'Reset to defaults');
+  paintPresets();
   const aboutMe = el('textarea', { class: 'input', rows: 4,
     placeholder: 'e.g. Backend dev, Romanian, learning ML. Prefers concrete examples.' });
   aboutMe.value = s.aboutMe;
@@ -612,7 +648,7 @@ async function renderSettings() {
     hotkeys: hotkeys.checked,
     theme: themeValue(),
     lang: lang.value.trim().toLowerCase() || 'en',
-    prompts: prompts.value,
+    prompts: parsePrompts(presets),
   });
 
   // Save is blue only while the form differs from what is stored.
@@ -629,7 +665,7 @@ async function renderSettings() {
   }, 'Save');
   const isDirty = () => JSON.stringify(formValues()) !== saved;
   const syncSave = () => { saveBtn.disabled = !isDirty(); };
-  for (const f of [anthropicKey, openaiKey, aboutMe, tone, vaultDir, lang, prompts]) f.addEventListener('input', syncSave);
+  for (const f of [anthropicKey, openaiKey, aboutMe, tone, vaultDir, lang]) f.addEventListener('input', syncSave);
   hotkeys.addEventListener('change', syncSave);
   syncSave();
   // Leaving with unsaved edits saves them (nothing here is dangerous to persist).
@@ -724,7 +760,9 @@ async function renderSettings() {
       field('Appearance', theme, 'Library page theme. The YouTube panel follows YouTube.'),
       field('Caption language', lang, 'Preferred transcript language (e.g. en, ro, nl). Other tracks and translations are in the transcript toolbar.'),
       field('About me', aboutMe, 'Added to every chat system prompt so answers fit you.'),
-      field('Chat presets', el('div', { class: 'field-col' }, prompts, resetPrompts), 'One per line as "Label: prompt". Shown as chips while a chat is empty; leave empty for none.'),
+      el('div', { class: 'field' }, el('span', { class: 'field-label' }, 'Chat presets'),
+        el('div', { class: 'field-col' }, presetList, el('div', { class: 'field-row' }, addPreset, resetPrompts)),
+        el('span', { class: 'field-help' }, 'Shortcut = the chip shown while a chat is empty; the text is what it sends. Remove all for none.')),
       field('Tone of voice', tone, 'How the assistant should talk.'),
       field('Knowledge base folder', el('div', { class: 'field-row' }, vaultDir, chooseBtn),
         el('span', {}, 'Your Obsidian vault (or any folder). Notes, chats and pinned videos are written as markdown under ',
