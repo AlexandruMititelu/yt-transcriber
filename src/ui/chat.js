@@ -304,13 +304,15 @@ export function createChatView(opts) {
     const pending = h('div', 'ytx-msg ytx-msg-assistant ytx-msg-pending');
     const status = h('span', 'ytx-msg-status', 'Thinking…');
     const body = h('div', 'ytx-msg-stream');
+    const toolLine = h('div', 'ytx-msg-tool');
     pending.append(status, body);
     list.append(pending);
     scrollBottom(true);
     const t0 = Date.now();
     let streamed = '';
+    let toolLabel = null; // set while a tool runs before any text: the tick must not overwrite it
     const tick = setInterval(() => {
-      if (streamed) return;
+      if (streamed || toolLabel) return;
       status.textContent = `Thinking… ${Math.round((Date.now() - t0) / 1000)}s`;
     }, 1000);
     try {
@@ -325,15 +327,27 @@ export function createChatView(opts) {
         settings,
         system,
         tools: retrieval(id) ? llm.transcriptTools(segments()) : null,
-        onTool: (name, input) => {
-          if (streamed) return;
-          status.textContent = name === 'search_transcript' ? `Searching transcript: ${input.query ?? ''}` : `Reading transcript ${input.from ?? ''} to ${input.to ?? ''}`;
+        // Tool activity: before any text it replaces the status; after text it is a shimmering line under the
+        // streamed reply (like Claude's "Searching the web…"), removed by the next text delta.
+        onTool: (name, input, phase) => {
+          if (myGen !== gen || !live()) return;
+          if (phase === 'result') { toolLine.remove(); toolLabel = null; return; }
+          const label = name === 'web_search' ? 'Searching the web…'
+            : name === 'web_fetch' ? 'Reading a page…'
+              : name === 'search_transcript' ? `Searching transcript${input.query ? `: ${input.query}` : '…'}`
+                : name === 'read_transcript' ? `Reading transcript${input.from ? ` ${input.from} to ${input.to ?? ''}` : '…'}`
+                  : `Using ${name}…`;
+          if (!streamed) { toolLabel = label; status.textContent = label; return; }
+          toolLine.textContent = label;
+          pending.append(toolLine);
+          scrollBottom();
         },
         messages: fit.messages,
         signal: ctl.signal,
         onText: (delta) => {
           if (myGen !== gen || !live()) return;
           if (!streamed) status.remove();
+          toolLine.remove();
           streamed += delta;
           body.textContent = streamed;
           scrollBottom();

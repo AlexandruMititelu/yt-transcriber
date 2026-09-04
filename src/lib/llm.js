@@ -339,7 +339,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // One request, streamed when `onText` is given (deltas arrive as they are generated), with one retry
 // on rate limit / overload. → the provider's non-streaming JSON.
-async function request(provider, req, { onText, signal } = {}) {
+// onTool(name, input, phase): phase 'start' when a tool block opens mid-stream (server-side web search, our
+// transcript tools), 'result' when its result block arrives. Input is not known yet at 'start'.
+async function request(provider, req, { onText, signal, onTool } = {}) {
   for (let attempt = 0; ; attempt++) {
     let r;
     if (onText) {
@@ -351,6 +353,11 @@ async function request(provider, req, { onText, signal } = {}) {
           if (provider === 'anthropic') {
             const d = ev.delta;
             if (ev.type === 'content_block_delta' && d?.type === 'text_delta') onText(d.text);
+            else if (ev.type === 'content_block_start' && onTool) {
+              const b = ev.content_block ?? {};
+              if (b.type === 'server_tool_use' || b.type === 'tool_use') onTool(b.name, {}, 'start');
+              else if (/_tool_result$/.test(b.type ?? '')) onTool(b.type.replace(/_tool_result$/, ''), {}, 'result');
+            }
           } else if (ev.choices?.[0]?.delta?.content) onText(ev.choices[0].delta.content);
         },
       });
@@ -374,7 +381,7 @@ export async function chat({ settings, system, messages, maxTokens, onText, sign
   const effort = supportsEffort(provider, id) ? settings.effort : 'off';
   const webSearch = !!settings.webSearch;
   const req = buildRequest({ provider, apiKey, model: id, system, messages, maxTokens, effort, webSearch, streaming: !!onText, tools: tools?.defs });
-  let data = await request(provider, req, { onText, signal });
+  let data = await request(provider, req, { onText, signal, onTool });
   const msgs = [...req.body.messages];
   const usage = { in: 0, out: 0, cacheRead: 0 }; // ponytail: summed over rounds; `in` over-counts context by earlier rounds
   const pre = []; // text the model wrote before a tool call
@@ -391,7 +398,7 @@ export async function chat({ settings, system, messages, maxTokens, onText, sign
       if (stop === 'tool_use') {
         const results = [];
         for (const b of data.content.filter((b) => b.type === 'tool_use')) {
-          onTool?.(b.name, b.input ?? {});
+          onTool?.(b.name, b.input ?? {}, 'run');
           results.push({ type: 'tool_result', tool_use_id: b.id, content: String(await tools.run(b.name, b.input ?? {})) });
         }
         msgs.push({ role: 'user', content: results });
@@ -404,11 +411,11 @@ export async function chat({ settings, system, messages, maxTokens, onText, sign
       msgs.push(msg);
       for (const c of msg.tool_calls) {
         const input = safeJson(c.function?.arguments);
-        onTool?.(c.function?.name, input);
+        onTool?.(c.function?.name, input, 'run');
         msgs.push({ role: 'tool', tool_call_id: c.id, content: String(await tools.run(c.function?.name, input)) });
       }
     }
-    data = await request(provider, { ...req, body: { ...req.body, messages: msgs } }, { onText, signal });
+    data = await request(provider, { ...req, body: { ...req.body, messages: msgs } }, { onText, signal, onTool });
   }
   const out = add(data);
   out.usage = usage;

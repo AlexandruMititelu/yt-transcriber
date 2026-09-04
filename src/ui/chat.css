@@ -35,6 +35,15 @@
 .ytx-msg-assistant { align-self: flex-start; background: var(--surface-2); border-bottom-left-radius: 4px; padding-right: 30px; }
 .ytx-msg-pending { color: var(--muted); }
 .ytx-msg-status { display: block; }
+/* tool activity line under a streaming reply: text shimmer, like Claude's "Searching the web…" */
+.ytx-msg-tool {
+  margin-top: 8px; font-size: 12px; font-weight: 500; width: fit-content;
+  background: linear-gradient(90deg, var(--muted) 0%, var(--text) 50%, var(--muted) 100%);
+  background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: ytx-shimmer 1.4s linear infinite;
+}
+@keyframes ytx-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .ytx-msg-tool { animation: none; color: var(--muted); background: none; } }
 .ytx-msg-stream { white-space: pre-wrap; color: var(--text); }
 .ytx-msg-stream:empty { display: none; }
 .ytx-msg-system {
