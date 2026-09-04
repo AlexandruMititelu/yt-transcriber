@@ -226,8 +226,7 @@
   display: flex;
 }
 
-#ytx-panel .ytx-scroll,
-#ytx-panel .ytx-chat-list {
+#ytx-panel .ytx-scroll {
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
@@ -245,15 +244,20 @@
   z-index: 2;
   display: flex;
   justify-content: flex-end;
-  padding: 4px 0 6px;
+  padding: 0 0 8px; /* bar top = tab control bottom + 8px, same as the chat switcher and notes bar */
   background: var(--surface);
 }
 #ytx-panel .ytx-follow { flex: none; }
 
+/* toolbar controls share the chat switcher's geometry: 30px tall, 9px radius, solid surface-2 */
 #ytx-panel .ytx-follow {
-  padding: 3px 10px;
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 10px;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: 9px;
+  background: var(--surface-2);
   color: var(--muted);
   font-size: 11.5px;
   font-weight: 600;
@@ -282,7 +286,7 @@
 
 /* container class differs from the shared .ytx-notes root: otherwise the padding stacks (8px + 8px) */
 #ytx-panel .ytx-notes-view {
-  padding: 2px 8px 8px;
+  padding: 0 8px 8px;
 }
 
 /* ---- shared bits ---- */
@@ -379,10 +383,10 @@
 #ytx-panel .ytx-tr-search {
   flex: 1;
   min-width: 0;
-  height: 26px;
+  height: 30px;
   padding: 0 10px;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: 9px;
   background: var(--surface-2);
   color: var(--text);
   font: inherit;
@@ -395,10 +399,11 @@
 
 #ytx-panel .ytx-tr-track {
   max-width: 120px;
-  height: 26px;
+  height: 30px;
   padding: 0 8px;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: 9px;
+  background: var(--surface-2);
   color: var(--muted);
   font-size: 11px;
   font-weight: 600;
@@ -432,7 +437,8 @@
 #ytx-panel .ytx-tr-item:hover { background: var(--accent); color: #fff; }
 #ytx-panel .ytx-tr-item.is-on { font-weight: 600; color: var(--accent); }
 #ytx-panel .ytx-tr-item.is-on:hover { color: #fff; }
-#ytx-panel .ytx-tr-copy { width: 26px; height: 26px; }
+#ytx-panel .ytx-tr-copy { width: 30px; height: 30px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface-2); }
+#ytx-panel .ytx-tr-copy:hover { color: var(--text); border-color: var(--muted); }
 
 #ytx-panel .ytx-chapter {
   display: flex;

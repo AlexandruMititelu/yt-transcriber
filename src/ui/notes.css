@@ -12,13 +12,16 @@
   align-items: center;
   gap: 8px;
   flex: none;
-  margin: 0 0 10px;
+  margin: 0 0 8px; /* same top and gap as the chat switcher */
 }
 
 .ytx-notes-btn {
-  padding: 6px 14px;
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 14px;
   border: 1px solid transparent;
-  border-radius: 999px;
+  border-radius: 9px;
   background: var(--accent-soft, rgba(0, 122, 255, 0.1));
   color: var(--accent);
   font: inherit;
@@ -403,5 +406,6 @@
 /* delete confirm sits on top of the card instead of replacing it */
 .ytx-notes-overlay { position: absolute; inset: 0; z-index: 4; background: var(--surface); border-radius: inherit; }
 
-.ytx-notes-bar .ytx-notes-cam { width: 28px; height: 28px; align-self: center; }
+.ytx-notes-bar .ytx-notes-cam { width: 30px; height: 30px; align-self: center; border: 1px solid var(--border); border-radius: 9px; background: var(--surface-2); }
+.ytx-notes-bar .ytx-notes-cam:hover { color: var(--text); border-color: var(--muted); }
 .ytx-notes-cam .ytx-ico { width: 16px; height: 16px; }
