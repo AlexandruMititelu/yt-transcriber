@@ -5,7 +5,7 @@ export const HOTKEYS = [
   { id: 'viewMode', keys: 'Alt+V', desc: 'Note editor: view mode (rendered)' },
   { id: 'prevTab', keys: 'Alt+↑', desc: 'Previous tab (Transcript · Chat · Notes)' },
   { id: 'nextTab', keys: 'Alt+↓', desc: 'Next tab' },
-  { id: 'webSearch', keys: 'Alt+W', desc: 'Chat: toggle web search' },
+  { id: 'webSearch', keys: 'Alt+W', desc: 'Toggle web search (Chat tab only)' },
 ];
 
 const BY_KEY = { e: 'editMode', v: 'viewMode', w: 'webSearch', ArrowUp: 'prevTab', ArrowDown: 'nextTab' };

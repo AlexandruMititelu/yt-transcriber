@@ -277,8 +277,7 @@ async function renderDetail(videoId) {
       const i = names.indexOf(cur);
       show(names[(i + (hk === 'nextTab' ? 1 : names.length - 1)) % names.length]);
     } else if (hk === 'webSearch') {
-      show('Chat');
-      built.Chat?.__toggleWeb?.();
+      if (cur === 'Chat') built.Chat?.__toggleWeb?.();
     } else if (built.Notes?.__view) {
       built.Notes.__view.setMode(hk === 'editMode' ? 'edit' : 'view');
     }

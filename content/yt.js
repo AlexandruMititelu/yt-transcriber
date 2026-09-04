@@ -626,8 +626,7 @@
         const i = TABS.indexOf(activeTab);
         selectTab(TABS[(i + (hk === 'nextTab' ? 1 : TABS.length - 1)) % TABS.length]);
       } else if (hk === 'webSearch') {
-        selectTab('chat');
-        toggleWeb();
+        if (activeTab === 'chat') toggleWeb(); // only meaningful while chatting
       } else if (typeof notesView !== 'undefined') {
         selectTab('notes');
         notesView.setMode(hk === 'editMode' ? 'edit' : 'view');

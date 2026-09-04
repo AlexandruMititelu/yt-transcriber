@@ -355,7 +355,7 @@ Bootstrap: `(async () => { ... })()`. All lib access via
   Alt+V) and a trash button (red on hover); other tabs stay reachable; the bar is a HIG-style nav bar:
   chevron + "Notes" back button in the tint color, borderless bold title, hairline below).
   Hotkeys (config/hotkeys.js, `settings.hotkeys` gate): Alt+↑/↓ cycle Transcript · Chat · Notes, Alt+E /
-  Alt+V set the editor mode via `notesView.setMode`, Alt+W selects Chat and toggles `settings.webSearch`
+  Alt+V set the editor mode via `notesView.setMode`, Alt+W toggles `settings.webSearch` only while the Chat tab is active
   (the globe inside the composer's input pill). Handled in the panel's window keydown capture
   listener and, on the library detail page, by a document listener replaced on every route. `@12:34` typed anywhere
   renders as a seek chip (panel) / time link (library), same pass as `[12:34]`. While typing,
