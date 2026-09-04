@@ -665,6 +665,7 @@
       if (!hotkeysOn) return;
       const hk = L.hotkeys.hotkeyId(e);
       if (!hk) return;
+      if (hk === 'deleteNote' && notesView?.isEditing()) return; // inside a note: leave Alt+Backspace to the field
       e.preventDefault(); e.stopPropagation();
       if (hk === 'prevTab' || hk === 'nextTab') {
         const i = TABS.indexOf(activeTab);
@@ -683,6 +684,8 @@
         selectTab('notes'); notesView.toggle();
       } else if (hk === 'deleteNote') {
         selectTab('notes'); notesView.focusDelete();
+      } else if (hk === 'tags') {
+        if (!(activeTab === 'notes' && notesView.focusTags())) tagBtn.click();
       } else if (hk === 'prevNote' || hk === 'nextNote') {
         selectTab('notes'); notesView.move(hk === 'nextNote' ? 1 : -1);
       } else if (hk === 'focusVideo') {

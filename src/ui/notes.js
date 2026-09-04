@@ -268,8 +268,16 @@ export function createNotesView(opts) {
   }
   // Alt+Backspace: put focus on the trash of the open editor or the selected card (Enter then asks).
   function focusDelete() {
+    if (openId) return; // inside a note Alt+Backspace stays the editor's own delete
+    (selId != null ? cardEls.get(selId) : null)?.querySelector('.ytx-notes-del')?.focus();
+  }
+  // Alt+T: open the tag popover of the open editor or the selected card. → true when something was opened.
+  function focusTags() {
     const scope = openId ? root.querySelector('.ytx-ed') : selId != null ? cardEls.get(selId) : null;
-    scope?.querySelector('.ytx-notes-del')?.focus();
+    const plus = scope?.querySelector('.ytx-tags-plus');
+    if (!plus) return false;
+    plus.click();
+    return true;
   }
   // Plain Enter on a focused card opens it (Alt+Enter does the same from anywhere).
   const enterOpens = (el, card) => el.addEventListener('keydown', (e) => {
@@ -602,5 +610,5 @@ export function createNotesView(opts) {
   }
 
   refresh();
-  return { root, refresh, flush, setMode, addNote, isEditing: () => !!openId, select, selectedId, move, toggle, focusDelete };
+  return { root, refresh, flush, setMode, addNote, isEditing: () => !!openId, select, selectedId, move, toggle, focusDelete, focusTags };
 }

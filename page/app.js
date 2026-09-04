@@ -466,6 +466,7 @@ async function renderDetail(videoId) {
     if (s1.hotkeys === false) return;
     const hk = hotkeyId(e);
     if (!hk) return;
+    if (hk === 'deleteNote' && built.Notes?.__view?.isEditing()) return; // inside a note: the field's own delete
     e.preventDefault();
     const cur = seg.querySelector('.seg-btn.active')?.dataset.tab || 'Transcript';
     if (hk === 'prevTab' || hk === 'nextTab') {
@@ -483,6 +484,8 @@ async function renderDetail(videoId) {
       show('Notes'); built.Notes?.__view?.toggle();
     } else if (hk === 'deleteNote') {
       show('Notes'); built.Notes?.__view?.focusDelete();
+    } else if (hk === 'tags') {
+      if (!(cur === 'Notes' && built.Notes?.__view?.focusTags())) tagEditor.root.querySelector('.ytx-tags-plus')?.click();
     } else if (hk === 'prevNote' || hk === 'nextNote') {
       show('Notes'); built.Notes?.__view?.move(hk === 'nextNote' ? 1 : -1);
     } else if (hk === 'focusVideo') {
