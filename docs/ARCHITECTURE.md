@@ -19,6 +19,7 @@ src/lib/llm.js                (provider-agnostic LLM service, ESM)
 src/lib/search.js             (BM25 over transcript groups, pure)
 src/lib/vault.js              (knowledge-base folder mirror: markdown builders/parsers + disk sync, ESM)
 src/lib/tags.js               (Obsidian tag rules: normTag, extractTags (inline #tags), parseTagList (front matter), chipTags (DOM))
+src/ui/quote.js|css           (Ctrl+right-click menu on a selection: Copy / Copy as quote / Quote in a new note; buildQuote(text, label) → blockquote + "— label")
 src/ui/tags.js|css            (tagChip (hue per tag) + createTagEditor: full form = chips + input + known-tag toggles; compact = chips + "+" that drops the same input/list down; shared)
 src/ui/tokens.css             (design tokens for extension pages)
 src/ui/picker.js|css          (model + effort popover, shared)
@@ -459,7 +460,8 @@ Bootstrap: `(async () => { ... })()`. All lib access via
   last reply's `usage.in + usage.out` / `llm.contextWindow(model)` (tokens in the tooltip) (an estimate `~N` from the system prompt's chars/3.5 before any
   reply); orange above 80%. `usage.in` is the whole prompt on both providers (Anthropic uncached + cache read + cache
   write summed in `parseResult`). Assistant content rendered via `renderMd` =
-  `src/ui/markdown.js` `renderMarkdown(text, {onSeek | timeHref})`: marked → DOMPurify (img forbidden) → links
+  `src/ui/markdown.js` `renderMarkdown(text, {onSeek | timeHref, onWiki})`: `[[target|label]]` → `<a class=ytx-wiki data-target>`
+  (click → onWiki(target); hosts open `chats/<file>` by file/title/chatName and switch to Chat) → marked → DOMPurify (img forbidden) → links
   target=_blank → `[12:34]` / `@12:34` time chips (button that seeks on the watch page, link to url&t= in the
   library) → copy button + language tag on every code block → mermaid fences rendered lazily
   (`setDark(bool)` re-inits the theme).

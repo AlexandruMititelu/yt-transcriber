@@ -10,6 +10,7 @@ import { renderMarkdown, setDark } from '../src/ui/markdown.js';
 import { createToaster } from '../src/ui/toast.js';
 import { pinIcon, chevronDown, copyIcon, gearIcon, chevronLeft, trashIcon } from '../src/ui/icons.js';
 import { createTagEditor, tagChip } from '../src/ui/tags.js';
+import { attachQuoteMenu } from '../src/ui/quote.js';
 import { configureTagColors } from '../src/lib/tags.js';
 import { HOTKEYS, hotkeyId } from '../config/hotkeys.js';
 import { PROMPTS, parsePrompts } from '../config/prompts.js';
@@ -79,7 +80,9 @@ function atTimeUrl(url, sec) {
   return `${url}&t=${Math.floor(sec)}s`;
 }
 
-const renderMdFor = (video) => (text) => renderMarkdown(text, { timeHref: (sec) => atTimeUrl(video.url, sec) });
+let wikiHandler = null;
+let quoteToNote = null; // set by renderDetail: quote → new note in the Notes pane // set by renderDetail: opens [[chats/<file>]] links from quotes
+const renderMdFor = (video) => (text) => renderMarkdown(text, { timeHref: (sec) => atTimeUrl(video.url, sec), onWiki: (t) => wikiHandler?.(t) });
 
 // ---------- library ----------
 
@@ -373,6 +376,15 @@ async function renderDetail(videoId) {
 
   const pane = el('div', { class: 'pane' });
   const panes = { Transcript: transcriptPane, Chat: chatPane, Notes: notesPane };
+  quoteToNote = (text) => { show('Notes'); built.Notes?.__view?.addNote(text.length > 250 ? 'note' : 'quick', text); };
+  wikiHandler = (target) => {
+    const name = String(target).replace(/^chats\//, '');
+    const c = video.chats.find((x) => x.file === name || x.title === name || vault.chatName(x) === name);
+    if (!c) { toast('Chat not found'); return; }
+    video.activeChatId = c.id;
+    built.Chat?.__refresh?.();
+    show('Chat');
+  };
   const seg = el('div', { class: 'segmented', role: 'tablist' }, Object.keys(panes).map((name) =>
     el('button', { class: 'seg-btn', role: 'tab', dataset: { tab: name } }, name)));
   const built = {}; // cache pane instances so chat busy-state and in-flight requests survive tab switches
@@ -478,6 +490,14 @@ function transcriptPane(video, disk) {
   } }, 'Copy all');
   const meta = el('span', { class: 'tr-meta' }, [video.transcript.trackName, video.transcript.duration ? fmtTime(video.transcript.duration) : null].filter(Boolean).join(' · '));
   root.append(el('div', { class: 'tr-tools' }, search, meta, copyAll));
+  attachQuoteMenu(list, {
+    toast,
+    source: (node) => {
+      const r = rows.find((x) => x.el === node.closest('.seg'));
+      return r ? { label: `[${fmtTime(r.start)}](${atTimeUrl(video.url, r.start)})` } : null;
+    },
+    onNote: (text) => quoteToNote?.(text),
+  });
   const list = el('div', { class: 'seg-list' });
   const chapters = video.transcript.chapters ?? [];
   let ci = 0;
@@ -496,7 +516,7 @@ function transcriptPane(video, disk) {
     const row = el('a', { class: 'seg', href: atTimeUrl(video.url, seg.start), target: '_blank' },
       el('span', { class: 'chip time' }, fmtTime(seg.start)),
       el('span', { class: 'seg-text' }, body, copy));
-    rows.push({ el: row, body, text: seg.text });
+    rows.push({ el: row, body, text: seg.text, start: seg.start });
     list.append(row);
   }
   root.append(list);
@@ -512,8 +532,10 @@ function chatPane(video, disk) {
     toast,
     segments: () => video.transcript?.grouped ?? [],
     settingsAction: () => el('a', { href: '#/settings' }, 'Open Settings'),
+    onNote: (text) => quoteToNote?.(text),
   });
   const root = el('div', { class: 'chat' }, view.root);
+  root.__refresh = view.refresh;
   root.__toggleWeb = view.toggleWeb;
   root.__cancel = view.cancel;
   root.__focus = view.focus;

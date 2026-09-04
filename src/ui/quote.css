@@ -1,0 +1,15 @@
+/* Ctrl + right-click quote menu (chat messages, transcript rows). Colors from host tokens. */
+.ytx-qmenu {
+  position: absolute; z-index: 60; min-width: 170px; padding: 5px; display: flex; flex-direction: column; gap: 1px;
+  border: 1px solid var(--border); border-radius: 12px; background: var(--surface);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 12px 32px rgba(0, 0, 0, 0.18);
+  font-family: var(--font-ui); font-size: 12.5px;
+}
+.ytx-qmenu-item {
+  width: 100%; padding: 6px 10px; border: 0; border-radius: 7px; background: none; color: var(--text);
+  font: inherit; text-align: left; cursor: pointer; transition: background-color 0.12s ease, color 0.12s ease;
+}
+.ytx-qmenu-item:hover, .ytx-qmenu-item:focus-visible { background: var(--accent); color: #fff; outline: none; }
+/* [[wiki links]] inside rendered markdown (quotes pointing back at a chat) */
+.ytx-md .ytx-wiki { color: var(--accent); text-decoration: none; border-bottom: 1px dotted currentColor; cursor: pointer; }
+.ytx-md .ytx-wiki:hover { border-bottom-style: solid; }

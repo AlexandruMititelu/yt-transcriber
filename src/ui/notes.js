@@ -564,8 +564,9 @@ export function createNotesView(opts) {
     if (ta) ta.blur();
   }
 
-  function addNote(kind = 'note') {
+  function addNote(kind = 'note', text = '') {
     const c = newCard(kind);
+    c.text = text;
     video.notes.cards.push(c);
     onChange(c);
     selId = c.id;

@@ -9,6 +9,7 @@ import { createChatBar, confirmBox } from './chatbar.js';
 import { globeIcon, copyIcon, checkIcon, cameraIcon, arrowUpIcon, stopIcon } from './icons.js';
 import { keysFor } from '../../config/hotkeys.js';
 import { PROMPTS, parsePrompts } from '../../config/prompts.js';
+import { attachQuoteMenu } from './quote.js';
 
 function h(tag, cls, text) {
   const n = document.createElement(tag);
@@ -174,6 +175,19 @@ export function createChatView(opts) {
     },
   });
   root.append(bar.root, list, newPill, composer);
+  // Ctrl + right-click on selected text → Copy / Copy as quote / Quote in a new note (opts.onNote(text)).
+  // The quote links back to the chat file: [[chats/<file>|Chat: title]] · You|Assistant · hh:mm.
+  attachQuoteMenu(list, {
+    toast,
+    source: (node) => {
+      const m = node.closest('.ytx-msg')?.__msg;
+      const c = cur();
+      if (!m || !c) return null;
+      const file = c.file || vault.chatName(c);
+      return { label: `[[chats/${file}|Chat: ${c.title}]] · ${m.role === 'user' ? 'You' : 'Assistant'} · ${fmtClock(m.ts)}` };
+    },
+    onNote: opts.onNote,
+  });
 
   /* ---- scrolling: only follow the bottom when the user is already there ---- */
   const nearBottom = () => list.scrollHeight - list.scrollTop - list.clientHeight < 48;
@@ -200,6 +214,7 @@ export function createChatView(opts) {
   }
   function bubble(m) {
     const el = h('div', `ytx-msg ytx-msg-${m.role}`);
+    el.__msg = m; // quote menu source
     if (m.ts) el.title = fmtClock(m.ts);
     if (m.role === 'assistant') {
       el.append(renderMd(m.content), copyBtn(m.content));

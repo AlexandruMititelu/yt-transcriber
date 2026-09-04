@@ -13,6 +13,7 @@
   let theaterObserver = null;
   let flushSave = null; // pending debounced note-save; flushed on teardown so edits survive SPA nav
   let notesView = null; // current init's notes view (declared up front: flushSave/hotkeys reference it)
+  let attachQuoteMenuLater = null;
 
   const url = (p) => browser.runtime.getURL(p);
   const h = (tag, cls, text) => {
@@ -33,8 +34,8 @@
 
   async function loadLibs() {
     if (L) return L;
-    const names = ['format', 'transcript', 'bus', 'db', 'llm', 'vault', 'picker', 'chatbar', 'notes', 'icons', 'hotkeys', 'markdown', 'toast', 'chat', 'tags', 'tagsUi'];
-    const UI = new Set(['picker', 'chatbar', 'notes', 'icons', 'markdown', 'toast', 'chat', 'tagsUi']);
+    const names = ['format', 'transcript', 'bus', 'db', 'llm', 'vault', 'picker', 'chatbar', 'notes', 'icons', 'hotkeys', 'markdown', 'toast', 'chat', 'tags', 'tagsUi', 'quote'];
+    const UI = new Set(['picker', 'chatbar', 'notes', 'icons', 'markdown', 'toast', 'chat', 'tagsUi', 'quote']);
     const pathFor = (n) => (n === 'hotkeys' ? 'config/hotkeys.js' : n === 'tagsUi' ? 'src/ui/tags.js' : UI.has(n) ? `src/ui/${n}.js` : `src/lib/${n}.js`);
     const mods = await Promise.all(names.map((n) => import(url(pathFor(n)))));
     // UMD vendors set globalThis.marked / globalThis.DOMPurify; mermaid loads lazily.
@@ -48,7 +49,7 @@
     const style = h('style');
     style.id = 'ytx-fonts';
     // <link> to a moz-extension: stylesheet gets blocked on youtube.com; inline the text instead.
-    for (const name of ['picker', 'chatbar', 'notes', 'markdown', 'toast', 'chat', 'tags']) {
+    for (const name of ['picker', 'chatbar', 'notes', 'markdown', 'toast', 'chat', 'tags', 'quote']) {
       fetch(url(`src/ui/${name}.css`)).then((r) => r.text()).then((css) => {
         const s = h('style');
         s.id = `ytx-${name}-css`;
@@ -67,7 +68,8 @@
     document.head.appendChild(style);
   }
 
-  const renderMd = (text) => L.markdown.renderMarkdown(text, { onSeek: seek });
+  let onWiki = null; // set per init: opens [[chats/<file>]] links from quotes
+  const renderMd = (text) => L.markdown.renderMarkdown(text, { onSeek: seek, onWiki: (t) => onWiki?.(t) });
 
   function scrapeMeta() {
     const title = L.vault.cleanTitle(
@@ -341,6 +343,20 @@
     const bar = h('div', 'ytx-follow-bar');
     // Toolbar sits above the scrolling row list (a sibling, not sticky: nothing can scroll behind it).
     const trList = h('div', 'ytx-scroll ytx-tr-list');
+    // Quotes (Ctrl + right-click on a selection) land in a quick note, long ones in a note; opens the Notes tab.
+    function quoteToNote(text) {
+      selectTab('notes');
+      notesView.addNote(text.length > 250 ? 'note' : 'quick', text);
+    }
+    attachQuoteMenuLater = () => L.quote.attachQuoteMenu(trList, {
+      toast,
+      source: (node) => {
+        const row = node.closest('.ytx-row');
+        const r = row && rows.find((x) => x.el === row);
+        return r ? { label: `[${fmtTime(r.start)}](${video.url}&t=${Math.floor(r.start)}s)` } : null;
+      },
+      onNote: quoteToNote,
+    });
     const search = h('input', 'ytx-tr-search');
     search.type = 'search';
     search.placeholder = 'Search transcript…';
@@ -429,6 +445,7 @@
     const setFollow = (on) => {
       followOn = on;
       paintFollow();
+    attachQuoteMenuLater?.();
       L.db.saveSettings({ follow: on }).catch(() => {});
       if (on) { currentRow = null; trackPlayback(); }
       else { currentRow?.classList.remove('is-current'); currentRow = null; currentCue?.classList.remove('is-now'); currentCue = null; }
@@ -586,6 +603,7 @@
       onSynced,
       segments: () => video.transcript?.grouped ?? [],
       onFrame: () => chatFrame().catch((e) => { toast(`Frame: ${e.message}`); return null; }),
+      onNote: quoteToNote,
       settingsAction: () => {
         const b = h('button', 'ytx-btn', 'Open library');
         b.addEventListener('click', () => L.bus.call({ type: 'open-library' }).catch(() => {}));
@@ -593,6 +611,14 @@
       },
     });
     views.chat.appendChild(chatView.root);
+    onWiki = (target) => {
+      const name = String(target).replace(/^chats\//, '');
+      const c = video.chats.find((x) => x.file === name || x.title === name || L.vault.chatName(x) === name);
+      if (!c) { toast('Chat not found'); return; }
+      video.activeChatId = c.id;
+      chatView.refresh();
+      selectTab('chat');
+    };
     const renderChat = () => chatView.refresh();
     const toggleWeb = () => chatView.toggleWeb();
     // Window capture: fires before YouTube's own document-level key handlers, which can swallow

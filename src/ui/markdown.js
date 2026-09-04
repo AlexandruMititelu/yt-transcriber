@@ -113,11 +113,19 @@ function decorateCode(root) {
 }
 
 // { onSeek?(sec), timeHref?(sec) → url, cls? } → element
-export function renderMarkdown(text, { onSeek, timeHref, cls = 'ytx-md' } = {}) {
+// Obsidian [[target|label]] links → <a class=ytx-wiki data-target>; the host's onWiki(target) opens them (a chat file, say).
+const WIKI = /\[\[([^\]|]+?)(?:\|([^\]]+?))?\]\]/g;
+const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+const wikiToHtml = (text) => String(text ?? '').replace(WIKI, (_, t, l) => `<a class="ytx-wiki" href="#" data-target="${esc(t.trim())}">${esc((l ?? t).trim())}</a>`);
+
+export function renderMarkdown(text, { onSeek, timeHref, onWiki, cls = 'ytx-md' } = {}) {
   const md = h('div', cls);
   // FORBID_TAGS img: a prompt-injected transcript could make the LLM emit an image URL that exfiltrates chat content on fetch
-  md.innerHTML = globalThis.DOMPurify.sanitize(globalThis.marked.parse(String(text ?? '')), { FORBID_TAGS: ['img'] });
-  for (const a of md.querySelectorAll('a[href]')) { a.target = '_blank'; a.rel = 'noreferrer noopener'; }
+  md.innerHTML = globalThis.DOMPurify.sanitize(globalThis.marked.parse(wikiToHtml(text)), { FORBID_TAGS: ['img'] });
+  for (const a of md.querySelectorAll('a.ytx-wiki')) {
+    a.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); onWiki?.(a.dataset.target); });
+  }
+  for (const a of md.querySelectorAll('a[href]:not(.ytx-wiki)')) { a.target = '_blank'; a.rel = 'noreferrer noopener'; }
   linkifyTimestamps(md, { onSeek, timeHref });
   decorateCode(md);
   renderMermaidIn(md);
