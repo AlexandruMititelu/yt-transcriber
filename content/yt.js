@@ -251,6 +251,7 @@
       tagEd.focus();
     });
     document.addEventListener('click', (e) => { if (!tagWrap.contains(e.target)) tagPop.classList.remove('is-open'); }, true);
+    window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && tagPop.classList.contains('is-open')) { tagPop.classList.remove('is-open'); tagBtn.focus(); } }, true);
     paintTags();
     header.append(addBtn, tagWrap, archiveBtn, pinBtn, libraryBtn);
     panel.appendChild(header);
@@ -666,6 +667,11 @@
       const hk = L.hotkeys.hotkeyId(e);
       if (!hk) return;
       if (hk === 'deleteNote' && notesView?.isEditing()) return; // inside a note: leave Alt+Backspace to the field
+      if (hk === 'toggleNote' && document.querySelector('.ytx-tags-pop.is-open, .ytx-tagpop.is-open')) {
+        e.preventDefault(); e.stopPropagation();
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); // tag editors close on Escape
+        return;
+      }
       e.preventDefault(); e.stopPropagation();
       if (hk === 'prevTab' || hk === 'nextTab') {
         const i = TABS.indexOf(activeTab);

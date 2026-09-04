@@ -467,6 +467,7 @@ async function renderDetail(videoId) {
     const hk = hotkeyId(e);
     if (!hk) return;
     if (hk === 'deleteNote' && built.Notes?.__view?.isEditing()) return; // inside a note: the field's own delete
+    if (hk === 'toggleNote' && document.querySelector('.ytx-tags-pop.is-open')) { e.preventDefault(); window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); return; }
     e.preventDefault();
     const cur = seg.querySelector('.seg-btn.active')?.dataset.tab || 'Transcript';
     if (hk === 'prevTab' || hk === 'nextTab') {

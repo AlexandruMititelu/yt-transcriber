@@ -41,8 +41,9 @@
 .ytx-tags-empty { color: var(--muted); font-size: 12px; padding: 2px 2px 0; }
 .ytx-tags-chips { display: flex; flex-wrap: wrap; gap: 4px; }
 .ytx-tags-chips:empty { display: none; }
-.ytx-tags-chips .ytx-tag { cursor: default; }
-.ytx-tags-chips .ytx-tag:hover { background: hsl(var(--tag-h) 80% 55% / var(--tag-bg-a)); color: hsl(var(--tag-h) 65% var(--tag-fg-l)); }
+.ytx-tag.is-sel { cursor: pointer; }
+.ytx-tag.is-sel .ytx-tag-x { pointer-events: none; }
+.ytx-tag:focus-visible { outline: 2px solid hsl(var(--tag-h) 70% 48%); outline-offset: 2px; }
 .ytx-tags-known { display: flex; flex-wrap: wrap; gap: 4px; max-height: 140px; overflow-y: auto; scrollbar-width: thin; }
 .ytx-tags-known:empty { display: none; }
 .ytx-tag-x {

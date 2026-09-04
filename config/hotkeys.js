@@ -13,7 +13,7 @@ export const HOTKEYS = [
   { id: 'prevNote', keys: "Alt+'", desc: 'Select the previous note (wraps)' },
   { id: 'nextNote', keys: 'Alt+\\', desc: 'Select the next note (wraps)' },
   { id: 'deleteNote', keys: 'Alt+Backspace', desc: 'Notes list: focus the trash of the selected note; Enter asks, Enter again deletes (Esc keeps it). Inside a note it is the normal delete' },
-  { id: 'tags', keys: 'Alt+T', desc: 'Tags: the selected / open note in Notes, otherwise the video' },
+  { id: 'tags', keys: 'Alt+T', desc: 'Tags: the selected / open note in Notes, otherwise the video. Then arrows move, Enter adds or removes, Alt+Backspace removes, Alt+Enter closes' },
   { id: 'focusVideo', keys: 'Alt+Shift+Enter', desc: 'Focus the YouTube player (space plays/pauses)' },
   { id: 'findTranscript', keys: 'Alt+F', desc: 'Go to Transcript and focus the search box' },
 ];

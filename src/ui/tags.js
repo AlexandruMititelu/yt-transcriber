@@ -18,6 +18,7 @@ function h(tag, cls, text) {
 export function tagChip(tag, { on = false, count, onClick, x } = {}) {
   const chip = h(onClick ? 'button' : 'span', `ytx-tag${on ? ' is-on' : ''}`, tag); // bare name, no #
   chip.style.setProperty('--tag-h', tagHue(tag));
+  chip.dataset.tag = tag;
   if (onClick) { chip.type = 'button'; chip.setAttribute('aria-pressed', on ? 'true' : 'false'); chip.addEventListener('click', (e) => { e.stopPropagation(); onClick(tag); }); }
   if (count != null) chip.append(' ', h('span', 'ytx-tag-n', String(count)));
   if (x) {
@@ -92,12 +93,16 @@ export function createTagEditor({ get, set, suggest, compact = false, chips: sho
   }
 
   const toggle = (t) => set(get().includes(t) ? get().filter((v) => v !== t) : [...get(), t]);
+  const remove = (t) => set(get().filter((v) => v !== t));
   const lockChip = (t) => { const c = tagChip(t, { on: true }); c.classList.add('is-locked'); c.title = 'From the video: remove it there'; return c; };
+  // Selected chip = a button (Enter / Alt+Backspace removes) with a ✕ glyph, so arrows can land on it.
+  const selChip = (t) => { const c = tagChip(t, { on: true, onClick: remove }); c.classList.add('is-sel'); c.title = `Remove ${t}`; c.append(h('span', 'ytx-tag-x', '✕')); return c; };
   function refresh() {
     const lk = locked?.() ?? [];
+    const was = document.activeElement?.closest?.('.ytx-tag')?.dataset.tag; // keep the keyboard cursor on the same tag
     chips.textContent = '';
     for (const t of lk) chips.append(lockChip(t));
-    for (const t of get().filter((t) => !lk.includes(t))) chips.append(tagChip(t, { x: (tag) => set(get().filter((v) => v !== tag)) }));
+    for (const t of get().filter((t) => !lk.includes(t))) chips.append(selChip(t));
     inherited.textContent = '';
     inherited.hidden = !lk.length;
     if (lk.length) { inherited.append(h('span', 'ytx-tags-inherited-label', 'From the video')); for (const t of lk) inherited.append(lockChip(t)); }
@@ -109,7 +114,22 @@ export function createTagEditor({ get, set, suggest, compact = false, chips: sho
     for (const t of all.filter((t) => !have.has(t) && (!q || t.includes(q)))) known.append(tagChip(t, { onClick: toggle }));
     if (q && validTag(q) && !all.includes(q) && !lk.includes(q) && !have.has(q)) known.append(newChip(q));
     if (!known.childElementCount) known.append(h('div', 'ytx-tags-empty', q ? (have.has(q) ? 'Already added.' : 'Keep typing…') : (all.length ? 'All known tags are on it.' : 'No tags yet. Type one.')));
+    if (was && root.contains(document.activeElement) === false) (root.querySelector(`.ytx-tag[data-tag="${CSS.escape(was)}"]:not(.is-locked)`) ?? input).focus();
   }
+  // Keyboard: arrows walk input → known tags → selected tags (wrapping); Enter presses a chip; Alt+Backspace
+  // removes a selected one; Alt+Enter closes (compact) and returns to the "+".
+  const focusables = () => [input, ...root.querySelectorAll('.ytx-tag:not(.is-locked)')].filter((n) => n.isConnected && n.offsetParent !== null);
+  root.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && e.altKey) { e.preventDefault(); e.stopPropagation(); close(); (plus ?? input).focus(); return; }
+    const list = focusables();
+    const i = list.indexOf(document.activeElement);
+    if (i < 0) return;
+    const onInput = document.activeElement === input;
+    const fwd = e.key === 'ArrowDown' || (e.key === 'ArrowRight' && !onInput);
+    const back = e.key === 'ArrowUp' || (e.key === 'ArrowLeft' && !onInput);
+    if (fwd || back) { e.preventDefault(); e.stopPropagation(); list[(i + (fwd ? 1 : list.length - 1)) % list.length].focus(); return; }
+    if (e.key === 'Backspace' && e.altKey && document.activeElement.classList.contains('is-sel')) { e.preventDefault(); e.stopPropagation(); document.activeElement.click(); }
+  });
   function newChip(q) {
     const c = tagChip(q, { onClick: () => add() });
     c.classList.add('is-new');
