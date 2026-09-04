@@ -556,7 +556,7 @@ export function createNotesView(opts) {
     title.addEventListener('input', () => { card.title = title.value; onChange(card); });
     title.addEventListener('keydown', (e) => {
       if (!e.altKey) e.stopPropagation(); // Alt+ hotkeys (back, trash) still reach the host
-      if (e.key === 'Enter' && !e.altKey) { e.preventDefault(); editorMode === 'edit' ? body.edit() : body.box.querySelector('[contenteditable]')?.focus(); }
+      if (e.key === 'Enter' && !e.altKey) { e.preventDefault(); focusField(body.box, { end: true }); } // caret into the text (edit() alone never focuses in the editor)
     });
     const ed = h('div', 'ytx-ed');
     bar.append(back, title);
