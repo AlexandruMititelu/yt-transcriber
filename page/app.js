@@ -481,6 +481,8 @@ async function renderDetail(videoId) {
       show('Notes'); built.Notes?.__view?.addNote(hk === 'quickNote' ? 'quick' : 'note');
     } else if (hk === 'toggleNote') {
       show('Notes'); built.Notes?.__view?.toggle();
+    } else if (hk === 'deleteNote') {
+      show('Notes'); built.Notes?.__view?.focusDelete();
     } else if (hk === 'prevNote' || hk === 'nextNote') {
       show('Notes'); built.Notes?.__view?.move(hk === 'nextNote' ? 1 : -1);
     } else if (hk === 'focusVideo') {

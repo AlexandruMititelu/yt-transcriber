@@ -259,11 +259,22 @@ export function createNotesView(opts) {
         },
       });
       box.classList.add('ytx-notes-overlay');
+      box.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') { ev.stopPropagation(); box.remove(); host.focus(); } });
       host.style.position = 'relative';
       host.append(box);
+      box.querySelector('.ytx-confirm-danger')?.focus(); // Enter confirms, Esc cancels
     });
     return b;
   }
+  // Alt+Backspace: put focus on the trash of the open editor or the selected card (Enter then asks).
+  function focusDelete() {
+    const scope = openId ? root.querySelector('.ytx-ed') : selId != null ? cardEls.get(selId) : null;
+    scope?.querySelector('.ytx-notes-del')?.focus();
+  }
+  // Plain Enter on a focused card opens it (Alt+Enter does the same from anywhere).
+  const enterOpens = (el, card) => el.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.altKey && !e.ctrlKey && !e.metaKey && e.target === el) { e.preventDefault(); e.stopPropagation(); select(card.id); toggle(); }
+  });
 
   // Rendered markdown that turns into a textarea on click; back to rendered on blur.
   // With `wysiwyg`, the rendered HTML itself is contenteditable and is converted back to markdown.
@@ -371,6 +382,7 @@ export function createNotesView(opts) {
   function quickCard(card) {
     const el = h('div', `ytx-qn ytx-c${card.color || 0}`);
     el.tabIndex = 0;
+    enterOpens(el, card);
     el.addEventListener('click', (e) => { if (!e.target.closest('a, button')) select(card.id); });
     const { box } = mdField(card, { cls: 'ytx-qn-body', placeholder: 'Quick note…', max: QUICK_MAX });
     const foot = h('div', 'ytx-notes-foot');
@@ -404,6 +416,7 @@ export function createNotesView(opts) {
   function noteCard(card) {
     const el = h('div', 'ytx-nt');
     el.tabIndex = 0;
+    enterOpens(el, card);
     el.title = 'Open in editor';
     el.append(h('div', 'ytx-nt-title', card.title || 'Untitled'), h('div', 'ytx-nt-excerpt', excerpt(card.text) || 'Empty note'));
     const foot = h('div', 'ytx-notes-foot');
@@ -588,5 +601,5 @@ export function createNotesView(opts) {
   }
 
   refresh();
-  return { root, refresh, flush, setMode, addNote, isEditing: () => !!openId, select, selectedId, move, toggle };
+  return { root, refresh, flush, setMode, addNote, isEditing: () => !!openId, select, selectedId, move, toggle, focusDelete };
 }

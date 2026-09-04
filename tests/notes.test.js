@@ -36,6 +36,12 @@ test('excerpt: first sentence, markdown stripped, capped', () => {
   assert.equal(notes.excerpt('x'.repeat(400)).length, 280);
 });
 
+test('hotkeyId: Alt+Backspace = deleteNote', async () => {
+  const { hotkeyId } = await import('../config/hotkeys.js');
+  assert.equal(hotkeyId({ altKey: true, key: 'Backspace' }), 'deleteNote');
+  assert.equal(hotkeyId({ altKey: false, key: 'Backspace' }), null);
+});
+
 test('parsePrompts: "Label: text" lines, defaults when unset, none when empty', async () => {
   const { parsePrompts, PROMPTS, promptsToText } = await import('../config/prompts.js');
   assert.deepEqual(parsePrompts(undefined), PROMPTS);

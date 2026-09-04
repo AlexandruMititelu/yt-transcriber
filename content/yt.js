@@ -681,6 +681,8 @@
         selectTab('notes'); notesView.addNote('quick');
       } else if (hk === 'toggleNote') {
         selectTab('notes'); notesView.toggle();
+      } else if (hk === 'deleteNote') {
+        selectTab('notes'); notesView.focusDelete();
       } else if (hk === 'prevNote' || hk === 'nextNote') {
         selectTab('notes'); notesView.move(hk === 'nextNote' ? 1 : -1);
       } else if (hk === 'focusVideo') {

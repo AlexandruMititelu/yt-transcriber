@@ -12,13 +12,14 @@ export const HOTKEYS = [
   { id: 'toggleNote', keys: 'Alt+Enter', desc: 'Note editor: back to the list (card stays selected) / open the selected note' },
   { id: 'prevNote', keys: "Alt+'", desc: 'Select the previous note (wraps)' },
   { id: 'nextNote', keys: 'Alt+\\', desc: 'Select the next note (wraps)' },
+  { id: 'deleteNote', keys: 'Alt+Backspace', desc: 'Focus the trash of the selected / open note; Enter asks, Enter again deletes (Esc keeps it)' },
   { id: 'focusVideo', keys: 'Alt+Shift+Enter', desc: 'Focus the YouTube player (space plays/pauses)' },
   { id: 'findTranscript', keys: 'Alt+F', desc: 'Go to Transcript and focus the search box' },
 ];
 
 const BY_KEY = {
   e: 'editMode', v: 'viewMode', w: 'webSearch', c: 'focusChat', n: 'newNote', q: 'quickNote',
-  f: 'findTranscript', "'": 'prevNote', '\\': 'nextNote', Enter: 'toggleNote', ArrowUp: 'prevTab', ArrowDown: 'nextTab',
+  f: 'findTranscript', "'": 'prevNote', '\\': 'nextNote', Enter: 'toggleNote', Backspace: 'deleteNote', ArrowUp: 'prevTab', ArrowDown: 'nextTab',
 };
 
 // KeyboardEvent → hotkey id, or null. All shortcuts are Alt + key; Shift is only valid for Alt+Shift+Enter.
