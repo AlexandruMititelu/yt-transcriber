@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "YT Transcriber",
-  "version": "0.1.37",
+  "version": "0.1.38",
   "description": "Transcript, chat, and notes for YouTube \u2014 bring your own LLM key, files land in your Obsidian vault.",
   "permissions": [
     "storage",

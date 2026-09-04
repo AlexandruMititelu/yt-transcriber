@@ -14,10 +14,12 @@
       <stop offset="0.5" stop-color="#FFFFFF" stop-opacity="0"/>
     </linearGradient>
   </defs>
+  <g transform="translate(256 256) scale(1.25) translate(-256 -274)">
   <g fill="url(#ribbon)">
     <rect x="112" y="136" width="288" height="76" rx="38"/>
     <path d="M218 212 H294 V352 L256 412 L218 352 Z"/>
   </g>
   <rect x="112" y="136" width="288" height="76" rx="38" fill="url(#sheen)"/>
   <path d="M218 212 H294 V290 Z" fill="url(#fold)"/>
+  </g>
 </svg>
