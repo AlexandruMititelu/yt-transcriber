@@ -81,7 +81,7 @@ test('note markdown roundtrips through parseNote', () => {
   assert.equal(note.title, 'Essay');
   assert.equal(note.text, '# H\n\nbody');
   // plain file written by hand in Obsidian = long-form note
-  assert.deepEqual(vault.parseNote('just text\n'), { text: 'just text', kind: 'note', fm: '' });
+  assert.deepEqual(vault.parseNote('just text\n'), { text: 'just text', kind: 'note', fm: '', tags: [] });
 });
 
 test('chat markdown = Obsidian callouts; roundtrips headings/rules/quotes/blank lines; legacy markers still parse', () => {
@@ -273,9 +273,10 @@ test('frontmatter: keys added in Obsidian (tags list, aliases) survive a rewrite
   const md = '---\nytx: "note"\nid: "n1"\nkind: "note"\ntitle: "T"\ntags:\n  - ml\n  - papers\naliases: [x]\n---\nbody';
   const parsed = vault.parseNote(md);
   assert.equal(parsed.text, 'body');
-  assert.equal(parsed.fm, 'tags:\n  - ml\n  - papers\naliases: [x]');
-  const out = vault.noteToMd(video, { id: 'n1', kind: 'note', title: 'T', text: 'body', ts: 1, ...parsed });
-  assert.match(out, /tags:\n  - ml\n  - papers\naliases: \[x\]\n---\nbody$/);
+  assert.equal(parsed.fm, 'aliases: [x]'); // tags are ours now (inherited from the video + the note's own)
+  assert.deepEqual(parsed.tags, ['ml', 'papers']);
+  const out = vault.noteToMd({ ...video, tags: ['talk'] }, { id: 'n1', kind: 'note', title: 'T', text: 'body', ts: 1, ...parsed });
+  assert.match(out, /tags: \[talk, ml, papers\]\naliases: \[x\]\n---\nbody$/);
   assert.equal(vault.parseNote(out).fm, parsed.fm);
   const chat = vault.parseChat('---\nytx: "chat"\nid: "c1"\ncssclasses: wide\n---\n# t\n');
   assert.equal(chat.fm, 'cssclasses: wide');
@@ -351,9 +352,18 @@ test('hub note + Index.md: written once per video, pin/unpin only restamp front 
   await vault.syncTags(settings, video);
   assert.match(files.get(hub), /tags: \[talk, ml\]/);
   assert.match(files.get('C:\\Vault/YT-transcriber/Index.md'), /Hub video\]\] · Chan #talk #ml/);
+  // children inherit: the note file and Transcript.md carry the video's tags
+  assert.match(files.get('C:\\Vault/YT-transcriber/Hub video/notes/x.md'), /tags: \[talk, ml\]/);
+  await vault.syncTranscript(settings, video);
+  assert.match(files.get('C:\\Vault/YT-transcriber/Hub video/Transcript.md'), /tags: \[talk, ml\]/);
   writeDisk(hub, files.get(hub).replace('tags: [talk, ml]', 'tags:\n  - rust\n  - "#papers"'));
   await vault.hydrate(settings, video);
   assert.deepEqual(video.tags, ['rust', 'papers']);
+  assert.deepEqual(video.notes.cards[0].tags, ['talk', 'ml']); // note keeps what the video no longer has, as its own (hydrate rebuilds card objects)
+  video.tags = ['rust'];
+  await vault.syncTags(settings, video);
+  assert.match(files.get('C:\\Vault/YT-transcriber/Hub video/notes/x.md'), /tags: \[rust, talk, ml\]/);
+  assert.match(files.get('C:\\Vault/YT-transcriber/Hub video/Transcript.md'), /tags: \[rust\]/);
   // frame capture → attachments + embed
   const embed = await vault.saveFrame(settings, video, 'data:image/jpeg;base64,AAAA', 61);
   assert.equal(embed, '![[attachments/1-01.jpg]]');

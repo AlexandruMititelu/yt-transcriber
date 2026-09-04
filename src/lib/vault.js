@@ -90,8 +90,12 @@ export function parseFrontmatter(md) {
 
 // Raw lines of every key not in `own`, joined: what we carry across a rewrite.
 const extraOf = (raw, own) => Object.keys(raw).filter((k) => !own.has(k)).map((k) => raw[k]).join('\n');
-const NOTE_KEYS = new Set(['ytx', 'id', 'kind', 'title', 'video', 'time', 'start', 'link', 'color', 'created']);
-const CHAT_KEYS = new Set(['ytx', 'id', 'title', 'video', 'created', 'updated']);
+const NOTE_KEYS = new Set(['ytx', 'id', 'kind', 'title', 'video', 'time', 'start', 'link', 'color', 'created', 'tags']);
+const CHAT_KEYS = new Set(['ytx', 'id', 'title', 'video', 'created', 'updated', 'tags']);
+const TRANSCRIPT_KEYS = new Set(['ytx', 'id', 'url', 'title', 'channel', 'lang', 'track', 'duration', 'tags']);
+// Children (notes, chats, Transcript.md) inherit the video's tags; a child may carry extra ones of its own.
+const childTags = (video, own) => { const t = [...new Set([...(video.tags ?? []), ...(own ?? [])])]; return t.length ? t : undefined; };
+const ownTags = (video, disk) => (disk ?? []).filter((t) => !(video.tags ?? []).includes(t));
 
 export function noteToMd(video, card) {
   return frontmatter({
@@ -105,6 +109,7 @@ export function noteToMd(video, card) {
     link: card.start == null ? undefined : `${video.url}&t=${Math.floor(card.start)}s`,
     color: card.color || 0,
     created: iso(card.ts),
+    tags: childTags(video, card.tags),
   }, card.fm) + (card.text || '');
 }
 
@@ -112,7 +117,7 @@ export function noteToMd(video, card) {
 // hand in Obsidian) are long-form notes; legacy ytx files without `kind` are quick notes.
 export function parseNote(md) {
   const { meta, body, raw } = parseFrontmatter(md);
-  const out = { text: body.replace(/\s+$/, ''), fm: extraOf(raw, NOTE_KEYS) };
+  const out = { text: body.replace(/\s+$/, ''), fm: extraOf(raw, NOTE_KEYS), tags: tagsOf(meta, raw) ?? [] };
   if (meta.ytx !== 'note') { out.kind = 'note'; return out; }
   out.kind = meta.kind === 'note' ? 'note' : 'quick';
   if (meta.id) out.id = String(meta.id);
@@ -144,6 +149,7 @@ export function chatToMd(video, chat) {
     video: video.url,
     created: iso(chat.createdAt),
     updated: iso(chat.updatedAt),
+    tags: childTags(video, chat.tags),
   }, chat.fm);
   const body = chat.messages.map((m) => {
     // A content line that looks like a callout header would parse as a new message: escape the bracket.
@@ -192,7 +198,7 @@ export function parseChat(md) {
   const { meta, body, raw } = parseFrontmatter(md);
   let messages = parseCallouts(body);
   if (!messages.length) messages = parseMarkers(body);
-  const out = { messages, fm: extraOf(raw, CHAT_KEYS) };
+  const out = { messages, fm: extraOf(raw, CHAT_KEYS), tags: tagsOf(meta, raw) ?? [] };
   if (meta.id) out.id = String(meta.id);
   if (meta.title) out.title = String(meta.title);
   for (const [k, f] of [['created', 'createdAt'], ['updated', 'updatedAt']]) {
@@ -326,6 +332,12 @@ export async function syncTags(settings, video) {
   const path = hubPath(settings, video);
   const { content } = await io(settings, { op: 'read', path });
   if (content != null) await io(settings, { op: 'write', path, content: restampHub(content, video, { pinnedAt: video.pinned?.at, tagsFromApp: true }) });
+  // Children inherit: rewrite every note and chat file, restamp Transcript.md.
+  for (const c of video.notes.cards) await syncNote(settings, video, c);
+  for (const c of video.chats) await syncChat(settings, video, c);
+  const tp = join(videoDir(settings, video), 'Transcript.md');
+  const tr = await io(settings, { op: 'read', path: tp });
+  if (tr.content != null) await io(settings, { op: 'write', path: tp, content: restampTranscript(tr.content, video) });
   await refreshIndex(settings).catch(() => {});
 }
 
@@ -369,10 +381,19 @@ export function transcriptToMd(video) {
     while (ci < chapters.length && chapters[ci].start <= s.start) { body.push('', `## ${chapters[ci].title}`, ''); ci++; }
     body.push(`- [${fmtTime(s.start)}](${video.url}&t=${Math.floor(s.start)}s) ${s.text}`);
   }
-  return frontmatter({
+  return frontmatter(transcriptMeta(video)) + `# ${video.title || video.videoId}\n${body.join('\n').replace(/^\n+/, '\n')}\n`;
+}
+const transcriptMeta = (video) => {
+  const t = video.transcript ?? {};
+  return {
     ytx: 'transcript', id: video.videoId, url: video.url, title: video.title || video.videoId, channel: video.channel,
-    lang: t.lang, track: t.trackName, duration: t.duration || undefined,
-  }) + `# ${video.title || video.videoId}\n${body.join('\n').replace(/^\n+/, '\n')}\n`;
+    lang: t.lang, track: t.trackName, duration: t.duration || undefined, tags: childTags(video),
+  };
+};
+// Re-stamp Transcript.md's front matter (tags) keeping the body and user keys.
+export function restampTranscript(md, video) {
+  const { body, raw } = parseFrontmatter(md);
+  return frontmatter(transcriptMeta(video), extraOf(raw, TRANSCRIPT_KEYS)) + body;
 }
 
 // <video>/Transcript.md, written once the transcript exists (video.transcriptFile remembers the location).
@@ -513,6 +534,7 @@ export async function hydrate(settings, video) {
     const prev = (parsed.id && byId.get(parsed.id)) || byFile.get(name);
     const card = { id: parsed.id || prev?.id || crypto.randomUUID(), title: '', start: null, color: 0, ts: Date.now(), ...prev, ...parsed, file: name, mtime: mtime || null };
     if (card.kind === 'note') card.title = name; // filename is the title: renames in Obsidian stick
+    card.tags = ownTags(video, card.tags); // inherited video tags are not the note's own
     cards.push(card);
   }
   cards.sort((a, b) => (a.ts || 0) - (b.ts || 0));
@@ -539,6 +561,7 @@ export async function hydrate(settings, video) {
       file: name,
       mtime: mtime || null,
     });
+    chats.at(-1).tags = ownTags(video, chats.at(-1).tags);
   }
   chats.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
   const freshChats = video.chats.filter((c) => !c.file && c.messages.length);

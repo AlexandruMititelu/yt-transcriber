@@ -308,8 +308,11 @@ When `settings.vaultDir` is set, files on disk are the source of truth. Layout:
                           (`restampHub`): the body and any user keys (aliases…) stay. `tags` is ours: on restamp
                           the disk list wins (edited in Obsidian) unless `tagsFromApp` (a tag edit in the app,
                           `syncTags` → restamp + refreshIndex); `hydrate` reads hub tags into `video.tags` when the
-                          key exists. Index.md lines end with the video's `#tags`. Notes carry no tag field: inline
-                          `#tag` in their text is the tag (Obsidian indexes it; the app chips + filters it).
+                          key exists. Index.md lines end with the video's `#tags`. Children inherit: notes, chats and
+                          Transcript.md get `tags: [video tags + own]` (`childTags`); on hydrate the inherited part is
+                          stripped back out (`ownTags`) so a tag removed from the video leaves the children on the next
+                          `syncTags` (which rewrites every note/chat and restamps Transcript.md). Notes carry no tag UI:
+                          inline `#tag` in their text is the tag (Obsidian indexes it; the app chips + filters it).
     Transcript.md         front matter (ytx: transcript, id, url, title, channel, lang, track, duration) + "# title" +
                           "## <chapter>" headings + "- [m:ss](url&t=Ns) text" lines; written with the folder or when the
                           track/translation changes (`video.transcriptFile` remembers the path)
