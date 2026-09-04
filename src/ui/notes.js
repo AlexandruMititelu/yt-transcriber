@@ -508,6 +508,7 @@ export function createNotesView(opts) {
       b.append(glyph);
       b.type = 'button';
       b.title = `${tip} (${keysFor(key === 'edit' ? 'editMode' : 'viewMode')})`;
+      b.addEventListener('pointerdown', (e) => e.preventDefault()); // keep focus: a blur re-render would swallow the click
       b.addEventListener('click', () => setMode(key));
       return b;
     };
