@@ -5,6 +5,7 @@
 // createTagEditor({ get, set, suggest?, compact?, chips?, locked?, up? }) → { root, refresh, focus, close }
 // locked() = tags inherited from the parent: shown first, no ✕, cannot be toggled here. up = popover opens upward.
 import { normTag, validTag, tagHue } from '../lib/tags.js';
+import { plusIcon } from './icons.js';
 
 function h(tag, cls, text) {
   const n = document.createElement(tag);
@@ -44,7 +45,8 @@ export function createTagEditor({ get, set, suggest, compact = false, chips: sho
   panel.append(inherited, input, known);
   let plus = null;
   if (compact) {
-    plus = h('button', 'ytx-tags-plus', '+');
+    plus = h('button', 'ytx-tags-plus');
+    plus.appendChild(plusIcon()); // SVG: a text '+' sits off-centre in the circle
     plus.type = 'button';
     plus.title = 'Add tag';
     plus.setAttribute('aria-label', 'Add tag');

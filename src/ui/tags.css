@@ -25,6 +25,7 @@
   display: inline-flex; align-items: center; justify-content: center;
   transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
+.ytx-tags-plus .ytx-ico { width: 11px; height: 11px; stroke-width: 2.4; display: block; }
 .ytx-tags-plus:hover, .ytx-tags-plus[aria-expanded="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
 .ytx-tags-pop {
   display: none; position: absolute; left: 0; top: calc(100% + 6px); z-index: 30; width: 260px; padding: 8px;
