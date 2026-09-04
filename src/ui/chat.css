@@ -106,12 +106,15 @@
   background: none; color: var(--muted); cursor: pointer; transition: color 0.15s ease, background-color 0.15s ease;
 }
 .ytx-chat-web .ytx-ico { width: 17px; height: 17px; stroke-width: 1.8; }
-.ytx-chat-web:hover { color: var(--text); }
+.ytx-chat-web:hover { color: var(--text); background: var(--surface); }
 .ytx-chat-web.is-on { color: var(--accent); background: var(--accent-soft); }
 
 .ytx-chat-send {
-  flex: none; width: 26px; height: 26px; border: 0; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
-  background: var(--accent); color: #fff; font: inherit; font-size: 15px; font-weight: 700; cursor: pointer;
+  flex: none; width: 26px; height: 26px; border: 0; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center;
+  background: var(--accent-soft); color: var(--accent); cursor: pointer; transition: color 0.15s ease, background-color 0.15s ease;
 }
-.ytx-chat-send.is-stop { background: var(--text); color: var(--surface); font-size: 11px; }
-.ytx-chat-send:hover { filter: brightness(1.08); }
+.ytx-chat-send .ytx-ico { width: 17px; height: 17px; stroke-width: 2.2; }
+.ytx-chat-send:hover { background: var(--accent); color: #fff; }
+.ytx-chat-send.is-stop { background: var(--surface); color: var(--text); }
+.ytx-chat-send.is-stop .ytx-ico { fill: currentColor; }
+.ytx-chat-send.is-stop:hover { background: var(--text); color: var(--surface); }

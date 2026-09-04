@@ -6,7 +6,7 @@ import * as vault from '../lib/vault.js';
 import { fmtTime } from '../lib/format.js';
 import { createPicker } from './picker.js';
 import { createChatBar, confirmBox } from './chatbar.js';
-import { globeIcon, copyIcon, checkIcon, cameraIcon } from './icons.js';
+import { globeIcon, copyIcon, checkIcon, cameraIcon, arrowUpIcon, stopIcon } from './icons.js';
 import { keysFor } from '../../config/hotkeys.js';
 import { PROMPTS, parsePrompts } from '../../config/prompts.js';
 
@@ -39,7 +39,8 @@ export function createChatView(opts) {
   ta.title = 'Enter to send, Shift+Enter for a new line';
   ta.rows = 1;
   ta.setAttribute('aria-label', 'Message');
-  const sendBtn = h('button', 'ytx-chat-send', '↑');
+  const sendBtn = h('button', 'ytx-chat-send');
+  sendBtn.appendChild(arrowUpIcon());
   sendBtn.type = 'button';
   sendBtn.title = 'Send (Enter)';
   sendBtn.setAttribute('aria-label', 'Send');
@@ -285,7 +286,7 @@ export function createChatView(opts) {
   let ctl = null; // AbortController of the in-flight request
   function setBusy(b) {
     busy = b;
-    sendBtn.textContent = b ? '■' : '↑';
+    sendBtn.replaceChildren(b ? stopIcon() : arrowUpIcon());
     sendBtn.title = b ? 'Stop (Esc)' : 'Send (Enter)';
     sendBtn.setAttribute('aria-label', b ? 'Stop' : 'Send');
     sendBtn.classList.toggle('is-stop', b);
