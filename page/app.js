@@ -92,7 +92,7 @@ const renderMdFor = (video) => (text) => renderMarkdown(text, {
 
 let libQuery = '';
 let libSort = 'recent'; // 'recent' | 'title' | 'channel'
-let libArchiveOpen = false; // archived section expanded
+let libView = 'all'; // 'all' | 'archive' (segmented switch, slides like iOS)
 let libTags = new Set(); // tag filter: a video must carry every selected tag
 let libGroup = 'none'; // 'none' | 'channel' | 'tag'
 let libShell = null; // header + tools, built once per visit to #/ — only the body inside .lib-stage repaints
@@ -192,8 +192,20 @@ function buildLibShell() {
   const tagsDd = tagMenu(() => paintLibrary('fade'));
   const count = el('span', { class: 'lib-count' });
   const stage = el('div', { class: 'lib-stage' }, el('div', { class: 'empty' }, 'Loading…'));
-  $app.replaceChildren(header,
-    el('div', { class: 'lib-tools' }, search, sortMenu(() => paintLibrary('fade')), group, tagsDd, count),
+  const views = [['all', 'All'], ['archive', 'Archive']];
+  const seg = el('div', { class: 'segmented lib-seg', role: 'tablist' }, views.map(([v, l]) => el('button', {
+    class: `seg-btn${libView === v ? ' active' : ''}`, role: 'tab', type: 'button', dataset: { v }, 'aria-selected': String(libView === v),
+    onclick: () => {
+      if (libView === v) return;
+      const dir = views.findIndex((x) => x[0] === v) > views.findIndex((x) => x[0] === libView) ? 'left' : 'right';
+      libView = v;
+      for (const b of seg.children) { b.classList.toggle('active', b.dataset.v === v); b.setAttribute('aria-selected', String(b.dataset.v === v)); }
+      paintLibrary(dir);
+    },
+  }, l)));
+  $app.replaceChildren(
+    el('div', { class: 'lib-head' }, header,
+      el('div', { class: 'lib-tools' }, seg, search, sortMenu(() => paintLibrary('fade')), group, tagsDd, count)),
     stage);
   libShell = { stage, count };
 }
@@ -215,9 +227,9 @@ async function paintLibrary(transition = 'fade') {
   for (const v of all) for (const t of v.tags ?? []) tagCounts.set(t, (tagCounts.get(t) || 0) + 1);
   if (libSort === 'title') vids = [...vids].sort((a, b) => (a.title || '').localeCompare(b.title || ''));
   else if (libSort === 'channel') vids = [...vids].sort((a, b) => (a.channel || '').localeCompare(b.channel || '') || b.updatedAt - a.updatedAt);
-  const archived = vids.filter((v) => v.archived);
-  const pinned = vids.filter((v) => v.pinned && !v.archived);
-  const rest = vids.filter((v) => !v.pinned && !v.archived);
+  vids = vids.filter((v) => !!v.archived === (libView === 'archive'));
+  const pinned = vids.filter((v) => v.pinned);
+  const rest = vids.filter((v) => !v.pinned);
   const section = (title, list) => el('section', { class: 'lib-section' },
     title ? el('h2', { class: 'lib-title' }, title) : null,
     el('div', { class: 'grid' }, list.map(videoCard)));
@@ -234,16 +246,14 @@ async function paintLibrary(transition = 'fade') {
       el('p', {}, 'No videos yet.'),
       el('p', { class: 'hint' }, 'Open a YouTube video — the transcript panel saves everything here.'));
   } else if (!vids.length) {
-    body = el('div', { class: 'empty' }, el('p', {}, 'Nothing matches.'));
+    body = el('div', { class: 'empty' }, el('p', {}, libView === 'archive' && !q && !libTags.size ? 'Nothing archived.' : 'Nothing matches.'));
   } else {
     body = el('div', {},
       pinned.length ? section('Pinned', pinned) : null,
-      grouped(rest, pinned.length ? 'Everything else' : null),
-      archived.length ? el('details', { class: 'lib-archive', open: libArchiveOpen ? '' : null, ontoggle: (e) => { libArchiveOpen = e.target.open; } },
-        el('summary', { class: 'lib-title' }, `Archived · ${archived.length}`),
-        el('div', { class: 'grid' }, archived.map(videoCard))) : null);
+      grouped(rest, pinned.length ? 'Everything else' : null));
   }
-  libShell.count.textContent = `${all.length} videos`;
+  const nView = all.filter((v) => !!v.archived === (libView === 'archive')).length;
+  libShell.count.textContent = `${nView} video${nView === 1 ? '' : 's'}`;
   swapBody(body, transition);
 }
 
@@ -304,7 +314,10 @@ function videoCard(v) {
       arc.disabled = true;
       try {
         await toggleArchive(v.videoId);
-        renderLibrary();
+        const was = !v.archived; // state before the toggle
+        leaveCard(wrap, () => { if (!libShell?.stage.querySelector('.card-wrap')) paintLibrary('fade'); });
+        libShell?.count && paintCount();
+        toast(`"${v.title || v.videoId}" ${was ? 'archived' : 'unarchived'}`, { action: { label: 'Undo', onClick: async () => { await toggleArchive(v.videoId); paintLibrary('fade'); } } });
       } catch (err) {
         arc.disabled = false;
         toast(err.message === 'no-vault'
@@ -323,6 +336,22 @@ function videoCard(v) {
       `${v.counts.segments} segments · ${v.counts.messages} messages · ${v.counts.cards} notes`),
     el('div', { class: 'card-actions' }, arc, pin, del));
   return wrap;
+}
+
+// A card leaving the list (archive / unarchive): fade + collapse, then removed; `then` runs after.
+function leaveCard(wrap, then) {
+  if (reduceMotion.matches) { wrap.remove(); then?.(); return; }
+  wrap.style.height = `${wrap.offsetHeight}px`;
+  wrap.classList.add('is-leaving');
+  requestAnimationFrame(() => { wrap.style.height = '0px'; wrap.style.opacity = '0'; wrap.style.transform = 'scale(0.96)'; });
+  const done = () => { wrap.remove(); then?.(); };
+  wrap.addEventListener('transitionend', done, { once: true });
+  setTimeout(done, 320);
+}
+async function paintCount() {
+  const all = await db.listVideos();
+  const n = all.filter((v) => !!v.archived === (libView === 'archive')).length;
+  if (libShell?.count) libShell.count.textContent = `${n} video${n === 1 ? '' : 's'}`;
 }
 
 // Tag row on a card (and the detail head): chips + "+" → compact editor popover; saves in place, no repaint.
@@ -553,6 +582,7 @@ function transcriptPane(video, disk) {
   } }, 'Copy all');
   const meta = el('span', { class: 'tr-meta' }, [video.transcript.trackName, video.transcript.duration ? fmtTime(video.transcript.duration) : null].filter(Boolean).join(' · '));
   root.append(el('div', { class: 'tr-tools' }, search, meta, copyAll));
+  const list = el('div', { class: 'seg-list' });
   attachQuoteMenu(list, {
     toast,
     source: (node) => {
@@ -561,7 +591,6 @@ function transcriptPane(video, disk) {
     },
     onNote: (text) => quoteToNote?.(text),
   });
-  const list = el('div', { class: 'seg-list' });
   const chapters = video.transcript.chapters ?? [];
   let ci = 0;
   for (const seg of grouped) {

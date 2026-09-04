@@ -7,7 +7,7 @@ Firefox MV2 extension. Transcript, chat, and notes panel next to any YouTube vid
 - Chat with the video (Anthropic or OpenAI, your API key): streamed markdown answers with mermaid diagrams, code copy buttons and clickable timestamps. Stop, retry, one-click presets, token/cost per reply and a context-window meter, optional web search. Transcripts bigger than 20% of the model's window are not sent whole: the model gets the chapter list and two tools, `search_transcript` (keyword search) and `read_transcript` (verbatim range), and pulls what it needs. Multiple chats per video, auto-titled, switchable
 - Quick notes (≤280 chars, color-coded cards, always fully visible) and long-form notes (title + markdown editor), both render markdown when you click away, optional time stamps, frame captures
 - Knowledge base folder (your Obsidian vault): every video gets a hub note, Transcript.md, notes and chats as markdown files, an Index.md at the root, and those files are the source of truth (edits in Obsidian win)
-- Library page with search, sort, channel grouping, full detail view, settings, JSON export/import
+- Library page (sticky header) with search, sort, grouping by channel or tag, tag filter, All | Archive, full detail view, settings, JSON export/import
 - Local-first: no server, no build step
 
 ## Install in Zen / Firefox
@@ -91,7 +91,7 @@ Transcripts and settings live in the browser profile's `storage.local` — on th
 - **+** (header) saves the video to the library without notes or chats; just watching never creates an entry
 - **Tags**: the tag button in the panel header (and the **+** under the title in the Library, also on every card) tags the video; they land in the hub note's front matter as `tags:` and on its Index.md line as `#tags`, so Obsidian's tag pane, search and graph see them. Edit them in Obsidian and the app picks them up. Suggestions come from tags you already used. Library cards show them; the **Tags** pop-up in the toolbar lists every tag with counts, click to filter (several = all must match), and the grouping pop-up can group the library **By tag** next to **By channel**; search matches tags too. Every child file (notes, chats, Transcript.md) inherits the video's tags in its front matter, so `#ml` in Obsidian finds them all. A note's own tags are inline `#tags` in its text, like anywhere in Obsidian: type them, or press the **+** in the note's footer to pick from known tags (it appends `#tag` to the text, ✕ removes it); the notes tab shows them as chips and a filter row
 - **Pin** (top right) moves the video's folder into `YT-transcriber/Pinned/` and turns yellow; press again to unpin. Pinned videos sit at the top of the Library, and every card has a pin
-- **Archive** (box icon next to the pin, also on cards and in the detail view) moves the folder into `YT-transcriber/Archive/`; archived videos leave the main list and sit in a collapsed "Archived" section at the bottom of the Library, last in Index.md. Pinning an archived video unarchives it and vice versa
+- **Archive** (box icon next to the pin, also on cards and in the detail view) moves the folder into `YT-transcriber/Archive/`; archived videos leave the main list; the **All | Archive** switch in the Library toolbar slides between the two (archiving from a card fades it out with an Undo toast), last in Index.md. Pinning an archived video unarchives it and vice versa
 - **Refetch transcript** (⟳) sits in the transcript toolbar
 - **⧉** opens the Library: browse saved videos, reopen transcript/chat/notes, delete, settings
 
@@ -138,7 +138,7 @@ config/hotkeys.js      keyboard shortcuts; config/prompts.js chat presets
 native/host.mjs        Node native-messaging host (fs ops + folder dialog); install.ps1 / install.sh register it
 content/yt.js|css      YouTube panel (classic script, styles scoped to #ytx-panel)
 page/app.html|js|css   Library page (hash routes #/, #/video/<id>, #/settings)
-tests/                 node:test suites, no network
+tests/                 node:test suites, no network; tests/dom.js = tiny DOM stand-in, tests/smoke.test.js builds every view + all library routes against it
 docs/ARCHITECTURE.md   binding contract
 ```
 

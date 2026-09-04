@@ -23,6 +23,12 @@ button:disabled { opacity: 0.5; cursor: default; }
 
 /* top bar */
 .topbar { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+/* library header (brand + tools) stays put while the grid scrolls */
+.lib-head { position: sticky; top: 0; z-index: 40; margin: -24px -20px 0; padding: 24px 20px 4px; background: var(--bg); }
+.lib-head .topbar { margin-bottom: 16px; }
+.lib-seg { margin: 0; }
+.card-wrap.is-leaving { overflow: hidden; margin-bottom: -14px; transition: height 0.28s ease, opacity 0.22s ease, transform 0.28s ease, margin 0.28s ease; }
+.card-wrap.is-leaving * { pointer-events: none; }
 .topbar h1 { flex: 1; margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.02em; display: flex; align-items: center; gap: 10px; }
 .topbar .logo { width: 28px; height: 28px; border-radius: 7px; }
 
@@ -243,9 +249,4 @@ kbd { font-family: var(--font-mono); font-size: 11.5px; padding: 1px 6px; border
 .card-arc { opacity: 0.35; transition: opacity 0.15s ease; width: 28px; height: 28px; }
 .card:hover .card-arc, .card-arc:focus-visible, .card-arc.on { opacity: 1; }
 .card-arc.on, .icon-btn.arc.on { color: var(--accent); }
-.lib-archive { margin-top: 8px; }
-.lib-archive > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 6px; }
-.lib-archive > summary::before { content: ''; width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); transition: transform 0.2s ease; }
-.lib-archive[open] > summary::before { transform: rotate(45deg); }
-.lib-archive > summary::-webkit-details-marker { display: none; }
 .card-del:hover { color: #ff453a; }

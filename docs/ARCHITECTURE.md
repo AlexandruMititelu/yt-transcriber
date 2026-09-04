@@ -534,13 +534,15 @@ NO inline scripts or on* attributes (extension CSP). Theme: `settings.theme` →
 Views (hash routing: `#/`, `#/video/<id>`, `#/settings`):
 - **Library `#/`**: header "YT Transcriber" + Settings gear and the tools row are built ONCE per visit (`buildLibShell`);
   only the body inside `.lib-stage` is repainted (`paintLibrary`), so typing in the search box never re-creates it.
-  Header = logo (assets/logo-light.svg) + name. Tools (`popMenu` = pill + chevron rotating 180° when open, popover
+  Header (`.lib-head`, sticky: brand row + tools row) = logo (assets/logo-light.svg) + name. Tools: All | Archive segmented switch (`libView`;
+  slides left/right via `swapBody`; archive view lists archived videos only, count follows the view), then (`popMenu` = pill + chevron rotating 180° when open, popover
   with the chatbar look; `choiceMenu` = radio list with a check column): search box (title/channel/#tags, debounced),
   sort pop-up (Recent | Title | Channel), grouping pop-up (No grouping | By channel | By tag: a video appears under
   each of its tags, "Untagged" otherwise), Tags pop-up (every library tag as coloured `tagChip`s with counts, click
   toggles it in `libTags`; filter = video carries ALL selected tags; "Clear filter"; label shows the selection, `.on`
   when active), video count (all session-scoped). All: a "Pinned" section first (when any), then "Everything
-  else" (or one section per group key). Pinned: only pinned videos (empty hint otherwise). Video card = `.card-wrap.card`
+  else" (or one section per group key). Archiving from a card: `leaveCard` fades/collapses the card in place,
+  toast "<title> archived" with Undo (no repaint); a now-empty stage repaints. Pinned: only pinned videos (empty hint otherwise). Video card = `.card-wrap.card`
   holding the `<a class=card-link>` (title, channel, relative date), a tag row (`videoTagEditor`: compact `createTagEditor`, chips with ✕ + "+" popover; saves + `vault.syncTags` in place, no
   repaint; same editor under the detail title),
   badges (N segments · N messages · N notes) and a
@@ -579,7 +581,13 @@ muted #98989d, accent #0a84ff, border rgba(255,255,255,.1). Radius 12 (sm 8). Ke
 (light/dark): 0 default surface, 1 #fff8d6/#4a4526, 2 #e2f6e3/#2a4030, 3 #e1f0ff/#243b52, 4 #fde7ef/#4a2c38.
 Fonts: --font-ui "Geist" then system stack, --font-mono "JetBrains Mono" (both @font-face from vendor).
 
-## Tests (node --test, node:assert/strict)
+## Tests
+
+`tests/dom.js` is a ~150-line DOM stand-in (elements, classList, naive selectors, events, a Document with
+body/activeElement) and `tests/smoke.test.js` builds every shared view and imports `page/app.js` through all three
+routes (detail with each pane, library All + Archive, settings) against it, asserting no console errors and no
+"Error:" render. It exists to catch construction-time bugs `node --check` cannot: use-before-declaration (TDZ),
+missing imports, calls on undefined. Add new views/routes there. (node --test, node:assert/strict)
 
 - format: fmtTime (0, 65, 3671, 59.9), clampText cut/no-cut, chunkText (respects size, no empties, word split).
 - transcript: extractPlayerResponse (html fixture with braces inside strings + `var` form + absent),
