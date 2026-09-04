@@ -37,7 +37,7 @@
 .ytx-mmd-expand:hover { background: var(--accent); color: #fff; }
 .ytx-mmd-overlay { position: fixed; inset: 0; z-index: 2147483000; display: flex; align-items: center; justify-content: center; padding: 32px; background: rgba(0, 0, 0, 0.75); }
 .ytx-mmd-box { max-width: 94vw; max-height: 90vh; overflow: auto; padding: 20px; border-radius: 14px; background: #fdf6e3; display: flex; align-items: center; justify-content: center; }
-.ytx-mmd-box svg { width: auto; height: auto; max-width: 90vw; max-height: 85vh; }
+.ytx-mmd-box svg { height: auto; max-height: 85vh; }
 .ytx-mmd-close {
   position: absolute; top: 16px; right: 20px; width: 36px; height: 36px; border: 0; border-radius: 50%;
   background: rgba(255, 255, 255, 0.15); color: #fff; font: inherit; font-size: 16px; cursor: pointer;

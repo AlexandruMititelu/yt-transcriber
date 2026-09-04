@@ -110,7 +110,12 @@ function expandBtn(wrap) {
     box.style.background = dark ? '#1e1e20' : '#fdf6e3';
     const svg = wrap.querySelector('svg')?.cloneNode(true);
     if (!svg) return;
-    svg.removeAttribute('width'); svg.removeAttribute('height'); svg.style.maxWidth = '100%'; svg.style.maxHeight = '100%';
+    // Mermaid pins the svg to its natural size (width=100% + inline max-width); size it to the window instead,
+    // keeping the viewBox aspect: as wide as fits, never taller than 85vh.
+    svg.removeAttribute('width'); svg.removeAttribute('height');
+    const vb = (svg.getAttribute('viewBox') || '').split(/[\s,]+/).map(Number);
+    const ratio = vb.length === 4 && vb[3] > 0 ? vb[2] / vb[3] : 1.6;
+    svg.style.cssText = `max-width:none;width:min(90vw, ${(85 * ratio).toFixed(1)}vh);height:auto;display:block`;
     box.append(svg);
     const close = h('button', 'ytx-mmd-close', '✕');
     close.type = 'button';
