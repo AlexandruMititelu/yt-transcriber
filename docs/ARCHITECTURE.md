@@ -382,7 +382,7 @@ Bootstrap: `(async () => { ... })()`. All lib access via
   `save()` writes only when `video.kept || video.pinned || a chat has messages || notes.cards.length` (then the
   in-memory transcript is persisted too) and `vault.syncTranscript` runs under the same gate.
 - **Transcript tab**: sticky toolbar: search box (filters rows as you type, matches wrapped in `<mark class="ytx-hl">`
-  yellow #ffd60a, Esc clears; Alt+F focuses it),
+  yellow #f5d442, Esc clears; Alt+F focuses it),
   track button (name of the current track; popover lists caption tracks and "Translate to" en/ro/nl/de/fr/es/it/pt →
   `loadTranscript(true, {track|translate})`, hidden when there is nothing to pick), copy-all (⧉, `[m:ss] text` lines),
   "Follow" toggle (persisted in `settings.follow`): on `timeupdate` of the page `<video>` the row whose
@@ -513,8 +513,9 @@ Shared rendering lives in src/ui/ (markdown, toast, chat, notes) — do NOT impo
 
 ## Design tokens (authoritative values in src/ui/tokens.css)
 
-Light: bg #f5f5f7, surface #fff, surface2 #f2f2f4, text #1d1d1f, muted #6e6e73, accent #007aff,
-border rgba(0,0,0,.08). Dark: bg #161617, surface #1e1e20, surface2 #2a2a2d, text #f5f5f7,
+Light = Solarized Light: bg #eee8d5, surface #fdf6e3, surface2 #e6dfc8, text #073642, muted #657b83, accent #268bd2,
+border rgba(7,54,66,.12), plus a fixed SVG fractal-noise grain layer (`--grain`, `--grain-opacity` .07; 0 in dark) over
+the page body and the panel. Dark: bg #161617, surface #1e1e20, surface2 #2a2a2d, text #f5f5f7,
 muted #98989d, accent #0a84ff, border rgba(255,255,255,.1). Radius 12 (sm 8). Keep card colors
 (light/dark): 0 default surface, 1 #fff8d6/#4a4526, 2 #e2f6e3/#2a4030, 3 #e1f0ff/#243b52, 4 #fde7ef/#4a2c38.
 Fonts: --font-ui "Geist" then system stack, --font-mono "JetBrains Mono" (both @font-face from vendor).
