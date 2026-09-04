@@ -127,12 +127,20 @@
 
     const { fmtTime } = L.format;
     const meta = await waitForMeta(myGen);
-    const video = (await L.db.getVideo(videoId)) ?? L.db.blankVideo(videoId, meta.title, meta.channel);
+    const rec = await L.db.getVideo(videoId);
+    const video = rec ?? L.db.blankVideo(videoId, meta.title, meta.channel);
+    let saved = !!rec; // has a DB record → no "+" button
     if (!live()) return;
     if (!L.vault.hasTitle(video) && meta.title) video.title = meta.title;
     if (!video.channel && meta.channel) video.channel = meta.channel;
 
-    const save = () => L.db.saveVideo(video).catch((e) => console.warn('[ytx] save failed', e));
+    // Save gate: merely watching a video must not create a record. Once the user keeps / pins /
+    // chats / takes a note the record (transcript included) is written on every save.
+    const keep = () => !!video.kept || !!video.pinned || video.chats.some((c) => c.messages.length) || video.notes.cards.length > 0;
+    const save = () => {
+      if (!keep()) return Promise.resolve();
+      return L.db.saveVideo(video).then(() => { saved = true; paintAdd(); }, (e) => console.warn('[ytx] save failed', e));
+    };
     // Debounced note autosave: model updates synchronously in the handlers; the write is
     // debounced, gen-guarded, and flushed on teardown so edits survive SPA nav. Dirty cards /
     // overview are mirrored to disk in the same flush.
@@ -159,9 +167,20 @@
     panel.id = 'ytx-panel';
 
     const header = h('div', 'ytx-header');
-    const titleEl = h('span', 'ytx-title', 'Transcript');
-    header.appendChild(titleEl);
-    const refetchBtn = h('button', 'ytx-icon-btn', '⟳');
+    header.appendChild(h('span', 'ytx-title', 'YT-Trans'));
+    const addBtn = h('button', 'ytx-icon-btn');
+    addBtn.appendChild(L.icons.plusIcon());
+    addBtn.title = 'Save this video to the library';
+    addBtn.setAttribute('aria-label', 'Save this video to the library');
+    function paintAdd() { addBtn.hidden = saved; }
+    paintAdd();
+    addBtn.addEventListener('click', async () => {
+      video.kept = true;
+      await save();
+      if (live()) toast('Saved to library');
+    });
+    const refetchBtn = h('button', 'ytx-icon-btn');
+    refetchBtn.appendChild(L.icons.refreshIcon());
     refetchBtn.title = 'Refetch transcript';
     refetchBtn.setAttribute('aria-label', 'Refetch transcript');
     const pinBtn = h('button', 'ytx-icon-btn ytx-pin');
@@ -172,17 +191,18 @@
     };
     paintPin();
     pinBtn.setAttribute('aria-label', 'Pin');
-    const libraryBtn = h('button', 'ytx-icon-btn', '⧉');
+    const libraryBtn = h('button', 'ytx-icon-btn');
+    libraryBtn.appendChild(L.icons.libraryIcon());
     libraryBtn.title = 'Open library';
     libraryBtn.setAttribute('aria-label', 'Open library');
-    header.append(refetchBtn, pinBtn, libraryBtn);
+    header.append(addBtn, refetchBtn, pinBtn, libraryBtn);
     panel.appendChild(header);
 
     const tabsBar = h('div', 'ytx-tabs');
     tabsBar.setAttribute('role', 'tablist');
     const views = {
       transcript: h('div', 'ytx-view ytx-scroll ytx-transcript'),
-      chat: h('div', 'ytx-view ytx-chat'),
+      chat: h('div', 'ytx-view ytx-chat-view'),
       notes: h('div', 'ytx-view ytx-scroll ytx-notes'),
     };
     const tabBtns = {};
@@ -211,7 +231,6 @@
 
     function selectTab(key) {
       activeTab = key;
-      titleEl.textContent = TAB_LABEL[key];
       for (const k of Object.keys(views)) {
         tabBtns[k].classList.toggle('is-active', k === key);
         tabBtns[k].setAttribute('aria-selected', k === key ? 'true' : 'false');
@@ -283,7 +302,8 @@
     const trackMenu = h('div', 'ytx-tr-menu');
     const trackWrap = h('div', 'ytx-tr-trackwrap');
     trackWrap.append(trackBtn, trackMenu);
-    const copyAll = h('button', 'ytx-icon-btn ytx-tr-copy', '⧉');
+    const copyAll = h('button', 'ytx-icon-btn ytx-tr-copy');
+    copyAll.appendChild(L.icons.copyIcon());
     copyAll.title = 'Copy whole transcript';
     copyAll.setAttribute('aria-label', 'Copy whole transcript');
     copyAll.addEventListener('click', () => {
@@ -295,13 +315,29 @@
     followBtn.setAttribute('aria-pressed', 'false');
     bar.append(search, trackWrap, copyAll, followBtn);
     function paintFollow() { followBtn.classList.toggle('is-on', followOn); followBtn.setAttribute('aria-pressed', followOn ? 'true' : 'false'); }
+    // Query matches are wrapped in <mark>; text nodes are built by hand (never innerHTML).
+    function paintText(r) {
+      const el = r.textEl;
+      el.textContent = '';
+      let i = 0;
+      if (query) {
+        const low = r.text.toLowerCase();
+        for (let j = low.indexOf(query); j >= 0; j = low.indexOf(query, i)) {
+          if (j > i) el.append(r.text.slice(i, j));
+          el.append(h('mark', 'ytx-hl', r.text.slice(j, j + query.length)));
+          i = j + query.length;
+        }
+      }
+      el.append(r.text.slice(i), r.acts);
+    }
     function applyFilter() {
       query = search.value.trim().toLowerCase();
       let n = 0;
       for (const r of rows) {
-        const hit = !query || r.el.textContent.toLowerCase().includes(query);
+        const hit = !query || r.text.toLowerCase().includes(query);
         r.el.hidden = !hit;
         if (hit) n++;
+        paintText(r);
       }
       for (const c of views.transcript.querySelectorAll('.ytx-chapter')) c.hidden = !!query;
       search.classList.toggle('is-empty', !!query && n === 0);
@@ -393,9 +429,9 @@
         const row = h('div', 'ytx-row');
         row.setAttribute('role', 'button');
         row.tabIndex = 0;
-        rows.push({ start: seg.start, el: row });
         const acts = h('span', 'ytx-row-acts');
-        const copy = h('button', 'ytx-row-act', '⧉');
+        const copy = h('button', 'ytx-row-act');
+        copy.appendChild(L.icons.copyIcon());
         copy.type = 'button';
         copy.title = 'Copy line';
         copy.setAttribute('aria-label', 'Copy line');
@@ -403,7 +439,8 @@
           e.stopPropagation();
           navigator.clipboard.writeText(`[${fmtTime(seg.start)}] ${seg.text}`).then(() => toast('Copied'), () => toast('Copy failed'));
         });
-        const ask = h('button', 'ytx-row-act', '💬');
+        const ask = h('button', 'ytx-row-act');
+        ask.appendChild(L.icons.chatIcon());
         ask.type = 'button';
         ask.title = 'Ask about this in Chat';
         ask.setAttribute('aria-label', 'Ask about this in Chat');
@@ -413,7 +450,10 @@
           chatView.prefill(`> [${fmtTime(seg.start)}] ${seg.text}\n\n`);
         });
         acts.append(copy, ask);
-        row.append(h('span', 'ytx-time', fmtTime(seg.start)), h('div', 'ytx-text', seg.text), acts);
+        // Actions live at the end of the text (inline), so they never cover words.
+        const textEl = h('div', 'ytx-text');
+        rows.push({ start: seg.start, el: row, text: seg.text, textEl, acts });
+        row.append(h('span', 'ytx-time', fmtTime(seg.start)), textEl);
         row.addEventListener('click', () => seek(seg.start));
         row.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); seek(seg.start); } });
         views.transcript.appendChild(row);
@@ -444,7 +484,8 @@
         if (!video.channel && t.channel) video.channel = t.channel;
         await save();
         renderTranscript();
-        disk((st) => L.vault.syncTranscript(st, video));
+        // Transcript.md only for kept videos; vault.ensureDirs writes it when notes/chats land.
+        if (keep()) disk((st) => L.vault.syncTranscript(st, video));
       } catch (e) {
         if (live()) renderTranscriptError(e);
       }
@@ -501,6 +542,14 @@
         selectTab('transcript'); search.focus();
       } else if (hk === 'newNote') {
         selectTab('notes'); notesView.addNote('note');
+      } else if (hk === 'quickNote') {
+        selectTab('notes'); notesView.addNote('quick');
+      } else if (hk === 'toggleNote') {
+        selectTab('notes'); notesView.toggle();
+      } else if (hk === 'prevNote' || hk === 'nextNote') {
+        selectTab('notes'); notesView.move(hk === 'nextNote' ? 1 : -1);
+      } else if (hk === 'focusVideo') {
+        (document.querySelector('#movie_player') || document.querySelector('video'))?.focus();
       } else {
         selectTab('notes');
         notesView.setMode(hk === 'editMode' ? 'edit' : 'view');

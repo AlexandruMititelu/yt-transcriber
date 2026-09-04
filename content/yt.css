@@ -142,6 +142,10 @@
   color: var(--text);
 }
 
+#ytx-panel .ytx-icon-btn[hidden] {
+  display: none;
+}
+
 #ytx-panel .ytx-icon-btn:disabled {
   opacity: 0.5;
   cursor: default;
@@ -263,7 +267,7 @@
 }
 
 #ytx-panel .ytx-notes {
-  padding: 2px 14px 14px;
+  padding: 2px 8px 8px;
 }
 
 /* ---- shared bits ---- */
@@ -340,8 +344,9 @@
 }
 
 /* ---- chat tab (shared: src/ui/chat.css) ---- */
+/* the view wrapper, not the shared .ytx-chat root — else the 8px padding lands twice */
 
-#ytx-panel .ytx-chat {
+#ytx-panel .ytx-chat-view {
   padding: 0 8px 8px;
 }
 
@@ -426,22 +431,29 @@
 #ytx-panel .ytx-chapter:hover { background: var(--surface-2); }
 #ytx-panel .ytx-chapter-title { font-weight: 700; font-size: 12.5px; }
 
-#ytx-panel .ytx-row { position: relative; }
 #ytx-panel .ytx-row[hidden] { display: none; }
+/* inline at the end of the text: never overlaps words */
 #ytx-panel .ytx-row-acts {
-  position: absolute;
-  top: 4px;
-  right: 6px;
   display: none;
   gap: 2px;
-  padding: 1px;
-  border-radius: 7px;
-  background: var(--surface);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  margin-left: 6px;
+  vertical-align: middle;
 }
 #ytx-panel .ytx-row:hover .ytx-row-acts, #ytx-panel .ytx-row:focus-within .ytx-row-acts { display: inline-flex; }
-#ytx-panel .ytx-row-act { width: 22px; height: 20px; border-radius: 6px; color: var(--muted); font-size: 12px; line-height: 1; }
+#ytx-panel .ytx-row-act {
+  width: 22px;
+  height: 20px;
+  border-radius: 6px;
+  color: var(--muted);
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
 #ytx-panel .ytx-row-act:hover { background: var(--surface-2); color: var(--text); }
+#ytx-panel .ytx-row-act .ytx-ico, #ytx-panel .ytx-tr-copy .ytx-ico { width: 14px; height: 14px; }
+
+#ytx-panel .ytx-hl { background: #ffd60a; color: #1d1d1f; border-radius: 3px; padding: 0 1px; }
+#ytx-panel.ytx-dark .ytx-hl { background: #ffd60a; color: #1d1d1f; }
 
 /* theater mode: #secondary sits below a full-width player; keep the panel readable */
 #ytx-panel.is-theater { max-height: 80vh; max-width: 720px; }
+
+#ytx-panel .ytx-icon-btn .ytx-ico { width: 16px; height: 16px; }

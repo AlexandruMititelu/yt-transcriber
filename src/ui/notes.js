@@ -100,6 +100,58 @@ export function createNotesView(opts) {
   const { video, renderMd, onChange, onDelete, fmtTime } = opts;
   const root = h('div', 'ytx-notes');
   let openId = null; // note being edited; null = list
+  let selId = null; // list selection (card id); persists across refresh(), moves off a deleted card
+  let cardEls = new Map(); // id → current list card element (rebuilt on every list paint)
+  let query = '';
+  let newestFirst = false;
+
+  // Cards in current filter/sort order (same rules paint() renders with).
+  const displayCards = () => {
+    const q = query.trim().toLowerCase();
+    let cards = video.notes.cards.filter((c) => !q || `${c.title || ''}\n${c.text || ''}`.toLowerCase().includes(q));
+    if (newestFirst) cards = [...cards].reverse();
+    return cards;
+  };
+  const markSelected = () => cardEls.forEach((el, id) => el.classList.toggle('is-selected', id === selId));
+  // Select a card by id (null clears). Re-applies the highlight, scrolls it into view and focuses it
+  // (unless focus is already inside it, e.g. its own textarea was just clicked into).
+  function select(id) {
+    selId = id ?? null;
+    markSelected();
+    const el = selId != null ? cardEls.get(selId) : null;
+    if (!el) return;
+    el.scrollIntoView({ block: 'nearest' });
+    if (!el.contains(document.activeElement)) el.focus();
+  }
+  const selectedId = () => selId;
+  // Move the selection by +1/-1 through the visible cards, wrapping. Closes the editor first.
+  function move(dir) {
+    if (openId) { flush(); openId = null; refresh(); }
+    const cards = displayCards();
+    if (!cards.length) return;
+    let idx = cards.findIndex((c) => c.id === selId);
+    idx = idx === -1 ? (dir > 0 ? 0 : cards.length - 1) : (idx + dir + cards.length) % cards.length;
+    select(cards[idx].id);
+  }
+  // Editor open → close it and select that card. Else open/edit the selected card, or select the first.
+  function toggle() {
+    if (openId) {
+      const id = openId;
+      flush();
+      openId = null;
+      refresh();
+      select(id);
+      return;
+    }
+    const card = selId != null ? video.notes.cards.find((c) => c.id === selId) : null;
+    if (card) {
+      if (card.kind === 'note') { openId = card.id; refresh(); return; }
+      cardEls.get(card.id)?.querySelector('.ytx-qn-body')?.click(); // reuse mdField's click-to-edit
+      return;
+    }
+    const cards = displayCards();
+    if (cards.length) select(cards[0].id);
+  }
 
   /* ---- shared bits ---- */
   function timeSlot(card, onRerender) {
@@ -159,8 +211,13 @@ export function createNotesView(opts) {
         onCancel: () => box.remove(),
         onConfirm: () => {
           const idx = video.notes.cards.indexOf(card);
+          const shown = selId === card.id ? displayCards() : null; // display order before removal
           video.notes.cards = video.notes.cards.filter((c) => c.id !== card.id);
           if (openId === card.id) openId = null;
+          if (shown) {
+            const pos = shown.findIndex((c) => c.id === card.id);
+            selId = shown[pos + 1]?.id ?? shown[pos - 1]?.id ?? null;
+          }
           onDelete(card);
           refresh();
           if (opts.onUndo) opts.onUndo(card, idx);
@@ -278,6 +335,8 @@ export function createNotesView(opts) {
   /* ---- list ---- */
   function quickCard(card) {
     const el = h('div', `ytx-qn ytx-c${card.color || 0}`);
+    el.tabIndex = 0;
+    el.addEventListener('click', (e) => { if (!e.target.closest('a, button')) select(card.id); });
     const { box } = mdField(card, { cls: 'ytx-qn-body', placeholder: 'Quick note…', max: QUICK_MAX });
     const foot = h('div', 'ytx-notes-foot');
     const dot = h('button', 'ytx-notes-dot');
@@ -309,6 +368,7 @@ export function createNotesView(opts) {
 
   function noteCard(card) {
     const el = h('div', 'ytx-nt');
+    el.tabIndex = 0;
     el.title = 'Open in editor';
     el.append(h('div', 'ytx-nt-title', card.title || 'Untitled'), h('div', 'ytx-nt-excerpt', excerpt(card.text) || 'Empty note'));
     const foot = h('div', 'ytx-notes-foot');
@@ -316,14 +376,13 @@ export function createNotesView(opts) {
     el.appendChild(foot);
     el.addEventListener('click', (e) => {
       if (e.target.closest('button, a, .ytx-confirm')) return;
+      selId = card.id; // editor doesn't render the grid, so set directly rather than via select()
       openId = card.id;
       refresh();
     });
     return el;
   }
 
-  let query = '';
-  let newestFirst = false;
   // Camera: save the current frame to the vault and embed it (into `card`, or a fresh note when null).
   function frameBtn(card) {
     const b = h('button', 'ytx-notes-icon ytx-notes-cam');
@@ -362,24 +421,12 @@ export function createNotesView(opts) {
     const addQuick = h('button', 'ytx-notes-btn', '+ quick note');
     addQuick.type = 'button';
     addQuick.title = HELP.quick;
-    addQuick.addEventListener('click', () => {
-      video.notes.cards.push(newCard('quick'));
-      onChange(video.notes.cards.at(-1));
-      refresh();
-      const last = grid.querySelector('.ytx-qn:last-child .ytx-qn-body');
-      if (last) last.click();
-    });
-    const addNote = h('button', 'ytx-notes-btn is-note', '+ note');
-    addNote.type = 'button';
-    addNote.title = HELP.note;
-    addNote.addEventListener('click', () => {
-      const c = newCard('note');
-      video.notes.cards.push(c);
-      onChange(c);
-      openId = c.id;
-      refresh();
-    });
-    bar.append(addQuick, addNote);
+    addQuick.addEventListener('click', () => addNote('quick'));
+    const addNoteBtn = h('button', 'ytx-notes-btn is-note', '+ note');
+    addNoteBtn.type = 'button';
+    addNoteBtn.title = HELP.note;
+    addNoteBtn.addEventListener('click', () => addNote('note'));
+    bar.append(addQuick, addNoteBtn);
     if (opts.onFrame) bar.append(frameBtn(null));
     const all = video.notes.cards;
     if (all.length > 3) {
@@ -399,16 +446,20 @@ export function createNotesView(opts) {
     const grid = h('div', 'ytx-notes-grid');
     const paint = () => {
       grid.textContent = '';
-      const q = query.trim().toLowerCase();
-      let cards = all.filter((c) => !q || `${c.title || ''}\n${c.text || ''}`.toLowerCase().includes(q));
-      if (newestFirst) cards = [...cards].reverse();
-      for (const card of cards) grid.appendChild(card.kind === 'note' ? noteCard(card) : quickCard(card));
+      cardEls = new Map();
+      const cards = displayCards();
+      for (const card of cards) {
+        const el = card.kind === 'note' ? noteCard(card) : quickCard(card);
+        cardEls.set(card.id, el);
+        grid.appendChild(el);
+      }
       if (!all.length) {
         const empty = h('div', 'ytx-notes-empty');
         empty.append(h('div', 'ytx-notes-empty-title', 'No notes yet'),
           h('div', null, HELP.quick), h('div', null, HELP.note));
         grid.append(empty);
       } else if (!cards.length) grid.append(h('div', 'ytx-notes-empty', 'Nothing matches.'));
+      markSelected();
     };
     paint();
     root.append(bar, grid);
@@ -486,11 +537,12 @@ export function createNotesView(opts) {
     const c = newCard(kind);
     video.notes.cards.push(c);
     onChange(c);
-    if (kind === 'note') openId = c.id;
+    selId = c.id;
+    if (kind === 'note') { openId = c.id; refresh(); return; }
     refresh();
-    if (kind === 'quick') root.querySelector('.ytx-qn:last-child .ytx-qn-body')?.click();
+    cardEls.get(c.id)?.querySelector('.ytx-qn-body')?.click();
   }
 
   refresh();
-  return { root, refresh, flush, setMode, addNote, isEditing: () => !!openId };
+  return { root, refresh, flush, setMode, addNote, isEditing: () => !!openId, select, selectedId, move, toggle };
 }

@@ -20,10 +20,24 @@ const ALWAYS_THINKS_RE = /claude-(fable|mythos)/;
 
 export const PROMPT_CAP = 24000;
 
-// Share of the transcript that fits under PROMPT_CAP (1 = all of it).
-export function promptCoverage(segments) {
+// Max prompt chars for a model's context window. ponytail: substring heuristic (~3.5 chars/token,
+// 60% of the window reserved for the prompt), matched first-hit-wins; extend when a model overflows.
+const CONTEXT_CAPS = [
+  ['claude-', 420000],  // 200k tokens
+  ['gpt-5', 840000],    // 400k tokens
+  ['gpt-4.1', 2000000], // 1M tokens
+  ['gpt-4o', 268000],   // 128k tokens
+  ['o1', 268000], ['o3', 268000], ['o4', 268000],
+];
+export function contextCap(modelId) {
+  const row = CONTEXT_CAPS.find(([k]) => String(modelId || '').includes(k));
+  return row ? row[1] : PROMPT_CAP;
+}
+
+// Share of the transcript that fits under cap (1 = all of it).
+export function promptCoverage(segments, cap = PROMPT_CAP) {
   const total = (segments ?? []).reduce((n, s) => n + s.text.length + 10, 0);
-  return total <= PROMPT_CAP ? 1 : PROMPT_CAP / total;
+  return total <= cap ? 1 : cap / total;
 }
 
 // Thinking/reasoning support by model id. ponytail: name heuristics, extend when a model errors.
@@ -189,7 +203,7 @@ export function assembleOpenai(chunks, onText) {
   return { choices: [{ message: msg, finish_reason: finish }], usage };
 }
 
-export function buildSystemPrompt({ title, channel, segments, aboutMe = '', tone = '', webSearch = false }) {
+export function buildSystemPrompt({ title, channel, segments, aboutMe = '', tone = '', webSearch = false, cap = PROMPT_CAP }) {
   const lines = (segments ?? [])
     .map((s) => `[${fmtTime(s.start)}] ${s.text}`)
     .join('\n');
@@ -209,8 +223,8 @@ export function buildSystemPrompt({ title, channel, segments, aboutMe = '', tone
   if (aboutMe.trim()) prompt += `About the user:\n${aboutMe.trim()}\n\n`;
   if (tone.trim()) prompt += `Tone of voice:\n${tone.trim()}\n\n`;
   prompt += 'Transcript:\n' + lines;
-  if (prompt.length <= PROMPT_CAP) return prompt;
-  return prompt.slice(0, PROMPT_CAP) + '\n[transcript truncated]';
+  if (prompt.length <= cap) return prompt;
+  return prompt.slice(0, cap) + '\n[transcript truncated]';
 }
 
 const RETRY_STATUS = new Set([429, 500, 502, 503, 529]);

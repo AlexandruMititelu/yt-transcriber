@@ -24,3 +24,10 @@ export const globeIcon = () => svg('<circle cx="12" cy="12" r="9"/><path d="M3 1
 export const eyeIcon = () => svg('<path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/>', 'ytx-ico ytx-ico-eye');
 export const cameraIcon = () => svg('<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>', 'ytx-ico ytx-ico-camera');
 export const searchIcon = () => svg('<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>', 'ytx-ico ytx-ico-search');
+export const plusIcon = () => svg('<path d="M12 5v14M5 12h14"/>', 'ytx-ico ytx-ico-plus');
+export const copyIcon = () => svg('<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/>', 'ytx-ico ytx-ico-copy');
+export const chatIcon = () => svg('<path d="M21 12a8 8 0 0 1-8 8H7l-4 3v-6.5A8 8 0 0 1 11 4h2a8 8 0 0 1 8 8z"/>', 'ytx-ico ytx-ico-chat');
+export const refreshIcon = () => svg('<path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v5h-5"/>', 'ytx-ico ytx-ico-refresh');
+export const libraryIcon = () => svg('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/><path d="M9 20V10"/>', 'ytx-ico ytx-ico-library');
+export const gearIcon = () => svg('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>', 'ytx-ico ytx-ico-gear');
+export const checkIcon = () => svg('<path d="M5 12l5 5L20 7"/>', 'ytx-ico ytx-ico-check');

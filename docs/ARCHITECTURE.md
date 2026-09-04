@@ -24,7 +24,7 @@ src/ui/notes.js|css           (notes tab: quick notes + note editor, shared)
 src/ui/chat.js|css            (chat tab: streaming, stop/retry, presets, usage, edit&resend, shared)
 src/ui/markdown.js|css        (markdown → DOM: sanitize, time chips, code copy, mermaid, shared)
 src/ui/toast.js|css           (toaster: createToaster(host) → toast(msg, {link, action, error, ms}), shared)
-src/ui/icons.js               (inline SVG icons: pin, trash, chevron, eye, globe, camera, search)
+src/ui/icons.js               (inline SVG icons: pin, trash, chevrons, eye, globe, camera, search, plus, copy, chat, refresh, library, gear, check — NO emoji/glyph icons anywhere, see .claude/skills/ui)
 config/hotkeys.js             (keyboard shortcuts: HOTKEYS list, hotkeyId(e), keysFor(id))
 config/prompts.js             (PROMPTS: one-click chat presets shown while a chat is empty)
 content/yt.js                 (content script, CLASSIC script — no top-level import/export)
@@ -240,9 +240,10 @@ export function parseResult(provider, json)     // → { text, usage: {in, out, 
 export function assembleAnthropic(events, onText?) / assembleOpenai(chunks, onText?)  // SSE events → the non-streaming JSON shape
 export function estimateCost(modelId, usage)    // USD or null (PRICES table by substring; cache reads at 10%)
 export function fmtUsage(modelId, usage)        // "12k in · 300 out · $0.041" ($ only when priced)
-export const PROMPT_CAP = 24000; export function promptCoverage(segments)  // share of the transcript that fits (1 = all)
+export const PROMPT_CAP = 24000; export function contextCap(modelId)             // max prompt chars by model family (claude 420k, gpt-5 840k, gpt-4.1 2M, gpt-4o/o* 268k, unknown 24000)
+export function promptCoverage(segments, cap = PROMPT_CAP)  // share of the transcript that fits (1 = all)
 
-export function buildSystemPrompt({ title, channel, segments, aboutMe = '', tone = '', webSearch = false })
+export function buildSystemPrompt({ title, channel, segments, aboutMe = '', tone = '', webSearch = false, cap = PROMPT_CAP })
 // webSearch adds a paragraph: when to search (facts beyond the transcript), focused queries reusing the
 // video's exact terms, several narrow searches, say what was found and where.
 // Persona: assistant for THIS video. Includes title/channel, then optional
@@ -364,7 +365,8 @@ Bootstrap: `(async () => { ... })()`. All lib access via
 - Fetch `src/ui/{picker,chatbar,notes,markdown,toast,chat}.css` and inject them as `<style>`s (a `<link>` to moz-extension: is blocked on youtube.com; unique ytx-picker-* classes) and a `<style>` with @font-face for Geist (variable, 100-900) and JetBrains Mono using absolute
   `browser.runtime.getURL('vendor/jetbrains-mono-400.woff2')` URLs (content-script CSS can't use
   relative url()).
-- Header: title = active tab name, buttons (all with aria-labels): ⟳ (refetch transcript), pin (SVG from `src/ui/icons.js`; toggles
+- Header: static app name "YT-Trans", buttons (SVG, aria-labels): + add (only while the video has no DB record:
+  sets `video.kept`, saves, hides itself), ⟳ (refetch transcript), pin (SVG from `src/ui/icons.js`; toggles
   `vault.pin` / `vault.unpin` → save → toast; yellow #ffcc00 + filled when `video.pinned`; `no-vault` →
   toast pointing at Settings), ⧉ library (`bus.call({type:'open-library'})`).
 - Apple-style segmented control tabs: **Transcript | Chat | Notes** (role=tablist/tab/tabpanel, aria-selected,
@@ -376,8 +378,11 @@ Bootstrap: `(async () => { ... })()`. All lib access via
   placeholder; `hydrate` returns early; `db.getVideo` heals stored records whose title/folder is "YouTube".
   The transcript fetch also returns `videoDetails.title`, applied when the scrape was empty.
   Transcript auto-fetched on first open (spinner state) with `settings.lang`, stored as `grouped` (+ track,
-  tracks, translate, duration, chapters; raw segments dropped); saved via db.saveVideo; `vault.syncTranscript`.
-- **Transcript tab**: sticky toolbar: search box (filters rows as you type, Esc clears; Alt+F focuses it),
+  tracks, translate, duration, chapters; raw segments dropped). Save gate: watching alone creates NO record;
+  `save()` writes only when `video.kept || video.pinned || a chat has messages || notes.cards.length` (then the
+  in-memory transcript is persisted too) and `vault.syncTranscript` runs under the same gate.
+- **Transcript tab**: sticky toolbar: search box (filters rows as you type, matches wrapped in `<mark class="ytx-hl">`
+  yellow #ffd60a, Esc clears; Alt+F focuses it),
   track button (name of the current track; popover lists caption tracks and "Translate to" en/ro/nl/de/fr/es/it/pt →
   `loadTranscript(true, {track|translate})`, hidden when there is nothing to pick), copy-all (⧉, `[m:ss] text` lines),
   "Follow" toggle (persisted in `settings.follow`): on `timeupdate` of the page `<video>` the row whose
@@ -385,7 +390,8 @@ Bootstrap: `(async () => { ... })()`. All lib access via
   scrollIntoView, which would scroll YouTube); a wheel/touch scroll by the user pauses Follow (toast).
   Chapter headings (`.ytx-chapter`, click seeks) are interleaved at their start times. Rows `[time chip][text]`
   from `grouped`, role=button + tabIndex (Enter/Space seek); click → seek immediately (no dblclick delay);
-  hover reveals two actions: copy line, and "ask" (switches to Chat and prefills `> [m:ss] text`).
+  hover reveals two SVG actions inline after the text (never overlaying it): copy line, and "ask" (switches to Chat
+  and prefills `> [m:ss] text`).
   States: loading / error (`transcript.explainFailure(e)`, retry button) / list.
 - **Chat tab** (`src/ui/chat.js` `createChatView({video, save, disk, renderMd, toast, isLive, onSynced, segments,
   settingsAction})` → `{root, refresh, toggleWeb, cancel, focus, prefill, isBusy}`, shared with the library): chat bar
@@ -406,7 +412,8 @@ Bootstrap: `(async () => { ... })()`. All lib access via
   Assistant bubbles: copy button top-right, token usage `fmtUsage` shown under the bubble on hover (absolute, no
   layout cost). User bubbles: plain text only. The list auto-scrolls only while the user
   is at the bottom; otherwise a "↓ New reply" pill appears. Empty chat shows a hint and, for long videos, the share
-  of the transcript that fits the prompt (`llm.promptCoverage`). Assistant content rendered via `renderMd` =
+  of the transcript that fits the prompt (`llm.promptCoverage` with `llm.contextCap(model)`; re-rendered when the
+  picker's `onChange` fires). Assistant content rendered via `renderMd` =
   `src/ui/markdown.js` `renderMarkdown(text, {onSeek | timeHref})`: marked → DOMPurify (img forbidden) → links
   target=_blank → `[12:34]` / `@12:34` time chips (button that seeks on the watch page, link to url&t= in the
   library) → copy button + language tag on every code block → mermaid fences rendered lazily
@@ -431,7 +438,11 @@ Bootstrap: `(async () => { ... })()`. All lib access via
   Hotkeys (config/hotkeys.js, `settings.hotkeys` gate): Alt+↑/↓ cycle Transcript · Chat · Notes, Alt+E /
   Alt+V set the editor mode via `notesView.setMode`, Alt+W toggles `settings.webSearch` only while the Chat tab is active
   (the globe inside the composer's input pill), Alt+C → Chat + focus the composer, Alt+N → Notes + new note
-  (`notesView.addNote('note')`), Alt+F → Transcript + focus the search box. Handled in the panel's window keydown capture
+  (`notesView.addNote('note')`), Alt+Q → Notes + new quick note, Alt+Enter → `notesView.toggle()` (editor open →
+  back to the list with that card selected; card selected → open it / edit it), Alt+' / Alt+\ → `notesView.move(∓1)`
+  (selection cycles through the cards, wrapping; `.is-selected` ring, card focused), Alt+Shift+Enter → focus
+  `#movie_player` so YouTube's own keys work, Alt+F → Transcript + focus the search box. `hotkeyId` accepts Shift
+  only for Alt+Shift+Enter. Handled in the panel's window keydown capture
   listener and, on the library detail page, by a document listener replaced on every route. `@12:34` typed anywhere
   renders as a seek chip (panel) / time link (library), same pass as `[12:34]`. While typing,
   `normalizeStamps` rewrites `@now` to the current video time and `@2:17` to `@02:17` (caret preserved).
@@ -468,17 +479,21 @@ NO inline scripts or on* attributes (extension CSP). Theme: `settings.theme` →
 `[data-theme=dark]`.
 
 Views (hash routing: `#/`, `#/video/<id>`, `#/settings`):
-- **Library `#/`**: "Loading…" state, header "YT Transcriber" + Settings gear, then a tools row: All | Pinned
-  segmented filter, search box (title/channel, debounced), sort select (Recent | Title | Channel), "By channel"
-  grouping toggle, video count (all session-scoped). All: a "Pinned" section first (when any), then "Everything
+- **Library `#/`**: header "YT Transcriber" + Settings gear and the tools row are built ONCE per visit (`buildLibShell`);
+  only the body inside `.lib-stage` is repainted (`paintLibrary`), so typing in the search box never re-creates it.
+  Tools: All | Pinned segmented filter (switching slides the body like iOS: All → Pinned enters from the right,
+  ~220ms ease-out + fade; sort/search/group changes fade only; reduced-motion = instant), search box (title/channel,
+  debounced), sort pop-up button (label + chevron rotating 180° when open, popover with a check column: Recent |
+  Title | Channel), "By channel" grouping toggle, video count (all session-scoped). All: a "Pinned" section first (when any), then "Everything
   else" (or one section per channel). Pinned: only pinned videos (empty hint otherwise). Video card = `.card-wrap`
   holding the `<a class=card>` (title, channel, relative date, badges: N segments · N messages · N notes) and a
   separate actions row (pin + ⌫ delete, faint until hover/focus, never nested in the link). Delete → `confirmBox`
   overlay on the card (library record only; vault files stay). The pin is yellow when pinned and toggles
   `vault.pin` / `vault.unpin` on the full record (`togglePin`). Click → detail.
 - **Video detail `#/video/<id>`**: back button, title links to `video.url` (new tab), same three tabs
-  as panel (tablist roles). Transcript: search box, track/length meta, "Copy all"; chapter headings; rows are
-  links to `${url}&t=<floor(start)>s` (new tab) with a hover copy button; no transcript → "Fetch transcript"
+  as panel (tablist roles). Transcript: search box (matches highlighted with `<mark class="ytx-hl">`), track/length
+  meta, "Copy all"; chapter headings; rows are links to `${url}&t=<floor(start)>s` (new tab) with an inline hover
+  copy button after the text; no transcript → "Fetch transcript"
   button (`transcript.fetchTranscript` works from the extension page thanks to the youtube.com host permission).
   Chat: the same `createChatView` (background does HTTP, so streaming works from this page too); Esc stops via
   the route-level key handler (no per-pane document listeners). Notes: same `createNotesView` ("@ time" prompts

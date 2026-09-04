@@ -14,7 +14,7 @@ function h(tag, cls, text) {
   return n;
 }
 
-export function createPicker({ isLive = () => true } = {}) {
+export function createPicker({ isLive = () => true, onChange } = {}) {
   const root = h('div', 'ytx-picker');
   const trigger = h('button', 'ytx-picker-trigger');
   trigger.type = 'button';
@@ -44,7 +44,7 @@ export function createPicker({ isLive = () => true } = {}) {
   }
   function set(patch) {
     Object.assign(settings, patch);
-    db.saveSettings(patch).catch(() => {});
+    db.saveSettings(patch).then(() => onChange?.(settings)).catch(() => {});
     label();
   }
   function item(text, right, onClick) {
@@ -110,6 +110,7 @@ export function createPicker({ isLive = () => true } = {}) {
   (async () => {
     settings = await db.getSettings();
     label();
+    onChange?.(settings);
     groups = await llm.modelGroups(settings);
     if (!isLive()) return;
     const model = llm.resolveModel(settings, groups);

@@ -47,6 +47,7 @@
   color: var(--muted); font: inherit; font-size: 13px; line-height: 1; cursor: pointer; opacity: 0.6;
 }
 .ytx-msg-copy:hover { opacity: 1; background: var(--surface); color: var(--text); }
+.ytx-msg-copy .ytx-ico { width: 14px; height: 14px; }
 .ytx-msg-usage {
   position: absolute; right: 8px; bottom: -14px; color: var(--muted); font-family: var(--font-mono); font-size: 10px;
   opacity: 0; transition: opacity 0.15s ease; pointer-events: none;

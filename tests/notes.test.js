@@ -2,6 +2,18 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 const notes = await import('../src/ui/notes.js');
+const { hotkeyId } = await import('../config/hotkeys.js');
+
+test('hotkeyId: notes hotkeys, Alt+Shift+Enter → focusVideo, other shift/ctrl combos → null', () => {
+  const key = (k, extra = {}) => ({ key: k, altKey: true, ctrlKey: false, metaKey: false, shiftKey: false, ...extra });
+  assert.equal(hotkeyId(key('q')), 'quickNote');
+  assert.equal(hotkeyId(key('Enter')), 'toggleNote');
+  assert.equal(hotkeyId(key("'")), 'prevNote');
+  assert.equal(hotkeyId(key('\\')), 'nextNote');
+  assert.equal(hotkeyId(key('Enter', { shiftKey: true })), 'focusVideo');
+  assert.equal(hotkeyId(key('q', { shiftKey: true })), null);
+  assert.equal(hotkeyId(key('e', { ctrlKey: true })), null);
+});
 
 test('normalizeStamps: @now → current time, @m:ss → @mm:ss, h:mm:ss untouched', () => {
   assert.equal(notes.normalizeStamps('at @now ok', 137), 'at @02:17 ok');

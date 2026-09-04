@@ -9,6 +9,7 @@
 
 .ytx-notes-bar {
   display: flex;
+  align-items: center;
   gap: 8px;
   flex: none;
   margin: 0 0 10px;
@@ -53,6 +54,9 @@
 .ytx-qn.ytx-c2 { background: var(--keep-2); }
 .ytx-qn.ytx-c3 { background: var(--keep-3); }
 .ytx-qn.ytx-c4 { background: var(--keep-4); }
+
+.ytx-qn:focus, .ytx-nt:focus { outline: none; }
+.ytx-qn.is-selected, .ytx-nt.is-selected { box-shadow: 0 0 0 2px var(--accent); }
 
 .ytx-qn-body {
   min-height: 40px;

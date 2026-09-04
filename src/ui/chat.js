@@ -5,7 +5,7 @@ import * as llm from '../lib/llm.js';
 import * as vault from '../lib/vault.js';
 import { createPicker } from './picker.js';
 import { createChatBar, confirmBox } from './chatbar.js';
-import { globeIcon } from './icons.js';
+import { globeIcon, copyIcon, checkIcon } from './icons.js';
 import { keysFor } from '../../config/hotkeys.js';
 import { PROMPTS, parsePrompts } from '../../config/prompts.js';
 
@@ -63,7 +63,11 @@ export function createChatView(opts) {
   webBtn.addEventListener('click', toggleWeb);
   const pill = h('div', 'ytx-chat-pill');
   const tools = h('div', 'ytx-chat-tools');
-  tools.append(h('span', 'ytx-chat-spacer'), createPicker({ isLive: live }), webBtn, sendBtn);
+  let lastSettings = null; // cached for the empty-state hint; picker's onChange keeps it fresh
+  tools.append(h('span', 'ytx-chat-spacer'), createPicker({
+    isLive: live,
+    onChange: (s) => { lastSettings = s; if (!cur()?.messages.length) refresh(); },
+  }), webBtn, sendBtn);
   pill.append(ta, tools);
   composer.append(presets, pill);
 
@@ -131,14 +135,15 @@ export function createChatView(opts) {
 
   /* ---- bubbles ---- */
   function copyBtn(text) {
-    const b = h('button', 'ytx-msg-copy', '⧉');
+    const b = h('button', 'ytx-msg-copy');
     b.type = 'button';
     b.title = 'Copy message';
     b.setAttribute('aria-label', 'Copy message');
+    b.appendChild(copyIcon());
     b.addEventListener('click', () => {
       navigator.clipboard.writeText(text).then(() => {
-        b.textContent = '✓';
-        setTimeout(() => { b.textContent = '⧉'; }, 1200);
+        b.replaceChildren(checkIcon());
+        setTimeout(() => b.replaceChildren(copyIcon()), 1200);
       }).catch(() => toast('Copy failed'));
     });
     return b;
@@ -179,7 +184,8 @@ export function createChatView(opts) {
       const empty = h('div', 'ytx-chat-empty');
       empty.append(h('div', 'ytx-chat-empty-title', 'Ask anything about this video'),
         h('div', 'ytx-chat-empty-hint', 'Answers cite timestamps you can click. Pick a preset below or type your own.'));
-      const cov = llm.promptCoverage(segments());
+      const cap = lastSettings ? llm.contextCap(llm.parseModel(lastSettings.model).id) : llm.PROMPT_CAP;
+      const cov = llm.promptCoverage(segments(), cap);
       if (cov < 1) empty.append(h('div', 'ytx-chat-empty-warn', `Long video: only the first ${Math.round(cov * 100)}% of the transcript fits the prompt.`));
       list.append(empty);
     } else {
@@ -258,6 +264,7 @@ export function createChatView(opts) {
     }, 1000);
     try {
       const settings = await db.getSettings();
+      lastSettings = settings;
       if (settings.webSearch) status.textContent = 'Thinking… (web search on)';
       const reply = await llm.chat({
         settings,
@@ -268,6 +275,7 @@ export function createChatView(opts) {
           aboutMe: settings.aboutMe,
           tone: settings.tone,
           webSearch: !!settings.webSearch,
+          cap: llm.contextCap(llm.parseModel(settings.model).id),
         }),
         messages: chat.messages.map(({ role, content }) => ({ role, content })),
         signal: ctl.signal,

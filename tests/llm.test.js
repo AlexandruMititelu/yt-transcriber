@@ -195,6 +195,24 @@ test('buildRequest anthropic 4.6+/5: adaptive thinking + output_config.effort, n
   assert.equal(legacy.body.thinking.budget_tokens, 4000);
 });
 
+test('contextCap: by model family, unknown/empty falls back to PROMPT_CAP', () => {
+  assert.equal(llm.contextCap('claude-sonnet-5'), 420000);
+  assert.equal(llm.contextCap('gpt-5.1'), 840000);
+  assert.equal(llm.contextCap(''), 24000);
+});
+
+test('buildSystemPrompt honours cap', () => {
+  const segments = [{ start: 0, text: 'x'.repeat(500) }];
+  const p = llm.buildSystemPrompt({ title: 'T', channel: 'C', segments, cap: 100 });
+  assert.ok(p.length <= 100 + '\n[transcript truncated]'.length);
+  assert.ok(p.includes('[transcript truncated]'));
+});
+
+test('promptCoverage honours cap', () => {
+  const segments = [{ start: 0, text: 'x'.repeat(500) }];
+  assert.ok(llm.promptCoverage(segments, 100) < 1);
+});
+
 test('buildSystemPrompt forbids em dashes', () => {
   assert.ok(llm.buildSystemPrompt({ title: 't', channel: 'c', segments: [] }).includes('Never use em dashes'));
 });
