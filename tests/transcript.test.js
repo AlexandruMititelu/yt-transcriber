@@ -96,8 +96,8 @@ test('groupSegments closes on window and computes end', () => {
     { start: 20, dur: 5, text: 'c' },
   ];
   assert.deepEqual(groupSegments(segs, { window: 20, maxChars: 300 }), [
-    { start: 0, end: 15, text: 'a b' },
-    { start: 20, end: 25, text: 'c' },
+    { start: 0, end: 15, text: 'a b', cues: [{ start: 0, text: 'a' }, { start: 10, text: 'b' }] },
+    { start: 20, end: 25, text: 'c', cues: [{ start: 20, text: 'c' }] },
   ]);
 });
 
@@ -110,7 +110,7 @@ test('groupSegments closes on maxChars', () => {
   const groups = groupSegments(segs, { window: 100, maxChars: 20 });
   assert.equal(groups.length, 2);
   assert.equal(groups[0].text, 'x'.repeat(30));
-  assert.deepEqual(groups[1], { start: 1, end: 3, text: 'y z' });
+  assert.deepEqual(groups[1], { start: 1, end: 3, text: 'y z', cues: [{ start: 1, text: 'y' }, { start: 2, text: 'z' }] });
 });
 
 test('fetchTranscript with injected fetchFn', async () => {

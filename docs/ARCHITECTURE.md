@@ -129,7 +129,7 @@ export function parseJson3(j)
 // json3 {events:[{tStartMs,dDurationMs,segs:[{utf8}]}]} → [{start, dur, text}] seconds (ms/1000),
 // text = segs joined, '\n'→' ', collapse whitespace, trim; drop events with no segs/empty text.
 
-export function groupSegments(segs, { window = 20, maxChars = 300 } = {})
+export function groupSegments(segs, { window = 20, maxChars = 300 } = {})   // → [{start, end, text, cues: [{start, text}]}] (cues = the raw caption lines in the row)
 // merge consecutive caption lines into display segments: close a group when
 // (next.start - group.start) >= window OR group text length > maxChars.
 // → [{start, end, text}] ; end = last.start + last.dur.
@@ -187,7 +187,7 @@ Video record shape:
   videoId, title, channel, url,            // url = `https://www.youtube.com/watch?v=${videoId}`
   savedAt, updatedAt,                      // epoch ms
   transcript: null | { lang, trackName, track: {lang, asr}, translate: null|lang, tracks: [{lang,name,asr}],
-                       duration, chapters: [{start,title}], grouped: [{start,end,text}] },  // raw segments are NOT kept
+                       duration, chapters: [{start,title}], grouped: [{start,end,text,cues:[{start,text}]}] },  // raw cues live inside grouped; records without cues are refetched on open
   chats: [ {id, title, messages: [ {role, content, ts, usage?: {in,out,cacheRead}, model?} ], createdAt, updatedAt, file?, mtime?, fm?} ],
   activeChatId: null | id,                 // last open chat, restored on reopen
   notes: { cards: [ {id, kind: 'quick'|'note', title, text, start: null|number, color: 0|1|2|3|4, ts, file?, mtime?, fm?} ] },
@@ -551,7 +551,7 @@ Fonts: --font-ui "Geist" then system stack, --font-mono "JetBrains Mono" (both @
 - format: fmtTime (0, 65, 3671, 59.9), clampText cut/no-cut, chunkText (respects size, no empties, word split).
 - transcript: extractPlayerResponse (html fixture with braces inside strings + `var` form + absent),
   extractTracks/pickTrack (manual-vs-asr preference), parseJson3 fixture (newlines, empty events),
-  groupSegments (window + maxChars closure, end computation).
+  groupSegments (window + maxChars closure, end computation, cues kept per row).
 - llm: buildRequest anthropic (url, x-api-key, version header, max_tokens, cached system block) /
   openai (bearer, system as first message, no token param), model default fallback, unknown provider throws,
   parseResponse both, assembleAnthropic/assembleOpenai + parseResult (usage, truncation), fmtUsage, retry on 429,

@@ -293,6 +293,7 @@
     L.db.getSettings().then((s) => { followOn = !!s.follow; paintFollow(); }).catch(() => {});
     let rows = []; // [{start, el}] from the last renderTranscript
     let currentRow = null;
+    let currentCue = null;
     let query = '';
     const bar = h('div', 'ytx-follow-bar');
     // Toolbar sits above the scrolling row list (a sibling, not sticky: nothing can scroll behind it).
@@ -323,19 +324,31 @@
     bar.append(search, trackWrap, copyAll, followBtn);
     function paintFollow() { followBtn.classList.toggle('is-on', followOn); followBtn.setAttribute('aria-pressed', followOn ? 'true' : 'false'); }
     // Query matches are wrapped in <mark>; text nodes are built by hand (never innerHTML).
-    function paintText(r) {
-      const el = r.textEl;
-      el.textContent = '';
+    function highlight(el, text) {
       let i = 0;
       if (query) {
-        const low = r.text.toLowerCase();
+        const low = text.toLowerCase();
         for (let j = low.indexOf(query); j >= 0; j = low.indexOf(query, i)) {
-          if (j > i) el.append(r.text.slice(i, j));
-          el.append(h('mark', 'ytx-hl', r.text.slice(j, j + query.length)));
+          if (j > i) el.append(text.slice(i, j));
+          el.append(h('mark', 'ytx-hl', text.slice(j, j + query.length)));
           i = j + query.length;
         }
       }
-      el.append(r.text.slice(i), r.acts);
+      el.append(text.slice(i));
+    }
+    // One span per caption cue (older records without cues: one span for the row); click seeks to the cue.
+    function paintText(r) {
+      const el = r.textEl;
+      el.textContent = '';
+      const cues = r.cues?.length ? r.cues : [{ start: r.start, text: r.text }];
+      r.cueEls = cues.map((c, k) => {
+        const span = h('span', 'ytx-cue');
+        highlight(span, c.text);
+        span.addEventListener('click', (e) => { e.stopPropagation(); seek(c.start); });
+        el.append(span, k < cues.length - 1 ? ' ' : '');
+        return span;
+      });
+      el.append(r.acts);
     }
     function applyFilter() {
       query = search.value.trim().toLowerCase();
@@ -356,7 +369,12 @@
       let i = rows.findIndex((r) => r.start > t) - 1;
       if (i < -1) i = rows.length - 1; // past the last start → last row
       if (i < 0) i = 0;
-      const row = rows[i].el;
+      const r = rows[i];
+      const row = r.el;
+      let k = r.cueEls.length - 1;
+      if (r.cues?.length) { k = r.cues.findIndex((c) => c.start > t) - 1; if (k < -1) k = r.cues.length - 1; if (k < 0) k = 0; }
+      const cue = r.cueEls[k];
+      if (cue !== currentCue) { currentCue?.classList.remove('is-now'); currentCue = cue; cue?.classList.add('is-now'); }
       if (row === currentRow) return;
       if (currentRow) currentRow.classList.remove('is-current');
       currentRow = row;
@@ -370,7 +388,7 @@
       paintFollow();
       L.db.saveSettings({ follow: on }).catch(() => {});
       if (on) { currentRow = null; trackPlayback(); }
-      else if (currentRow) { currentRow.classList.remove('is-current'); currentRow = null; }
+      else { currentRow?.classList.remove('is-current'); currentRow = null; currentCue?.classList.remove('is-now'); currentCue = null; }
     };
     followBtn.addEventListener('click', () => setFollow(!followOn));
     // A wheel / touch scroll by the user pauses Follow (the smooth scroll we trigger does not fire these).
@@ -424,6 +442,7 @@
       paintTrack();
       rows = [];
       currentRow = null;
+      currentCue = null;
       const chapters = video.transcript?.chapters ?? [];
       let ci = 0;
       for (const seg of grouped) {
@@ -460,7 +479,7 @@
         acts.append(copy, ask);
         // Actions live at the end of the text (inline), so they never cover words.
         const textEl = h('div', 'ytx-text');
-        rows.push({ start: seg.start, el: row, text: seg.text, textEl, acts });
+        rows.push({ start: seg.start, el: row, text: seg.text, cues: seg.cues, textEl, acts });
         row.append(h('span', 'ytx-time', fmtTime(seg.start)), textEl);
         row.addEventListener('click', () => seek(seg.start));
         row.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); seek(seg.start); } });
@@ -470,7 +489,8 @@
     }
 
     async function loadTranscript(force = false, pick = {}) {
-      if (video.transcript && !force) { renderTranscript(); return; }
+      // Records saved before cues existed are refetched once so Follow can highlight per caption line.
+      if (video.transcript && !force && video.transcript.grouped?.[0]?.cues) { renderTranscript(); return; }
       renderTranscriptLoading();
       try {
         const s = await L.db.getSettings();

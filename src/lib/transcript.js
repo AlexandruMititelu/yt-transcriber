@@ -72,10 +72,12 @@ export function groupSegments(segs, { window = 20, maxChars = 300 } = {}) {
       groups.push(group);
       group = null;
     }
-    if (!group) group = { start: seg.start, end: seg.start + seg.dur, text: seg.text };
+    // cues: the raw caption lines inside the row, so Follow can highlight the exact one being spoken.
+    if (!group) group = { start: seg.start, end: seg.start + seg.dur, text: seg.text, cues: [{ start: seg.start, text: seg.text }] };
     else {
       group.text += ' ' + seg.text;
       group.end = seg.start + seg.dur;
+      group.cues.push({ start: seg.start, text: seg.text });
     }
   }
   if (group) groups.push(group);
