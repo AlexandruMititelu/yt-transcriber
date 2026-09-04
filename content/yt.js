@@ -206,7 +206,7 @@
     const tabsBar = h('div', 'ytx-tabs');
     tabsBar.setAttribute('role', 'tablist');
     const views = {
-      transcript: h('div', 'ytx-view ytx-scroll ytx-transcript'),
+      transcript: h('div', 'ytx-view ytx-transcript'),
       chat: h('div', 'ytx-view ytx-chat-view'),
       notes: h('div', 'ytx-view ytx-scroll ytx-notes-view'),
     };
@@ -295,6 +295,8 @@
     let currentRow = null;
     let query = '';
     const bar = h('div', 'ytx-follow-bar');
+    // Toolbar sits above the scrolling row list (a sibling, not sticky: nothing can scroll behind it).
+    const trList = h('div', 'ytx-scroll ytx-tr-list');
     const search = h('input', 'ytx-tr-search');
     search.type = 'search';
     search.placeholder = 'Search transcript…';
@@ -359,7 +361,7 @@
       if (currentRow) currentRow.classList.remove('is-current');
       currentRow = row;
       row.classList.add('is-current');
-      const box = views.transcript;
+      const box = trList;
       programmaticScroll = Date.now();
       box.scrollTo({ top: row.offsetTop - box.clientHeight / 2 + row.offsetHeight / 2, behavior: 'smooth' });
     }
@@ -373,8 +375,8 @@
     followBtn.addEventListener('click', () => setFollow(!followOn));
     // A wheel / touch scroll by the user pauses Follow (the smooth scroll we trigger does not fire these).
     const userScrolled = () => { if (followOn && Date.now() - programmaticScroll > 50) { setFollow(false); toast('Follow paused'); } };
-    views.transcript.addEventListener('wheel', userScrolled, { passive: true });
-    views.transcript.addEventListener('touchmove', userScrolled, { passive: true });
+    trList.addEventListener('wheel', userScrolled, { passive: true });
+    trList.addEventListener('touchmove', userScrolled, { passive: true });
     paintFollow();
     // One listener per init; the <video> element is stable across SPA navs, so guard with live().
     document.querySelector('video')?.addEventListener('timeupdate', () => { if (live()) trackPlayback(); });
@@ -415,9 +417,10 @@
 
     function renderTranscript() {
       views.transcript.textContent = '';
+      trList.textContent = '';
       const grouped = video.transcript?.grouped ?? [];
       if (!grouped.length) return renderTranscriptError(new Error('no-captions'));
-      views.transcript.appendChild(bar);
+      views.transcript.append(bar, trList);
       paintTrack();
       rows = [];
       currentRow = null;
@@ -429,7 +432,7 @@
           const head = h('div', 'ytx-chapter');
           head.append(h('span', 'ytx-time', fmtTime(c.start)), h('span', 'ytx-chapter-title', c.title));
           head.addEventListener('click', () => seek(c.start));
-          views.transcript.appendChild(head);
+          trList.appendChild(head);
         }
         const row = h('div', 'ytx-row');
         row.setAttribute('role', 'button');
@@ -461,7 +464,7 @@
         row.append(h('span', 'ytx-time', fmtTime(seg.start)), textEl);
         row.addEventListener('click', () => seek(seg.start));
         row.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); seek(seg.start); } });
-        views.transcript.appendChild(row);
+        trList.appendChild(row);
       }
       applyFilter();
     }

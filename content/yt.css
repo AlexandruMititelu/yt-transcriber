@@ -234,18 +234,15 @@
 }
 
 #ytx-panel .ytx-transcript {
-  position: relative;
-  padding: 0 8px 8px; /* same inset as the tab control */
+  padding: 8px 8px 0; /* same inset as the tab control */
 }
+#ytx-panel .ytx-tr-list { position: relative; flex: 1; min-height: 0; padding-bottom: 8px; }
 
 #ytx-panel .ytx-follow-bar {
-  position: sticky;
-  top: 0;
-  z-index: 2;
+  flex: none;
   display: flex;
   justify-content: flex-end;
-  padding: 8px 0; /* solid: covers the gap under the tabs while rows scroll beneath */
-  background: var(--surface);
+  padding: 0 0 8px;
 }
 #ytx-panel .ytx-follow { flex: none; }
 
