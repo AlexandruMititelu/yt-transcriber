@@ -132,6 +132,7 @@ export function parseJson3(j)
 // json3 {events:[{tStartMs,dDurationMs,segs:[{utf8}]}]} → [{start, dur, text}] seconds (ms/1000),
 // text = segs joined, '\n'→' ', collapse whitespace, trim; drop events with no segs/empty text.
 
+export function transcriptAt(grouped, sec)   // → { start, line, prev, next, block, blockStart } | null: the cue spoken at sec, neighbours (across rows), its row
 export function groupSegments(segs, { window = 20, maxChars = 300 } = {})   // → [{start, end, text, cues: [{start, text}]}] (cues = the raw caption lines in the row)
 // merge consecutive caption lines into display segments: close a group when
 // (next.start - group.start) >= window OR group text length > maxChars.

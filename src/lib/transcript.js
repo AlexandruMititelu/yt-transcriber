@@ -84,6 +84,21 @@ export function groupSegments(segs, { window = 20, maxChars = 300 } = {}) {
   return groups;
 }
 
+// What is being said at `sec`, from grouped rows (with cues): the cue line, its neighbours, the whole row.
+// → { start, line, prev, next, block, blockStart } | null
+export function transcriptAt(grouped, sec) {
+  if (!grouped?.length) return null;
+  let gi = grouped.findIndex((g) => g.start > sec) - 1;
+  if (gi < -1) gi = grouped.length - 1;
+  if (gi < 0) gi = 0;
+  const cues = grouped.flatMap((g, i) => (g.cues?.length ? g.cues : [{ start: g.start, text: g.text }]).map((c) => ({ ...c, gi: i })));
+  let ci = cues.findIndex((c) => c.start > sec) - 1;
+  if (ci < -1) ci = cues.length - 1;
+  if (ci < 0) ci = 0;
+  const g = grouped[gi];
+  return { start: cues[ci].start, line: cues[ci].text, prev: cues[ci - 1]?.text ?? '', next: cues[ci + 1]?.text ?? '', block: g.text, blockStart: g.start };
+}
+
 // Chapters from the description: lines starting with (or containing) a timestamp followed by a title.
 export function parseChapters(description) {
   const out = [];

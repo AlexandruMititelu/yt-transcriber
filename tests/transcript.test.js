@@ -179,3 +179,16 @@ test('explainFailure maps error codes to readable reasons', () => {
   assert.match(transcript.explainFailure(new Error('unplayable: Sign in to confirm your age')), /age/);
   assert.match(transcript.explainFailure(new Error('live')), /Live/);
 });
+
+test('transcriptAt: cue at the time, neighbours across rows, whole block', async () => {
+  const { transcriptAt } = await import('../src/lib/transcript.js');
+  const grouped = [
+    { start: 0, end: 20, text: 'a b', cues: [{ start: 0, text: 'a' }, { start: 10, text: 'b' }] },
+    { start: 20, end: 40, text: 'c d', cues: [{ start: 20, text: 'c' }, { start: 30, text: 'd' }] },
+  ];
+  assert.deepEqual(transcriptAt(grouped, 12), { start: 10, line: 'b', prev: 'a', next: 'c', block: 'a b', blockStart: 0 });
+  assert.deepEqual(transcriptAt(grouped, 99).line, 'd');
+  assert.equal(transcriptAt(grouped, 0).prev, '');
+  assert.equal(transcriptAt([{ start: 0, end: 5, text: 'old' }], 3).line, 'old', 'rows without cues');
+  assert.equal(transcriptAt([], 3), null);
+});

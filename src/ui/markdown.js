@@ -2,6 +2,8 @@
 // new tab, [12:34] / @12:34 become time chips, code blocks get a copy button, mermaid fences render.
 // Vendors (marked, DOMPurify) are UMD globals loaded by the host; mermaid loads lazily from vendor/.
 
+import { expandIcon } from './icons.js';
+
 const h = (tag, cls, text) => {
   const n = document.createElement(tag);
   if (cls) n.className = cls;
@@ -84,10 +86,41 @@ export async function renderMermaidIn(root) {
         const svg = typeof res === 'string' ? res : res.svg;
         const wrap = h('div', 'ytx-mermaid');
         wrap.innerHTML = svg; // mermaid output, securityLevel 'strict'
+        wrap.append(expandBtn(wrap));
         code.parentElement.replaceWith(wrap);
       } catch { /* invalid diagram: leave the fenced block visible */ }
     }
   } catch { /* mermaid failed to load: fenced blocks stay as code */ }
+}
+
+// Top-right expander: the diagram in a full-screen overlay (dark backdrop), Escape / click outside closes.
+function expandBtn(wrap) {
+  const b = h('button', 'ytx-mmd-expand');
+  b.type = 'button';
+  b.title = 'Expand diagram';
+  b.setAttribute('aria-label', 'Expand diagram');
+  b.appendChild(expandIcon());
+  b.addEventListener('click', () => {
+    const host = wrap.closest('#ytx-panel') ?? document.body; // inside the panel so its colour tokens apply
+    const overlay = h('div', 'ytx-mmd-overlay');
+    const box = h('div', 'ytx-mmd-box');
+    const svg = wrap.querySelector('svg')?.cloneNode(true);
+    if (!svg) return;
+    svg.removeAttribute('width'); svg.removeAttribute('height'); svg.style.maxWidth = '100%'; svg.style.maxHeight = '100%';
+    box.append(svg);
+    const close = h('button', 'ytx-mmd-close', '✕');
+    close.type = 'button';
+    close.title = 'Close';
+    close.setAttribute('aria-label', 'Close');
+    overlay.append(box, close);
+    const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); done(); } };
+    const done = () => { overlay.remove(); window.removeEventListener('keydown', onKey, true); };
+    overlay.addEventListener('click', (e) => { if (e.target === overlay || e.target === close) done(); });
+    window.addEventListener('keydown', onKey, true);
+    host.append(overlay);
+    close.focus();
+  });
+  return b;
 }
 
 // Copy button + language tag on every <pre>.

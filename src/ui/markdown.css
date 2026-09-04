@@ -24,7 +24,23 @@
 .ytx-code-copy { padding: 1px 7px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--muted); font: inherit; font-size: 10.5px; font-weight: 600; cursor: pointer; opacity: 0.7; }
 .ytx-code-copy:hover { opacity: 1; color: var(--text); }
 
-.ytx-mermaid { margin: 0 0 8px; overflow-x: auto; background: var(--surface-2); border-radius: var(--radius-sm); padding: 8px; }
+.ytx-mermaid { position: relative; margin: 0 0 8px; overflow-x: auto; background: var(--surface-2); border-radius: var(--radius-sm); padding: 8px; }
+.ytx-mmd-expand {
+  position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; border: 0; border-radius: 6px; padding: 0;
+  background: var(--surface); color: var(--muted); cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+  opacity: 0; transition: opacity 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+}
+.ytx-mmd-expand .ytx-ico { width: 14px; height: 14px; }
+.ytx-mermaid:hover .ytx-mmd-expand, .ytx-mmd-expand:focus-visible { opacity: 1; }
+.ytx-mmd-expand:hover { background: var(--accent); color: #fff; }
+.ytx-mmd-overlay { position: fixed; inset: 0; z-index: 2147483000; display: flex; align-items: center; justify-content: center; padding: 32px; background: rgba(0, 0, 0, 0.75); }
+.ytx-mmd-box { max-width: 94vw; max-height: 90vh; overflow: auto; padding: 20px; border-radius: 14px; background: var(--surface, #fff); display: flex; align-items: center; justify-content: center; }
+.ytx-mmd-box svg { width: auto; height: auto; max-width: 90vw; max-height: 85vh; }
+.ytx-mmd-close {
+  position: absolute; top: 16px; right: 20px; width: 36px; height: 36px; border: 0; border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15); color: #fff; font: inherit; font-size: 16px; cursor: pointer;
+}
+.ytx-mmd-close:hover { background: rgba(255, 255, 255, 0.3); }
 .ytx-mermaid svg { max-width: 100%; height: auto; }
 
 /* time chip: <button> on the watch page (seeks), <a> in the library (opens at &t=) */

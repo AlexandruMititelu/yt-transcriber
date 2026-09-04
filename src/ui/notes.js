@@ -86,9 +86,21 @@ export function stampFmt(sec) {
   const ss = String(s % 60).padStart(2, '0');
   return hh ? `${hh}:${mm}:${ss}` : `${mm}:${ss}`;
 }
-export function normalizeStamps(text, nowSec) {
+// @now → @mm:ss. With a transcript lookup `at(sec)` (transcript.transcriptAt): @now=t adds the caption line
+// being spoken, @now=tt the previous / current / next lines as a quote, @now=ttt the whole timestamp block.
+export function normalizeStamps(text, nowSec, at) {
   let out = String(text);
-  if (nowSec != null) out = out.replace(/@now\b/gi, `@${stampFmt(nowSec)}`);
+  if (nowSec != null) {
+    out = out.replace(/@now(=t{1,3})?(?![\w=])/gi, (_, lvl) => {
+      const stamp = `@${stampFmt(nowSec)}`;
+      const t = lvl ? at?.(nowSec) : null;
+      if (!t) return stamp;
+      const n = lvl.length - 1;
+      if (n === 1) return `${stamp} "${t.line}"`;
+      if (n === 2) return `${stamp}\n> ${[t.prev, `**${t.line}**`, t.next].filter(Boolean).join('\n> ')}`;
+      return `${stamp}\n> [${stampFmt(t.blockStart)}] ${t.block}`;
+    });
+  }
   return out.replace(/@(\d{1,2}):(\d{2})(?![:\d])/g, (_, m, s) => `@${m.padStart(2, '0')}:${s}`);
 }
 
@@ -97,7 +109,7 @@ export function newCard(kind) {
 }
 
 // opts: { video, renderMd(text) → element, onChange(card), onDelete(card), fmtTime(sec),
-//         currentTime?() → sec | null, onSeek?(sec), timeHref?(sec) }
+//         currentTime?() → sec | null, transcriptAt?(sec) (for @now=t/tt/ttt), onSeek?(sec), timeHref?(sec) }
 // → { root, refresh(), flush() }
 export function createNotesView(opts) {
   const { video, renderMd, onChange, onDelete, fmtTime } = opts;
@@ -266,7 +278,7 @@ export function createNotesView(opts) {
         md.contentEditable = 'true';
         md.setAttribute('data-placeholder', placeholder);
         md.addEventListener('input', () => {
-          card.text = normalizeStamps(htmlToMd(md), opts.currentTime ? opts.currentTime() : null);
+          card.text = normalizeStamps(htmlToMd(md), opts.currentTime ? opts.currentTime() : null, opts.transcriptAt);
           onChange(card);
           if (onInput) onInput();
         });
@@ -296,7 +308,7 @@ export function createNotesView(opts) {
       };
       ta.addEventListener('input', () => {
         const before = ta.value;
-        const fixed = normalizeStamps(before, opts.currentTime ? opts.currentTime() : null);
+        const fixed = normalizeStamps(before, opts.currentTime ? opts.currentTime() : null, opts.transcriptAt);
         if (fixed !== before) {
           const caret = ta.selectionStart + (fixed.length - before.length);
           ta.value = fixed;

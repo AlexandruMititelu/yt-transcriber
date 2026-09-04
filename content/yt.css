@@ -84,7 +84,7 @@
   box-sizing: border-box;
 }
 
-#ytx-panel button:not(:where([class^="ytx-picker"], [class^="ytx-chatbar"], [class^="ytx-confirm"], [class^="ytx-notes"], [class^="ytx-qn"], [class^="ytx-nt"], [class^="ytx-ed"], [class^="ytx-chat"], [class^="ytx-msg"], [class^="ytx-code"], [class^="ytx-toast"], [class^="ytx-ts"], [class^="ytx-tag"], [class^="ytx-qmenu"])) {
+#ytx-panel button:not(:where([class^="ytx-picker"], [class^="ytx-chatbar"], [class^="ytx-confirm"], [class^="ytx-notes"], [class^="ytx-qn"], [class^="ytx-nt"], [class^="ytx-ed"], [class^="ytx-chat"], [class^="ytx-msg"], [class^="ytx-code"], [class^="ytx-toast"], [class^="ytx-ts"], [class^="ytx-tag"], [class^="ytx-qmenu"], [class^="ytx-mmd"])) {
   font: inherit;
   color: inherit;
   background: none;

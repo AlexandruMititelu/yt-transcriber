@@ -20,6 +20,11 @@ test('normalizeStamps: @now → current time, @m:ss → @mm:ss, h:mm:ss untouche
   assert.equal(notes.normalizeStamps('see @2:17 and @12:05', null), 'see @02:17 and @12:05');
   assert.equal(notes.normalizeStamps('@1:02:03 stays', null), '@1:02:03 stays');
   assert.equal(notes.normalizeStamps('@now', null), '@now', 'no clock → left alone');
+  const at = () => ({ start: 135, line: 'cur', prev: 'before', next: 'after', block: 'before cur after more', blockStart: 120 });
+  assert.equal(notes.normalizeStamps('x @now=t y', 137, at), 'x @02:17 "cur" y');
+  assert.equal(notes.normalizeStamps('@now=tt', 137, at), '@02:17\n> before\n> **cur**\n> after');
+  assert.equal(notes.normalizeStamps('@now=ttt', 137, at), '@02:17\n> [02:00] before cur after more');
+  assert.equal(notes.normalizeStamps('@now=t', 137, null), '@02:17', 'no transcript → plain stamp');
   assert.equal(notes.normalizeStamps('@nowhere', 5), '@nowhere');
   assert.equal(notes.stampFmt(3723), '1:02:03');
   assert.equal(notes.stampFmt(59), '00:59');

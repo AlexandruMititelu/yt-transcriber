@@ -722,6 +722,7 @@
       fmtTime,
       renderMd,
       currentTime: () => document.querySelector('video')?.currentTime ?? 0,
+      transcriptAt: (sec) => L.transcript.transcriptAt(video.transcript?.grouped ?? [], sec),
       onSeek: seek,
       onChange: (card) => { notesDirty = true; diskDirty.add(card); saveSoon(); },
       onDelete: (card) => { diskDirty.delete(card); save(); disk((s) => L.vault.removeNote(s, video, card)); },
