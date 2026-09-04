@@ -62,7 +62,9 @@ test('note markdown roundtrips through parseNote', () => {
   assert.ok(md.startsWith('---\nytx: "note"\n'));
   assert.ok(md.includes('time: "12:34"'));
   assert.ok(/created: "\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}"/.test(md), 'local readable stamp');
+  assert.ok(md.includes('id: "1"'), 'uuid in front matter');
   const back = vault.parseNote(md);
+  assert.equal(back.id, '1');
   assert.equal(back.text, card.text);
   assert.equal(back.kind, 'quick');
   assert.equal(back.start, 754);
@@ -91,6 +93,7 @@ test('chat markdown = Obsidian callouts; roundtrips headings/rules/quotes/blank 
   assert.ok(md.includes('> [!assistant] 2026-09-04 13:31:27\n> ### Rayleigh\n>\n> ---\n>\n> > a quote\n'));
   assert.ok(!md.includes('<!--'));
   const back = vault.parseChat(md);
+  assert.equal(back.id, 'c1', 'uuid in front matter');
   assert.equal(back.title, chat.title);
   assert.equal(back.createdAt, Math.floor(chat.createdAt / 1000) * 1000, 'second precision');
   assert.equal(vault.parseChat('---\ncreated: "2026-09-04T11:38:02.236Z"\n---\n').createdAt, Date.parse('2026-09-04T11:38:02.236Z'), 'legacy ISO still parses');
@@ -224,4 +227,28 @@ test('cleanTitle / videoFolder: the placeholder "YouTube" title never becomes a 
   v.title = 'Now real';
   await vault.syncNote(settings, v, card);
   assert.equal(v.folder, 'Now real');
+});
+
+test('hydrate keeps identity by uuid when a file was renamed in Obsidian', async () => {
+  files.clear();
+  const v = db.blankVideo('abc', 'Vid');
+  const card = { id: 'keep-me', kind: 'note', title: 'Old name', text: 'body', start: null, color: 0, ts: 1 };
+  v.notes.cards.push(card);
+  await vault.syncNote(settings, v, card);
+  const base = 'C:\\Vault/YT-transcriber/Vid';
+  files.set(`${base}/notes/New name.md`, files.get(`${base}/notes/Old name.md`));
+  files.delete(`${base}/notes/Old name.md`);
+  const chat = db.newChat('Chat A');
+  chat.messages.push({ role: 'user', content: 'q', ts: 1 });
+  v.chats.push(chat);
+  await vault.syncChat(settings, v, chat);
+  files.set(`${base}/chats/Chat B.md`, files.get(`${base}/chats/Chat A.md`));
+  files.delete(`${base}/chats/Chat A.md`);
+  await vault.hydrate(settings, v);
+  assert.equal(v.notes.cards.length, 1);
+  assert.equal(v.notes.cards[0].id, 'keep-me');
+  assert.equal(v.notes.cards[0].title, 'New name');
+  assert.equal(v.chats.length, 1);
+  assert.equal(v.chats[0].id, chat.id);
+  assert.equal(v.chats[0].title, 'Chat B');
 });

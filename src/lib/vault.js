@@ -84,6 +84,7 @@ export function parseFrontmatter(md) {
 export function noteToMd(video, card) {
   return frontmatter({
     ytx: 'note',
+    id: card.id,
     kind: card.kind === 'note' ? 'note' : 'quick',
     title: card.kind === 'note' ? card.title : undefined,
     video: video.url,
@@ -101,6 +102,7 @@ export function parseNote(md) {
   const out = { text: body.replace(/\s+$/, '') };
   if (meta.ytx !== 'note') { out.kind = 'note'; return out; }
   out.kind = meta.kind === 'note' ? 'note' : 'quick';
+  if (meta.id) out.id = String(meta.id);
   if (meta.title) out.title = String(meta.title);
   if (typeof meta.start === 'number') out.start = meta.start;
   else out.start = null;
@@ -119,6 +121,7 @@ const MSG_MARK = /^<!-- ytx:(user|assistant) ts=(\d+) -->[ \t]*\r?\n(?:### (?:Yo
 export function chatToMd(video, chat) {
   const head = frontmatter({
     ytx: 'chat',
+    id: chat.id,
     title: chat.title,
     video: video.url,
     created: iso(chat.createdAt),
@@ -166,6 +169,7 @@ export function parseChat(md) {
   let messages = parseCallouts(body);
   if (!messages.length) messages = parseMarkers(body);
   const out = { messages };
+  if (meta.id) out.id = String(meta.id);
   if (meta.title) out.title = String(meta.title);
   for (const [k, f] of [['created', 'createdAt'], ['updated', 'updatedAt']]) {
     const t = meta[k] ? parseStamp(meta[k]) : 0;
@@ -338,13 +342,15 @@ export async function hydrate(settings, video) {
   // notes
   const cards = [];
   const byFile = new Map(video.notes.cards.filter((c) => c.file).map((c) => [c.file, c]));
+  const byId = new Map(video.notes.cards.map((c) => [c.id, c]));
   for (const name of noteFiles) {
     if (name === summary) continue; // the pin summary lives in the video folder, not notes/, but be safe
     const { content } = await native({ op: 'read', path: join(nDir, `${name}.md`) });
     if (content == null) continue;
     const parsed = parseNote(content);
-    const prev = byFile.get(name);
-    const card = { id: prev?.id ?? crypto.randomUUID(), title: '', start: null, color: 0, ts: Date.now(), ...prev, ...parsed, file: name };
+    // Identity = the uuid in front matter (survives renames in Obsidian); file name is the fallback.
+    const prev = (parsed.id && byId.get(parsed.id)) || byFile.get(name);
+    const card = { id: parsed.id || prev?.id || crypto.randomUUID(), title: '', start: null, color: 0, ts: Date.now(), ...prev, ...parsed, file: name };
     if (card.kind === 'note') card.title = name; // filename is the title: renames in Obsidian stick
     cards.push(card);
   }
@@ -356,13 +362,14 @@ export async function hydrate(settings, video) {
   // chats
   const chats = [];
   const chatByFile = new Map(video.chats.filter((c) => c.file).map((c) => [c.file, c]));
+  const chatById = new Map(video.chats.map((c) => [c.id, c]));
   for (const name of chatFiles) {
     const { content } = await native({ op: 'read', path: join(cDir, `${name}.md`) });
     if (content == null) continue;
     const parsed = parseChat(content);
-    const prev = chatByFile.get(name);
+    const prev = (parsed.id && chatById.get(parsed.id)) || chatByFile.get(name);
     chats.push({
-      id: prev?.id ?? crypto.randomUUID(),
+      id: parsed.id || prev?.id || crypto.randomUUID(),
       createdAt: Date.now(),
       updatedAt: Date.now(),
       ...prev,

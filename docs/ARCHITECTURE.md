@@ -137,6 +137,7 @@ export const DEFAULT_SETTINGS = {
   aboutMe: '', tone: '',            // free text, injected into the chat system prompt
   vaultDir: '',                     // knowledge base folder (Obsidian vault); '' = storage.local only
   hotkeys: true,                    // all shortcuts on/off; the list itself is fixed in config/hotkeys.js
+  webSearch: false,                 // server-side web search tool; toggled in the chat composer picker
 }
 export async function getSettings()            // {...DEFAULT_SETTINGS, ...stored}; migrates v1 {provider, apiKey, model} → per-provider key + 'provider:model', drops legacy + notion keys
 export async function saveSettings(patch)      // merge + write; returns merged
@@ -183,7 +184,9 @@ export function parseModel(str)                 // 'openai:gpt-5.1' → {provide
 export const keyFor = (settings, provider)      // settings[`${provider}Key`] || ''
 export const availableProviders = (settings)    // PROVIDERS with a non-empty key
 
-export function buildRequest({ provider, apiKey, model, system, messages, maxTokens = 2048, effort = 'off' })
+export function webSearchTool(modelId)          // {type: 'web_search_20260209' (Claude 4.6+/5) | 'web_search_20250305', name: 'web_search', max_uses: 5}
+export function buildRequest({ provider, apiKey, model, system, messages, maxTokens = 2048, effort = 'off', webSearch = false })
+// webSearch → anthropic body.tools = [webSearchTool(m)]; openai body.web_search_options = {}
 // messages: [{role:'user'|'assistant', content}] — plain strings.
 // anthropic → { url:'https://api.anthropic.com/v1/messages',
 //   headers: {'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true'},
@@ -200,10 +203,12 @@ export function buildRequest({ provider, apiKey, model, system, messages, maxTok
 // model falls back to DEFAULT_MODELS[provider] when falsy. Unknown provider → throw.
 
 export function parseResponse(provider, json)
-// anthropic: json.content.filter(b=>b.type==='text').map(b=>b.text).join('')
-// openai:    json.choices?.[0]?.message?.content ?? ''
+// anthropic: text blocks joined; their `citations[].{url,title}` (web search) → "\n\nSources:\n- [title](url)" (unique urls)
+// openai:    choices[0].message.content + the same block from message.annotations[type=url_citation].url_citation
 
-export function buildSystemPrompt({ title, channel, segments, aboutMe = '', tone = '' })
+export function buildSystemPrompt({ title, channel, segments, aboutMe = '', tone = '', webSearch = false })
+// webSearch adds a paragraph: when to search (facts beyond the transcript), focused queries reusing the
+// video's exact terms, several narrow searches, say what was found and where.
 // Persona: assistant for THIS video. Includes title/channel, then optional
 // 'About the user:\n<aboutMe>' and 'Tone of voice:\n<tone>' sections (skipped when blank),
 // then timestamped transcript lines `[m:ss] text` from grouped segments. Whole prompt
@@ -213,7 +218,9 @@ export function buildSystemPrompt({ title, channel, segments, aboutMe = '', tone
 
 export async function chat({ settings, system, messages, maxTokens })
 // parseModel(settings.model) → provider/id; apiKey = keyFor(settings, provider); none → throw Error('no-api-key').
-// buildRequest(..., effort: settings.effort); POST via bus.http; on !ok throw Error(error); parseResponse.
+// buildRequest(..., effort: settings.effort, webSearch: settings.webSearch); POST via bus.http; on !ok throw Error(error);
+// anthropic stop_reason 'pause_turn' (server tool loop hit its limit) → re-POST with the partial assistant
+// content appended as an assistant message (no extra user turn), at most 3 times; then parseResponse.
 
 export function filterModelIds(provider, ids)   // openai: keep /^(gpt-\d|o\d)/, drop audio|realtime|tts|transcribe|search|instruct|image|embed|moderation|codex|dated snapshots; dedupe+sort
 export async function listModels({ provider, apiKey })   // GET /v1/models (anthropic ?limit=100) via bus.http → filterModelIds; throws on !ok
@@ -234,14 +241,14 @@ When `settings.vaultDir` is set, files on disk are the source of truth. Layout:
     Transcript.md         front matter (ytx: transcript, id, url, lang) + "# title" + "- [m:ss](url&t=Ns) text"
                           lines; written with the folder (or on the next write once a transcript exists);
                           `video.transcriptFile` remembers the path so it is not rewritten every flush
-    notes/<note>.md       one per card: front matter (ytx: note, kind: quick|note, title (notes only), video,
+    notes/<note>.md       one per card: front matter (ytx: note, id (uuid), kind: quick|note, title (notes only), video,
                           time, start, color, created) + text; all dates local `YYYY-MM-DD HH:mm:ss`.
                           Files without front matter (hand-written in Obsidian) = notes titled by filename.
   pinned/<video>/         the same tree while the video is pinned (pin = rename the folder here, unpin =
                           rename back; moving it by hand in Obsidian is detected on hydrate), plus
     <video>.md            summary: front matter (ytx: video, id, url, channel, pinned) + "# title" +
                           "[Watch on YouTube](url)" + "## Transcript" as "- [m:ss](url&t=Ns) text" lines
-    chats/<chat>.md       front matter (ytx: chat, title, video, created, updated) + "# title" + messages,
+    chats/<chat>.md       front matter (ytx: chat, id (uuid), title, video, created, updated) + "# title" + messages,
                           each an Obsidian callout: "> [!user|assistant] YYYY-MM-DD HH:mm:ss" (local time)
                           followed by "> "-prefixed content lines; a non-quoted line ends the message.
                           Legacy "<!-- ytx:<role> ts=<ms> -->" marker files still parse.
@@ -276,7 +283,8 @@ export async function hydrate(settings, video)                  // disk → reco
 All async ops are no-ops when `enabled(settings)` is false (except `pin`, which throws `no-vault`).
 
 `hydrate`: first decides pinned state from where the folder lives (pinned/ wins). Then lists `notes/` and
-`chats/`. Every `.md` there becomes a card/chat (existing item with the same `file` keeps its id); items
+`chats/`. Every `.md` there becomes a card/chat (identity = the `id` uuid in front matter, so a rename in
+Obsidian keeps the same card/chat; file name is the fallback for files without one); items
 whose file disappeared are dropped; local items with NO `file` yet are written (first run after enabling).
 `activeChatId` falls back to the last chat. Called by both UIs right after `getVideo`, before rendering;
 a failure (host not installed) toasts once and the UI continues with storage.local data.

@@ -213,3 +213,46 @@ test('supportsEffort: thinking-capable families only; chat forces effort off oth
   await llm.chat({ settings: { openaiKey: 'k', model: 'openai:gpt-5.1', effort: 'high' }, system: 's', messages: [] });
   assert.equal(sent[1].body.reasoning_effort, 'high');
 });
+
+test('web search: anthropic tool (variant by model) / openai web_search_options; off omits both', () => {
+  const a = llm.buildRequest({ provider: 'anthropic', apiKey: 'k', model: 'claude-sonnet-5', system: '', messages: [], webSearch: true });
+  assert.deepEqual(a.body.tools, [{ type: 'web_search_20260209', name: 'web_search', max_uses: 5 }]);
+  const old = llm.buildRequest({ provider: 'anthropic', apiKey: 'k', model: 'claude-haiku-4-5-20251001', system: '', messages: [], webSearch: true });
+  assert.equal(old.body.tools[0].type, 'web_search_20250305');
+  const o = llm.buildRequest({ provider: 'openai', apiKey: 'k', model: 'gpt-5.1', system: '', messages: [], webSearch: true });
+  assert.deepEqual(o.body.web_search_options, {});
+  const off = llm.buildRequest({ provider: 'anthropic', apiKey: 'k', model: 'claude-sonnet-5', system: '', messages: [] });
+  assert.ok(!('tools' in off.body));
+  assert.ok(llm.buildSystemPrompt({ title: 't', channel: 'c', segments: [], webSearch: true }).includes('search the web'));
+  assert.ok(!llm.buildSystemPrompt({ title: 't', channel: 'c', segments: [] }).includes('search the web'));
+});
+
+test('parseResponse appends unique cited sources; anthropic citations and openai annotations', () => {
+  const a = llm.parseResponse('anthropic', { content: [
+    { type: 'server_tool_use', id: 's', name: 'web_search', input: { query: 'q' } },
+    { type: 'web_search_tool_result', tool_use_id: 's', content: [] },
+    { type: 'text', text: 'Alpha ', citations: [{ type: 'web_search_result_location', url: 'https://a.io', title: 'A' }] },
+    { type: 'text', text: 'beta.', citations: [{ type: 'web_search_result_location', url: 'https://a.io', title: 'A' }, { url: 'https://b.io', title: 'B' }] },
+  ] });
+  assert.equal(a, 'Alpha beta.\n\nSources:\n- [A](https://a.io)\n- [B](https://b.io)');
+  const o = llm.parseResponse('openai', { choices: [{ message: { content: 'x', annotations: [{ type: 'url_citation', url_citation: { url: 'https://c.io', title: 'C' } }] } }] });
+  assert.equal(o, 'x\n\nSources:\n- [C](https://c.io)');
+  assert.equal(llm.parseResponse('anthropic', { content: [{ type: 'text', text: 'plain' }] }), 'plain');
+});
+
+test('chat resumes pause_turn by re-sending the partial assistant turn, bounded', async () => {
+  const sent = [];
+  let n = 0;
+  globalThis.browser.runtime.sendMessage = async (msg) => {
+    sent.push(msg);
+    n++;
+    if (n === 1) return { ok: true, data: { stop_reason: 'pause_turn', content: [{ type: 'server_tool_use', id: 's', name: 'web_search', input: { query: 'q' } }] } };
+    return { ok: true, data: { stop_reason: 'end_turn', content: [{ type: 'text', text: 'done' }] } };
+  };
+  const out = await llm.chat({ settings: { anthropicKey: 'k', model: 'anthropic:claude-sonnet-5', effort: 'off', webSearch: true }, system: 's', messages: [{ role: 'user', content: 'hi' }] });
+  assert.equal(out, 'done');
+  assert.equal(sent.length, 2);
+  assert.equal(sent[1].body.messages.length, 2);
+  assert.equal(sent[1].body.messages[1].role, 'assistant');
+  assert.equal(sent[1].body.messages[1].content[0].type, 'server_tool_use');
+});

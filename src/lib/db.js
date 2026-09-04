@@ -9,6 +9,7 @@ export const DEFAULT_SETTINGS = {
   tone: '', // system prompt: tone of voice
   vaultDir: '', // knowledge base folder (e.g. Obsidian vault); '' = local storage only
   hotkeys: true, // keyboard shortcuts on/off (list in config/hotkeys.js)
+  webSearch: false, // let the model search the web (server-side tool); toggled in the chat composer
 };
 
 // v1 settings were { provider, apiKey, model } — map into per-provider keys once. Notion keys dropped.

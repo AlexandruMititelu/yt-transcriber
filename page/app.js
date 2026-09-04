@@ -381,6 +381,7 @@ function chatPane(video, disk) {
     if (m.role === 'assistant') {
       // FORBID_TAGS img: a prompt-injected transcript could make the LLM emit an image URL that exfiltrates chat content on fetch
       b.innerHTML = DOMPurify.sanitize(marked.parse(m.content), { FORBID_TAGS: ['img'] });
+      for (const a of b.querySelectorAll('a[href]')) { a.target = '_blank'; a.rel = 'noreferrer noopener'; }
       linkTimestamps(b, video.url);
       renderMermaidIn(b);
       const c = el('button', { class: 'copy-btn', title: 'Copy message' }, '⧉');
@@ -443,6 +444,7 @@ function chatPane(video, disk) {
           segments: video.transcript?.grouped ?? [],
           aboutMe: settings.aboutMe,
           tone: settings.tone,
+          webSearch: !!settings.webSearch,
         }),
         messages: chat.messages.map(({ role, content }) => ({ role, content })),
       });

@@ -44,11 +44,19 @@ function anthropicHeaders(apiKey) {
   };
 }
 
-export function buildRequest({ provider, apiKey, model, system, messages, maxTokens = 2048, effort = 'off' }) {
+// Server-side web search (Anthropic runs the searches; results come back as citations).
+// Opus 4.6+ / Sonnet 4.6+ / 5 take the 2026-02-09 variant (dynamic filtering); older models the basic one.
+export function webSearchTool(modelId) {
+  const type = ADAPTIVE_RE.test(modelId) ? 'web_search_20260209' : 'web_search_20250305';
+  return { type, name: 'web_search', max_uses: 5 };
+}
+
+export function buildRequest({ provider, apiKey, model, system, messages, maxTokens = 2048, effort = 'off', webSearch = false }) {
   const m = model || DEFAULT_MODELS[provider];
   const think = EFFORTS.includes(effort) && effort !== 'off';
   if (provider === 'anthropic') {
     const body = { model: m, max_tokens: maxTokens, system, messages };
+    if (webSearch) body.tools = [webSearchTool(m)];
     if (ADAPTIVE_RE.test(m)) {
       if (think) {
         body.thinking = { type: 'adaptive' };
@@ -67,6 +75,7 @@ export function buildRequest({ provider, apiKey, model, system, messages, maxTok
   if (provider === 'openai') {
     const body = { model: m, messages: [{ role: 'system', content: system }, ...messages] };
     if (think) body.reasoning_effort = effort;
+    if (webSearch) body.web_search_options = {}; // Chat Completions built-in web search
     return {
       url: 'https://api.openai.com/v1/chat/completions',
       headers: { authorization: `Bearer ${apiKey}` },
@@ -76,14 +85,26 @@ export function buildRequest({ provider, apiKey, model, system, messages, maxTok
   throw new Error(`unknown provider: ${provider}`);
 }
 
-export function parseResponse(provider, json) {
-  if (provider === 'anthropic') {
-    return json.content.filter((b) => b.type === 'text').map((b) => b.text).join('');
-  }
-  return json.choices?.[0]?.message?.content ?? '';
+// Unique [title](url) lines appended under "Sources:" when the model cited web results.
+function sourcesBlock(cites) {
+  const seen = new Map();
+  for (const c of cites) if (c?.url && !seen.has(c.url)) seen.set(c.url, c.title || c.url);
+  if (!seen.size) return '';
+  return '\n\nSources:\n' + [...seen].map(([url, title]) => `- [${title}](${url})`).join('\n');
 }
 
-export function buildSystemPrompt({ title, channel, segments, aboutMe = '', tone = '' }) {
+export function parseResponse(provider, json) {
+  if (provider === 'anthropic') {
+    const texts = json.content.filter((b) => b.type === 'text');
+    const cites = texts.flatMap((b) => b.citations ?? []);
+    return texts.map((b) => b.text).join('') + sourcesBlock(cites);
+  }
+  const msg = json.choices?.[0]?.message ?? {};
+  const cites = (msg.annotations ?? []).filter((a) => a.type === 'url_citation').map((a) => a.url_citation);
+  return (msg.content ?? '') + sourcesBlock(cites);
+}
+
+export function buildSystemPrompt({ title, channel, segments, aboutMe = '', tone = '', webSearch = false }) {
   const lines = (segments ?? [])
     .map((s) => `[${fmtTime(s.start)}] ${s.text}`)
     .join('\n');
@@ -93,6 +114,13 @@ export function buildSystemPrompt({ title, channel, segments, aboutMe = '', tone
     'You may answer with markdown, and may draw diagrams in ```mermaid fenced blocks. ' +
     'Cite timestamps like [12:34] when referencing the video. ' +
     'Never use em dashes or double hyphens (--); use commas, periods, or colons instead.\n\n';
+  if (webSearch) {
+    prompt +=
+      'You can search the web. Use it when the answer needs facts beyond the transcript: people, papers, ' +
+      'products, tools, prices, dates, current events, or claims worth verifying. Write focused queries ' +
+      'that reuse the exact names and terms from the video, run several narrow searches rather than one ' +
+      'broad one, and say what you found and where. Stay on the transcript alone for questions it already answers.\n\n';
+  }
   if (aboutMe.trim()) prompt += `About the user:\n${aboutMe.trim()}\n\n`;
   if (tone.trim()) prompt += `Tone of voice:\n${tone.trim()}\n\n`;
   prompt += 'Transcript:\n' + lines;
@@ -105,9 +133,17 @@ export async function chat({ settings, system, messages, maxTokens }) {
   const apiKey = keyFor(settings, provider);
   if (!apiKey) throw new Error('no-api-key');
   const effort = supportsEffort(provider, id) ? settings.effort : 'off';
-  const req = buildRequest({ provider, apiKey, model: id, system, messages, maxTokens, effort });
-  const r = await http(req.url, { method: 'POST', headers: req.headers, body: req.body });
+  const webSearch = !!settings.webSearch;
+  const req = buildRequest({ provider, apiKey, model: id, system, messages, maxTokens, effort, webSearch });
+  let r = await http(req.url, { method: 'POST', headers: req.headers, body: req.body });
   if (!r.ok) throw new Error(r.error);
+  // Server-side tools may pause after ~10 search iterations: re-send with the partial assistant turn
+  // appended (no extra user message) and the server resumes. Bounded so a stuck loop can't run forever.
+  for (let i = 0; provider === 'anthropic' && r.data?.stop_reason === 'pause_turn' && i < 3; i++) {
+    const body = { ...req.body, messages: [...req.body.messages, { role: 'assistant', content: r.data.content }] };
+    r = await http(req.url, { method: 'POST', headers: req.headers, body });
+    if (!r.ok) throw new Error(r.error);
+  }
   return parseResponse(provider, r.data);
 }
 

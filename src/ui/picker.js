@@ -24,7 +24,7 @@ export function createPicker({ isLive = () => true } = {}) {
   menu.append(list, footer);
   root.append(trigger, menu);
 
-  let settings = { model: '', effort: 'off' };
+  let settings = { model: '', effort: 'off', webSearch: false };
   let groups = {};
   let view = 'models';
 
@@ -37,6 +37,7 @@ export function createPicker({ isLive = () => true } = {}) {
     const eff = h('span', 'ytx-picker-effort', canThink() ? (EFFORT_LABEL[settings.effort] ?? 'Off') : 'No effort');
     if (!canThink()) { eff.classList.add('is-off'); eff.title = 'This model has no thinking/effort setting'; }
     trigger.append(eff);
+    if (settings.webSearch) trigger.append(h('span', 'ytx-picker-web', 'Web'));
   }
   function set(patch) {
     Object.assign(settings, patch);
@@ -78,6 +79,14 @@ export function createPicker({ isLive = () => true } = {}) {
     const eff = item('Effort', val, () => { view = view === 'effort' ? 'models' : 'effort'; render(); });
     eff.disabled = !ok;
     footer.append(eff);
+    if (view !== 'effort') {
+      const web = item('Web search', h('span', 'ytx-picker-value', settings.webSearch ? 'On' : 'Off'), () => {
+        set({ webSearch: !settings.webSearch });
+        render();
+      });
+      web.title = 'Let the model run web searches (server-side) and cite sources';
+      footer.append(web);
+    }
   }
 
   // composedPath, not root.contains: a click that re-renders the menu detaches its target

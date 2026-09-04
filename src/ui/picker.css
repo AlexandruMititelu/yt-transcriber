@@ -140,6 +140,15 @@
   color: var(--muted);
 }
 
+.ytx-picker-web {
+  padding: 0 6px;
+  border-radius: 5px;
+  background: var(--accent-soft, rgba(0, 122, 255, 0.1));
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+}
+
 .ytx-picker-effort.is-off {
   opacity: 0.45;
   text-decoration: line-through;

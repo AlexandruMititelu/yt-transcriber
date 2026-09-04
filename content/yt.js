@@ -476,6 +476,7 @@
       const md = h('div', 'ytx-md');
       // FORBID_TAGS img: a prompt-injected transcript could make the LLM emit an image URL that exfiltrates chat content on fetch
       md.innerHTML = globalThis.DOMPurify.sanitize(globalThis.marked.parse(content), { FORBID_TAGS: ['img'] });
+      for (const a of md.querySelectorAll('a[href]')) { a.target = '_blank'; a.rel = 'noreferrer noopener'; }
       linkifyTimestamps(md);
       renderMermaidIn(md);
       return md;
@@ -559,6 +560,7 @@
           segments: video.transcript?.grouped ?? [],
           aboutMe: settings.aboutMe,
           tone: settings.tone,
+          webSearch: !!settings.webSearch,
         });
         const reply = await L.llm.chat({
           settings,
