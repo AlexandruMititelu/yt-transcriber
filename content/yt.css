@@ -182,7 +182,7 @@
 #ytx-panel .ytx-tabs {
   display: flex;
   flex: none;
-  margin: 0 8px 8px;
+  margin: 0 8px; /* the 8px below lives in each view (sticky toolbar paints it, so rows can't show through) */
   padding: 2px;
   background: var(--surface-2);
   border-radius: 9px;
@@ -244,7 +244,7 @@
   z-index: 2;
   display: flex;
   justify-content: flex-end;
-  padding: 0 0 8px; /* bar top = tab control bottom + 8px, same as the chat switcher and notes bar */
+  padding: 8px 0; /* solid: covers the gap under the tabs while rows scroll beneath */
   background: var(--surface);
 }
 #ytx-panel .ytx-follow { flex: none; }
@@ -286,7 +286,7 @@
 
 /* container class differs from the shared .ytx-notes root: otherwise the padding stacks (8px + 8px) */
 #ytx-panel .ytx-notes-view {
-  padding: 0 8px 8px;
+  padding: 8px 8px 8px;
 }
 
 /* ---- shared bits ---- */
@@ -366,7 +366,7 @@
 /* the view wrapper, not the shared .ytx-chat root — else the 8px padding lands twice */
 
 #ytx-panel .ytx-chat-view {
-  padding: 0 8px 8px;
+  padding: 8px 8px 8px;
 }
 
 #ytx-panel .ytx-chat-new {
