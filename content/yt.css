@@ -127,6 +127,7 @@
   gap: 4px;
   padding: 12px 12px 8px 16px;
   flex: none;
+  z-index: 3; /* every panel child is its own stacking context: the tag popover must beat the tabs + body */
 }
 
 #ytx-panel .ytx-title {
