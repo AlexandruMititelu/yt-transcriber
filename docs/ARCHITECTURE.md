@@ -523,10 +523,13 @@ NO inline scripts or on* attributes (extension CSP). Theme: `settings.theme` →
 Views (hash routing: `#/`, `#/video/<id>`, `#/settings`):
 - **Library `#/`**: header "YT Transcriber" + Settings gear and the tools row are built ONCE per visit (`buildLibShell`);
   only the body inside `.lib-stage` is repainted (`paintLibrary`), so typing in the search box never re-creates it.
-  Header = logo (assets/logo-light.svg) + name. Tools: search box (title/channel,
-  debounced), sort pop-up button (label + chevron rotating 180° when open, popover with a check column: Recent |
-  Title | Channel), "By channel" grouping toggle, video count (all session-scoped). All: a "Pinned" section first (when any), then "Everything
-  else" (or one section per channel). Pinned: only pinned videos (empty hint otherwise). Video card = `.card-wrap`
+  Header = logo (assets/logo-light.svg) + name. Tools (`popMenu` = pill + chevron rotating 180° when open, popover
+  with the chatbar look; `choiceMenu` = radio list with a check column): search box (title/channel/#tags, debounced),
+  sort pop-up (Recent | Title | Channel), grouping pop-up (No grouping | By channel | By tag: a video appears under
+  each of its tags, "Untagged" otherwise), Tags pop-up (every library tag as coloured `tagChip`s with counts, click
+  toggles it in `libTags`; filter = video carries ALL selected tags; "Clear filter"; label shows the selection, `.on`
+  when active), video count (all session-scoped). All: a "Pinned" section first (when any), then "Everything
+  else" (or one section per group key). Pinned: only pinned videos (empty hint otherwise). Video card = `.card-wrap`
   holding the `<a class=card>` (title, channel, relative date, badges: N segments · N messages · N notes) and a
   separate actions row (pin + ⌫ delete, faint until hover/focus, never nested in the link). Delete → `confirmBox`
   overlay on the card (library record only; vault files stay). The pin is yellow when pinned and toggles

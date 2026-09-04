@@ -84,8 +84,8 @@ const renderMdFor = (video) => (text) => renderMarkdown(text, { timeHref: (sec) 
 
 let libQuery = '';
 let libSort = 'recent'; // 'recent' | 'title' | 'channel'
-let libTag = null; // tag filter chip
-let libGroup = false; // group by channel
+let libTags = new Set(); // tag filter: a video must carry every selected tag
+let libGroup = 'none'; // 'none' | 'channel' | 'tag'
 let libShell = null; // header + tools, built once per visit to #/ — only the body inside .lib-stage repaints
 let libPaint = 0; // paint token: a slow listVideos must never overwrite a newer paint
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
@@ -93,19 +93,13 @@ const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
 const SORTS = [['recent', 'Recent'], ['title', 'Title'], ['channel', 'Channel']];
 
 // macOS-style pop-up button: pill + rotating chevron, menu reuses the chatbar popover look.
-function sortMenu(onPick) {
+// popMenu(paintMenu(menu, close), { cls }) → { wrap, label, btn, close }
+function popMenu(paintMenu, { cls = '' } = {}) {
   const label = el('span', {});
-  const btn = el('button', { class: 'btn lib-dd', type: 'button', 'aria-haspopup': 'listbox', 'aria-expanded': 'false' },
+  const btn = el('button', { class: `btn lib-dd ${cls}`, type: 'button', 'aria-haspopup': 'listbox', 'aria-expanded': 'false' },
     label, el('span', { class: 'lib-dd-caret' }, chevronDown()));
   const menu = el('div', { class: 'ytx-chatbar-menu lib-dd-menu' });
   const wrap = el('div', { class: 'lib-dd-wrap' }, btn, menu);
-  const paint = () => {
-    label.textContent = SORTS.find(([v]) => v === libSort)[1];
-    menu.replaceChildren(...SORTS.map(([v, l]) => el('button', {
-      class: 'ytx-chatbar-item', type: 'button',
-      onclick: () => { close(); if (v === libSort) return; libSort = v; paint(); onPick(); },
-    }, el('span', { class: 'ytx-chatbar-check' }, libSort === v ? '✓' : ''), el('span', { class: 'ytx-chatbar-text' }, l))));
-  };
   const onDown = (e) => { if (!wrap.contains(e.target)) close(); };
   const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
   function close() {
@@ -118,14 +112,44 @@ function sortMenu(onPick) {
   }
   btn.onclick = () => {
     if (menu.classList.contains('is-open')) return close();
+    paintMenu(menu, close);
     menu.classList.add('is-open');
     btn.classList.add('is-open');
     btn.setAttribute('aria-expanded', 'true');
     window.addEventListener('pointerdown', onDown, true);
     window.addEventListener('keydown', onKey, true);
   };
+  return { wrap, label, btn, close, menu, repaint: () => paintMenu(menu, close) };
+}
+// Radio list menu (sort, group). options: [[value, label]], get/set the current value.
+function choiceMenu(options, get, set, onPick) {
+  const m = popMenu((menu, close) => menu.replaceChildren(...options.map(([v, l]) => el('button', {
+    class: 'ytx-chatbar-item', type: 'button',
+    onclick: () => { close(); if (v === get()) return; set(v); paint(); onPick(); },
+  }, el('span', { class: 'ytx-chatbar-check' }, get() === v ? '✓' : ''), el('span', { class: 'ytx-chatbar-text' }, l)))));
+  const paint = () => { m.label.textContent = options.find(([v]) => v === get())[1]; };
   paint();
-  return wrap;
+  return m.wrap;
+}
+const sortMenu = (onPick) => choiceMenu(SORTS, () => libSort, (v) => { libSort = v; }, onPick);
+const GROUPS = [['none', 'No grouping'], ['channel', 'By channel'], ['tag', 'By tag']];
+const groupMenu = (onPick) => choiceMenu(GROUPS, () => libGroup, (v) => { libGroup = v; }, onPick);
+// Tags: every tag in the library as coloured chips with counts; click toggles it in the filter (AND).
+let tagCounts = new Map();
+function tagMenu(onPick) {
+  const m = popMenu((menu) => {
+    const chips = [...tagCounts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([t, n]) =>
+      tagChip(t, { on: libTags.has(t), count: n, onClick: () => { if (libTags.has(t)) libTags.delete(t); else libTags.add(t); m.repaint(); paint(); onPick(); } }));
+    const clear = el('button', { class: 'ytx-chatbar-item', type: 'button', disabled: libTags.size ? null : 'true', onclick: () => { libTags.clear(); m.close(); paint(); onPick(); } },
+      el('span', { class: 'ytx-chatbar-check' }, ''), el('span', { class: 'ytx-chatbar-text' }, 'Clear filter'));
+    menu.replaceChildren(chips.length ? el('div', { class: 'ytx-tag-row lib-tag-menu' }, chips) : el('div', { class: 'lib-tag-empty' }, 'No tags yet. Tag a video from its header.'), clear);
+  }, { cls: 'lib-tagdd' });
+  const paint = () => {
+    m.label.textContent = libTags.size ? `Tags · ${[...libTags].map((t) => `#${t}`).join(' ')}` : 'Tags';
+    m.btn.classList.toggle('on', libTags.size > 0);
+  };
+  paint();
+  return m.wrap;
 }
 
 // iPhone-style swap: new body enters from one side, old one slides out on top (absolute) so nothing jumps.
@@ -155,19 +179,14 @@ function buildLibShell() {
   search.value = libQuery;
   const searchSoon = debounce(() => paintLibrary('fade'), 150);
   search.oninput = () => { libQuery = search.value; searchSoon(); };
-  const group = el('button', { class: `btn lib-group${libGroup ? ' on' : ''}`, 'aria-pressed': String(libGroup), onclick: () => {
-    libGroup = !libGroup;
-    group.classList.toggle('on', libGroup);
-    group.setAttribute('aria-pressed', String(libGroup));
-    paintLibrary('fade');
-  } }, 'By channel');
+  const group = groupMenu(() => paintLibrary('fade'));
+  const tagsDd = tagMenu(() => paintLibrary('fade'));
   const count = el('span', { class: 'lib-count' });
   const stage = el('div', { class: 'lib-stage' }, el('div', { class: 'empty' }, 'Loading…'));
-  const tags = el('div', { class: 'ytx-tag-row lib-tags' });
   $app.replaceChildren(header,
-    el('div', { class: 'lib-tools' }, search, sortMenu(() => paintLibrary('fade')), group, count),
-    tags, stage);
-  libShell = { stage, count, tags };
+    el('div', { class: 'lib-tools' }, search, sortMenu(() => paintLibrary('fade')), group, tagsDd, count),
+    stage);
+  libShell = { stage, count };
 }
 
 async function renderLibrary() {
@@ -182,12 +201,9 @@ async function paintLibrary(transition = 'fade') {
   if (token !== libPaint || !libShell?.stage.isConnected) return;
   const q = libQuery.trim().toLowerCase();
   let vids = all.filter((v) => !q || `${v.title} ${v.channel} ${(v.tags ?? []).map((t) => `#${t}`).join(' ')}`.toLowerCase().includes(q));
-  if (libTag) vids = vids.filter((v) => (v.tags ?? []).includes(libTag));
-  // Tag filter row: every tag in the library with counts; click toggles.
-  const counts = new Map();
-  for (const v of all) for (const t of v.tags ?? []) counts.set(t, (counts.get(t) || 0) + 1);
-  libShell.tags.replaceChildren(...[...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([t, n]) =>
-    tagChip(t, { on: libTag === t, count: n, onClick: () => { libTag = libTag === t ? null : t; paintLibrary('fade'); } })));
+  if (libTags.size) vids = vids.filter((v) => [...libTags].every((t) => (v.tags ?? []).includes(t)));
+  tagCounts = new Map();
+  for (const v of all) for (const t of v.tags ?? []) tagCounts.set(t, (tagCounts.get(t) || 0) + 1);
   if (libSort === 'title') vids = [...vids].sort((a, b) => (a.title || '').localeCompare(b.title || ''));
   else if (libSort === 'channel') vids = [...vids].sort((a, b) => (a.channel || '').localeCompare(b.channel || '') || b.updatedAt - a.updatedAt);
   const pinned = vids.filter((v) => v.pinned);
@@ -196,9 +212,10 @@ async function paintLibrary(transition = 'fade') {
     title ? el('h2', { class: 'lib-title' }, title) : null,
     el('div', { class: 'grid' }, list.map(videoCard)));
   const grouped = (list, fallbackTitle) => {
-    if (!libGroup) return list.length ? section(fallbackTitle, list) : null;
+    if (libGroup === 'none') return list.length ? section(fallbackTitle, list) : null;
     const by = new Map();
-    for (const v of list) { const k = v.channel || 'Unknown channel'; if (!by.has(k)) by.set(k, []); by.get(k).push(v); }
+    const keysOf = (v) => (libGroup === 'tag' ? (v.tags?.length ? v.tags.map((t) => `#${t}`) : ['Untagged']) : [v.channel || 'Unknown channel']);
+    for (const v of list) for (const k of keysOf(v)) { if (!by.has(k)) by.set(k, []); by.get(k).push(v); }
     return el('div', {}, [...by.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([k, l]) => section(k, l)));
   };
   let body;
