@@ -75,6 +75,7 @@ Native host protocol (native/host.mjs, stdio, 4-byte LE length + JSON, requests 
 { id, op: 'pick-folder' }                → { id, ok, path | null }      // OS folder dialog (PowerShell / osascript / zenity)
 { id, op: 'list', root, path }           → { id, ok, entries: [{name, dir}] }   // [] when missing
 { id, op: 'read', root, path }           → { id, ok, content | null, mtime | null }   // mtime = ms
+{ id, op: 'read-b64', root, path }       → { id, ok, data: base64 | null }   // binary (frame captures back into the UI)
 { id, op: 'stat', root, path }           → { id, ok, mtime | null }
 { id, op: 'write', root, path, content } → mkdir -p + write utf8 → { mtime }
 { id, op: 'write-b64', root, path, data }→ mkdir -p + write bytes (frame captures)
