@@ -27,10 +27,15 @@
   cursor: pointer;
 }
 
+.ytx-notes-btn { transition: background-color 0.15s ease, color 0.15s ease, transform 0.15s ease; }
+.ytx-notes-btn:hover { background: var(--accent); color: #fff; }
+.ytx-notes-btn:active { transform: scale(0.97); }
+
 .ytx-notes-btn.is-note {
   background: var(--green-soft, rgba(52, 199, 89, 0.14));
   color: var(--green, #248a3d);
 }
+.ytx-notes-btn.is-note:hover { background: var(--green, #248a3d); color: #fff; }
 
 .ytx-notes-grid {
   display: grid;
@@ -41,6 +46,7 @@
 
 /* quick note card */
 .ytx-qn {
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -56,7 +62,7 @@
 .ytx-qn.ytx-c4 { background: var(--keep-4); }
 
 .ytx-qn:focus, .ytx-nt:focus { outline: none; }
-.ytx-qn.is-selected, .ytx-nt.is-selected { box-shadow: 0 0 0 2px var(--accent); }
+.ytx-qn.is-selected, .ytx-nt.is-selected { box-shadow: var(--shadow); transform: translateY(-1px); }
 
 .ytx-qn-body {
   min-height: 40px;
@@ -79,9 +85,9 @@
   cursor: pointer;
 }
 
-.ytx-nt:hover {
-  background: var(--surface-2);
-}
+.ytx-qn:hover { border-color: var(--muted); }
+.ytx-nt { transition: box-shadow 0.15s ease, border-color 0.15s ease, background-color 0.15s ease; }
+.ytx-nt:hover { background: var(--surface-2); }
 
 .ytx-nt-title {
   font-size: 13px;

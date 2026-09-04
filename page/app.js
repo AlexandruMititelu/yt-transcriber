@@ -8,7 +8,7 @@ import { createNotesView } from '../src/ui/notes.js';
 import { createChatView } from '../src/ui/chat.js';
 import { renderMarkdown, setDark } from '../src/ui/markdown.js';
 import { createToaster } from '../src/ui/toast.js';
-import { pinIcon, chevronDown, copyIcon } from '../src/ui/icons.js';
+import { pinIcon, chevronDown, copyIcon, gearIcon, chevronLeft, trashIcon } from '../src/ui/icons.js';
 import { HOTKEYS, hotkeyId } from '../config/hotkeys.js';
 import { PROMPTS, promptsToText } from '../config/prompts.js';
 

@@ -203,7 +203,7 @@
     const views = {
       transcript: h('div', 'ytx-view ytx-scroll ytx-transcript'),
       chat: h('div', 'ytx-view ytx-chat-view'),
-      notes: h('div', 'ytx-view ytx-scroll ytx-notes'),
+      notes: h('div', 'ytx-view ytx-scroll ytx-notes-view'),
     };
     const tabBtns = {};
     const TABS = ['transcript', 'chat', 'notes'];

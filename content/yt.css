@@ -233,7 +233,7 @@
 
 #ytx-panel .ytx-transcript {
   position: relative;
-  padding: 0 10px 12px;
+  padding: 0 8px 8px; /* same inset as the tab control */
 }
 
 #ytx-panel .ytx-follow-bar {
@@ -277,7 +277,8 @@
   background: var(--accent-soft);
 }
 
-#ytx-panel .ytx-notes {
+/* container class differs from the shared .ytx-notes root: otherwise the padding stacks (8px + 8px) */
+#ytx-panel .ytx-notes-view {
   padding: 2px 8px 8px;
 }
 
