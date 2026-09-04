@@ -101,9 +101,13 @@ function expandBtn(wrap) {
   b.setAttribute('aria-label', 'Expand diagram');
   b.appendChild(expandIcon());
   b.addEventListener('click', () => {
-    const host = wrap.closest('#ytx-panel') ?? document.body; // inside the panel so its colour tokens apply
+    // On document.body: YouTube's layout ancestors make `position: fixed` inside the panel a panel-sized box.
+    const host = document.body;
+    const dark = wrap.closest('#ytx-panel')?.classList.contains('ytx-dark') || document.documentElement.dataset.theme === 'dark'
+      || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
     const overlay = h('div', 'ytx-mmd-overlay');
     const box = h('div', 'ytx-mmd-box');
+    box.style.background = dark ? '#1e1e20' : '#fdf6e3';
     const svg = wrap.querySelector('svg')?.cloneNode(true);
     if (!svg) return;
     svg.removeAttribute('width'); svg.removeAttribute('height'); svg.style.maxWidth = '100%'; svg.style.maxHeight = '100%';
