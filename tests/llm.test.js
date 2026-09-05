@@ -292,19 +292,19 @@ test('assembleAnthropic rebuilds the non-streaming shape (text, citations, usage
   assert.equal(got.join(''), 'Hello');
   const r = llm.parseResult('anthropic', json);
   assert.equal(r.text, 'Hello\n\nSources:\n- [A](https://a.io)\n\n*[Reply cut off: hit the length limit]*');
-  assert.deepEqual(r.usage, { in: 180, out: 7, cacheRead: 80 }); // in = uncached + cached
+  assert.deepEqual(r.usage, { in: 180, out: 7, cacheRead: 80, cacheWrite: 0, searches: 0 }); // in = uncached + cached
   assert.equal(r.truncated, true);
   const o = llm.parseResult('openai', llm.assembleOpenai([
     { choices: [{ delta: { content: 'a' } }] }, { choices: [{ delta: { content: 'b' }, finish_reason: 'stop' }] }, { choices: [], usage: { prompt_tokens: 5, completion_tokens: 2 } },
   ]));
   assert.equal(o.text, 'ab');
-  assert.deepEqual(o.usage, { in: 5, out: 2, cacheRead: 0 });
+  assert.deepEqual(o.usage, { in: 5, out: 2, cacheRead: 0, cacheWrite: 0, searches: 0 });
 });
 
 test('fmtUsage shows tokens, and a $ estimate only for priced models', () => {
   assert.equal(llm.fmtK(1e6), '1M'); assert.equal(llm.fmtK(400000), '400k');
   assert.equal(llm.fmtUsage('claude-sonnet-4-6', { in: 12000, out: 300, cacheRead: 0 }), '12k in · 300 out · $0.041');
-  assert.equal(llm.fmtUsage('claude-sonnet-5', { in: 1200, out: 30 }), '1.2k in · 30 out');
+  assert.equal(llm.fmtUsage('gpt-4o', { in: 1200, out: 30 }), '1.2k in · 30 out');
 });
 
 test('chat retries once on 429 then succeeds', async () => {
@@ -360,7 +360,7 @@ test('chat runs transcript tools: Anthropic tool_use round trip, usage summed', 
   const calls = [];
   const out = await llm.chat({ settings: { anthropicKey: 'k', model: 'anthropic:claude-sonnet-5', effort: 'off' }, system: 's', messages: [{ role: 'user', content: 'cats?' }], tools, onTool: (n, i) => calls.push([n, i.query]) });
   assert.equal(out.text, 'Searching.\n\nCats at 0:00.');
-  assert.deepEqual(out.usage, { in: 30, out: 3, cacheRead: 0 });
+  assert.deepEqual(out.usage, { in: 30, out: 3, cacheRead: 0, cacheWrite: 0, searches: 0, cost: 0.000135 });
   assert.deepEqual(calls, [['search_transcript', 'cats']]);
   assert.equal(sent[0].body.tools[0].name, 'search_transcript');
   const m = sent[1].body.messages;

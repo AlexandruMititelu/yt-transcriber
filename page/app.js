@@ -2,6 +2,8 @@ import { fmtTime } from '../src/lib/format.js';
 import * as db from '../src/lib/db.js';
 import * as llm from '../src/lib/llm.js';
 import * as vault from '../src/lib/vault.js';
+import * as memory from '../src/lib/memory.js';
+import * as usage from '../src/lib/usage.js';
 import * as transcriptLib from '../src/lib/transcript.js';
 import { confirmBox } from '../src/ui/chatbar.js';
 import { createNotesView } from '../src/ui/notes.js';
@@ -668,6 +670,7 @@ function notesPane(video, disk) {
 
 async function renderSettings() {
   const s = await db.getSettings();
+  const usageRows = await db.getUsage();
 
   const keyField = (value) => {
     const input = el('input', { class: 'input', type: 'password', autocomplete: 'off', spellcheck: 'false' });
@@ -740,6 +743,38 @@ async function renderSettings() {
   tone.value = s.tone;
   const hotkeys = el('input', { type: 'checkbox' });
   hotkeys.checked = s.hotkeys !== false;
+  // Memory: on/off, the text itself (editable; file in the vault or settings.memoryText), and Clear.
+  const memOn = el('input', { type: 'checkbox' });
+  memOn.checked = s.memory !== false;
+  const memText = el('textarea', { class: 'input', rows: 5, placeholder: 'Nothing remembered yet.', maxlength: String(memory.MAX_CHARS), 'aria-label': 'Memory' });
+  const memLoaded = await memory.load(s).catch(() => s.memoryText || '');
+  memText.value = memLoaded;
+  const memCount = el('span', { class: 'field-help' });
+  const paintMem = () => { memCount.textContent = `${memText.value.length} / ${memory.MAX_CHARS} characters`; memText.disabled = !memOn.checked; };
+  const memClear = el('button', { class: 'btn', type: 'button', onclick: () => { memText.value = ''; paintMem(); syncSave(); } }, 'Clear');
+  memText.addEventListener('input', paintMem);
+  memOn.addEventListener('change', () => { paintMem(); syncSave(); });
+  const prices = el('textarea', { class: 'input mono', rows: 6, spellcheck: 'false', placeholder: llm.DEFAULT_PRICES });
+  prices.value = s.prices || llm.DEFAULT_PRICES;
+  // Usage & costs: totals by period + by model from the ledger, CSV download, vault mirror on demand.
+  const rep = usage.report(usageRows);
+  const fmtTot = (t) => [String(t.calls), llm.fmtK(t.in), llm.fmtK(t.out), t.cost || !t.unpriced ? llm.fmtCost(t.cost) : '', t.unpriced ? `${t.unpriced} unpriced` : ''];
+  const usageTable = (label, first, rows) => el('table', { class: 'hotkeys usage-table', 'aria-label': label },
+    el('tr', {}, [first, 'Calls', 'In', 'Out', 'Cost', ''].map((x) => el('th', {}, x))),
+    rows.map((r) => el('tr', {}, [r[0], ...fmtTot(r[1])].map((x) => el('td', {}, x)))));
+  const download = (name, text, type) => {
+    const url = URL.createObjectURL(new Blob([text], { type }));
+    const a = el('a', { href: url, download: name });
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  };
+  const csvBtn = el('button', { class: 'btn', onclick: () => download(usage.CSV_FILE, usage.toCsv(usageRows), 'text/csv') }, 'Download CSV');
+  const mirrorBtn = el('button', { class: 'btn', onclick: async () => {
+    mirrorBtn.disabled = true;
+    try { await usage.mirror(formValues(), usageRows); toast(`Written to YT-transcriber/admin/${usage.MD_FILE} + ${usage.CSV_FILE}`); } catch (err) { toast(`Write failed: ${err.message}`); } finally { mirrorBtn.disabled = false; }
+  } }, 'Write to knowledge base');
   const vaultDir = el('input', { class: 'input', placeholder: 'C:\\Users\\you\\Obsidian\\Vault' });
   vaultDir.value = s.vaultDir;
   const chooseBtn = el('button', {
@@ -764,9 +799,12 @@ async function renderSettings() {
     tone: tone.value,
     vaultDir: vaultDir.value.trim().replace(/[\\/]+$/, ''),
     hotkeys: hotkeys.checked,
+    memory: memOn.checked,
+    memoryText: memory.clip(memText.value),
     theme: themeValue(),
     lang: lang.value.trim().toLowerCase() || 'en',
     prompts: parsePrompts(presets),
+    prices: prices.value.trim() === llm.DEFAULT_PRICES ? '' : prices.value,
   });
 
   // Save is blue only while the form differs from what is stored.
@@ -783,7 +821,7 @@ async function renderSettings() {
   }, 'Save');
   const isDirty = () => JSON.stringify(formValues()) !== saved;
   const syncSave = () => { saveBtn.disabled = !isDirty(); };
-  for (const f of [anthropicKey, openaiKey, aboutMe, tone, vaultDir, lang]) f.addEventListener('input', syncSave);
+  for (const f of [anthropicKey, openaiKey, aboutMe, tone, vaultDir, lang, prices]) f.addEventListener('input', syncSave);
   hotkeys.addEventListener('change', syncSave);
   syncSave();
   // Leaving with unsaved edits saves them (nothing here is dangerous to persist).
@@ -799,6 +837,7 @@ async function renderSettings() {
           system: 'You are a connectivity test. Reply with the single word: ok',
           messages: [{ role: 'user', content: 'ping' }],
           maxTokens: 8,
+          meta: { kind: 'test' },
         });
         toast(`${label} key works`);
         const st = provider === 'anthropic' ? ak.status : ok.status;
@@ -835,12 +874,7 @@ async function renderSettings() {
       const all = await browser.storage.local.get(null);
       // API keys stay out of the file: it lands in Downloads and gets backed up / synced.
       if (all.settings) all.settings = { ...all.settings, anthropicKey: '', openaiKey: '' };
-      const url = URL.createObjectURL(new Blob([JSON.stringify(all, null, 2)], { type: 'application/json' }));
-      const a = el('a', { href: url, download: 'yt-transcriber-export.json' });
-      document.body.append(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      download('yt-transcriber-export.json', JSON.stringify(all, null, 2), 'application/json');
     },
   }, 'Export data');
 
@@ -903,6 +937,13 @@ async function renderSettings() {
       section('Chat',
         field('About me', aboutMe, 'Added to every chat system prompt so answers fit you.'),
         field('Tone of voice', tone, 'How the assistant should talk.'),
+        el('div', { class: 'field' },
+          el('label', { class: 'field-check' }, memOn, el('span', { class: 'field-label' }, 'Memory')),
+          memText,
+          el('div', { class: 'field-row' }, memClear, memCount),
+          el('span', { class: 'field-help' }, 'Facts about you the assistant keeps across chats, added to every chat prompt and kept short on purpose. ',
+            'It learns from chats every few turns and when you say "remember" or "forget". Lives in ', el('code', {}, 'admin/Memory.md'),
+            ' in the knowledge base (browser storage without one); edit it here or in Obsidian.')),
         el('div', { class: 'field' }, el('span', { class: 'field-label' }, 'Presets'),
           el('div', { class: 'field-col' }, presetList, el('div', { class: 'field-row' }, addPreset, resetPrompts)),
           el('span', { class: 'field-help' }, 'Shortcut = the chip shown while a chat is empty; the text is what it sends. Remove all for none.'))),
@@ -933,6 +974,15 @@ async function renderSettings() {
             ['Space / Enter', 'On a focused transcript row: jump there'],
           ]),
           el('span', { class: 'field-help' }, 'Always on.'))),
+      section('Usage & costs',
+        el('div', { class: 'field' },
+          usageTable('Usage by period', 'Period', rep.periods.map((p) => [p.label, p])),
+          rep.byModel.length ? usageTable('Usage by model', 'Model', rep.byModel.map((m) => [m.model, m])) : null,
+          el('div', { class: 'field-row' }, csvBtn, mirrorBtn),
+          el('span', { class: 'field-help' }, 'Every LLM call (chat, chat titles, key tests) is logged: model, tokens, cache hits, web searches, duration, cost estimate. ',
+            'The CSV has one row per call with date, time and weekday. With a knowledge base folder, ',
+            el('code', {}, `YT-transcriber/admin/${usage.CSV_FILE}`), ' and ', el('code', {}, usage.MD_FILE), ' are rewritten after every call.')),
+        field('Prices', prices, 'USD per million tokens: "<model id substring> <input> <output>", one per line, first match wins. Cache reads cost 10%, cache writes 125%, each web search $0.01. Clear the box to get the defaults back.')),
       section('Data',
         el('div', { class: 'settings-actions' }, exportBtn, importBtn, importInput),
         el('span', { class: 'field-help' }, 'Export = every video plus non-secret settings as JSON (API keys stay out). Import merges such a file back in.'))));

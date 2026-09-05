@@ -3,6 +3,7 @@
 import * as db from '../lib/db.js';
 import * as llm from '../lib/llm.js';
 import * as vault from '../lib/vault.js';
+import * as memory from '../lib/memory.js';
 import { fmtTime } from '../lib/format.js';
 import { createPicker } from './picker.js';
 import { createChatBar, confirmBox } from './chatbar.js';
@@ -103,8 +104,8 @@ export function createChatView(opts) {
   const modelId = () => (lastSettings ? llm.parseModel(lastSettings.model).id : '');
   // Transcript past the model's cap → left out of the prompt, model searches it with llm.transcriptTools.
   const retrieval = (id) => llm.promptCoverage(segments(), llm.contextCap(id)) < 1;
-  const sysPrompt = (id, s = {}) => llm.buildSystemPrompt({
-    title: video.title, channel: video.channel, segments: segments(), aboutMe: s.aboutMe, tone: s.tone,
+  const sysPrompt = (id, s = {}, mem = '') => llm.buildSystemPrompt({
+    title: video.title, channel: video.channel, segments: segments(), aboutMe: s.aboutMe, tone: s.tone, memory: mem,
     webSearch: !!s.webSearch, cap: llm.contextCap(id), retrieval: retrieval(id),
     duration: video.transcript?.duration ?? 0, chapters: video.transcript?.chapters ?? [],
   });
@@ -349,14 +350,14 @@ export function createChatView(opts) {
       lastSettings = settings;
       if (settings.webSearch) status.textContent = 'Thinking… (web search on)';
       const id = llm.parseModel(settings.model).id;
-      const system = sysPrompt(id, settings);
+      const system = sysPrompt(id, settings, await memory.forPrompt(settings).catch(() => ''));
       const hist = await Promise.all(chat.messages.map(async (m) => ({ role: m.role, content: m.content, image: (await frameOf(m)) ?? undefined })));
       const fit = llm.fitHistory({ modelId: id, system, messages: hist });
       if (fit.dropped) toast(`${fit.dropped} older message${fit.dropped > 1 ? 's' : ''} left out: this chat no longer fits ${id}`);
       const reply = await llm.chat({
         settings,
         system,
-        tools: retrieval(id) ? llm.transcriptTools(segments()) : null,
+        tools: llm.mergeTools(retrieval(id) ? llm.transcriptTools(segments()) : null, memory.tools(settings)),
         // Tool activity: before any text it replaces the status; after text it is a shimmering line under the
         // streamed reply (like Claude's "Searching the web…"), removed by the next text delta.
         onTool: (name, input, phase) => {
@@ -366,13 +367,16 @@ export function createChatView(opts) {
             : name === 'web_fetch' ? 'Reading a page…'
               : name === 'search_transcript' ? `Searching transcript${input.query ? `: ${input.query}` : '…'}`
                 : name === 'read_transcript' ? `Reading transcript${input.from ? ` ${input.from} to ${input.to ?? ''}` : '…'}`
-                  : `Using ${name}…`;
+                  : name === 'remember' ? 'Saving to memory…'
+                    : name === 'forget' ? 'Updating memory…'
+                      : `Using ${name}…`;
           if (!streamed) { toolLabel = label; status.textContent = label; return; }
           toolLine.textContent = label;
           pending.append(toolLine);
           scrollBottom();
         },
         messages: fit.messages,
+        meta: { videoId: video.videoId },
         signal: ctl.signal,
         onText: (delta) => {
           if (myGen !== gen || !live()) return;
@@ -389,6 +393,12 @@ export function createChatView(opts) {
       await save();
       sync(chat);
       autoTitle(chat, settings);
+      // Every few turns a cheap call folds what this chat taught about the user into the memory file.
+      if (memory.due(settings, chat)) {
+        const p = memory.consolidate(settings, chat, { videoId: video.videoId }); // stamps chat.memAt first
+        save().catch(() => {});
+        p.then((t) => { if (t != null) toast('Memory updated'); }).catch(() => {});
+      }
       if (cur() === chat) refresh();
     } catch (e) {
       if (myGen !== gen || !live()) return;

@@ -7,6 +7,8 @@ export const DEFAULT_SETTINGS = {
   effort: 'off', // 'off' | 'low' | 'medium' | 'high' — thinking / reasoning effort
   aboutMe: '', // system prompt: who the user is
   tone: '', // system prompt: tone of voice
+  memory: true, // facts learned across chats, injected into the system prompt (src/lib/memory.js)
+  memoryText: '', // the memory itself; mirror of <vault>/YT-transcriber/admin/Memory.md when a vault is set
   vaultDir: '', // knowledge base folder (e.g. Obsidian vault); '' = local storage only
   hotkeys: true, // keyboard shortcuts on/off (list in config/hotkeys.js)
   webSearch: false, // let the model search the web (server-side tool); toggled in the chat composer
@@ -16,6 +18,7 @@ export const DEFAULT_SETTINGS = {
   lang: 'en', // preferred caption language (BCP-47 prefix)
   prompts: undefined, // chat presets as "Label: text" lines; undefined = config/prompts.js defaults
   tagColors: {}, // { tag: hue }, assigned once per tag (src/lib/tags.js)
+  prices: '', // price table text (llm.parsePrices); '' = llm.DEFAULT_PRICES
 };
 
 // v1 settings were { provider, apiKey, model } — map into per-provider keys once. Notion keys dropped.
@@ -57,6 +60,19 @@ export async function setCachedModels(provider, ids) {
 
 export async function clearCachedModels() {
   await browser.storage.local.remove(['models:anthropic', 'models:openai']);
+}
+
+// LLM usage ledger (src/lib/usage.js rows), key `usage`. ponytail: read-modify-write; two calls finishing in the same
+// instant from two pages could drop a row. Unbounded; slice it here if it ever matters.
+export async function getUsage() {
+  const { usage } = await browser.storage.local.get('usage');
+  return Array.isArray(usage) ? usage : [];
+}
+
+export async function appendUsage(row) {
+  const rows = [...(await getUsage()), row];
+  await browser.storage.local.set({ usage: rows });
+  return rows;
 }
 
 export const NEW_CHAT_TITLE = 'New chat';

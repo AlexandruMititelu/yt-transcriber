@@ -4,6 +4,7 @@ import { http, stream } from './bus.js';
 import * as db from './db.js';
 import { fmtTime } from './format.js';
 import { createIndex } from './search.js';
+import * as usageLog from './usage.js'; // cycle (usage.js imports fmtCost/fmtK): only used inside functions, so it is safe
 
 export const PROVIDERS = ['anthropic', 'openai'];
 export const DEFAULT_MODELS = { anthropic: 'claude-sonnet-5', openai: 'gpt-5.1' };
@@ -85,6 +86,13 @@ export const parseTime = (v) => {
   const p = String(v ?? '').trim().split(':').map(Number);
   return p.length && !p.some(isNaN) ? Math.max(0, p.reduce((a, n) => a * 60 + n, 0)) : 0;
 };
+
+// Several { defs, run } tool sets as one; nulls skipped. → null when nothing is left.
+export function mergeTools(...sets) {
+  const ts = sets.filter(Boolean);
+  if (!ts.length) return null;
+  return { defs: ts.flatMap((t) => t.defs), run: (name, input) => (ts.find((t) => t.defs.some((d) => d.name === name)) ?? ts[0]).run(name, input) };
+}
 
 const READ_MAX = 600; // seconds per read_transcript call (~150 lines)
 // Transcript bigger than the prompt cap: the model pulls what it needs. → { defs, run(name, input) → string }
@@ -213,7 +221,8 @@ export function parseResult(provider, json) {
       // `in` = whole prompt (Anthropic reports uncached, cache-read and cache-write separately; OpenAI's prompt_tokens already includes cached).
       usage: {
         in: (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0),
-        out: u.output_tokens ?? 0, cacheRead: u.cache_read_input_tokens ?? 0,
+        out: u.output_tokens ?? 0, cacheRead: u.cache_read_input_tokens ?? 0, cacheWrite: u.cache_creation_input_tokens ?? 0,
+        searches: u.server_tool_use?.web_search_requests ?? 0,
       },
       truncated,
     };
@@ -225,30 +234,46 @@ export function parseResult(provider, json) {
   const truncated = choice.finish_reason === 'length';
   return {
     text: (msg.content ?? '') + sourcesBlock(cites) + (truncated ? TRUNCATED : ''),
-    usage: { in: u.prompt_tokens ?? 0, out: u.completion_tokens ?? 0, cacheRead: u.prompt_tokens_details?.cached_tokens ?? 0 },
+    usage: { in: u.prompt_tokens ?? 0, out: u.completion_tokens ?? 0, cacheRead: u.prompt_tokens_details?.cached_tokens ?? 0, cacheWrite: 0, searches: 0 },
     truncated,
   };
 }
 
-// USD per million tokens [input, output]; unknown models show token counts only.
-// ponytail: hand-maintained, matched by substring, first hit wins.
-const PRICES = [
-  ['claude-opus-4', 15, 75], ['claude-sonnet-4', 3, 15], ['claude-haiku-4', 1, 5],
-  ['gpt-5-nano', 0.05, 0.4], ['gpt-5-mini', 0.25, 2], ['gpt-5', 1.25, 10],
-];
-export function estimateCost(modelId, usage) {
-  const row = PRICES.find(([k]) => String(modelId).includes(k));
+// Price table: one `<model substring> <$ per M input> <$ per M output>` per line, first hit wins, so specific
+// ids go above their family. Editable in Settings (settings.prices); unknown models show token counts only.
+// ponytail: hand-maintained; verify the 5.x rows against the vendor pages.
+export const DEFAULT_PRICES = `claude-opus-4-1 15 75
+claude-opus-4-2025 15 75
+claude-opus 5 25
+claude-sonnet 3 15
+claude-haiku-4 1 5
+claude-fable 5 25
+gpt-5-nano 0.05 0.4
+gpt-5-mini 0.25 2
+gpt-5 1.25 10`;
+export function parsePrices(text) {
+  return String(text || DEFAULT_PRICES).split('\n').map((l) => l.trim().split(/\s+/)).filter((p) => p.length >= 3 && p[0] && !isNaN(p[1]) && !isNaN(p[2]))
+    .map(([k, i, o]) => [k, Number(i), Number(o)]);
+}
+const CACHE_READ = 0.1; // share of input price (Anthropic and OpenAI)
+const CACHE_WRITE = 1.25; // Anthropic cache_creation
+const SEARCH_USD = 0.01; // Anthropic web search per request
+export function estimateCost(modelId, usage, prices = parsePrices(DEFAULT_PRICES)) {
+  const row = prices.find(([k]) => String(modelId).includes(k));
   if (!row || !usage) return null;
   const [, pin, pout] = row;
   const cached = usage.cacheRead || 0;
-  return ((usage.in - cached) * pin + cached * pin * 0.1 + usage.out * pout) / 1e6;
+  const written = usage.cacheWrite || 0;
+  return ((usage.in - cached - written) * pin + cached * pin * CACHE_READ + written * pin * CACHE_WRITE + usage.out * pout) / 1e6 + (usage.searches || 0) * SEARCH_USD;
 }
 export const fmtK = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(n % 1e6 ? 1 : 0)}M` : n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : String(n));
+export const fmtCost = (c) => `$${c < 0.01 ? c.toFixed(4) : c.toFixed(3)}`;
+// usage.cost (priced when the call was made) wins over a fresh estimate.
 export function fmtUsage(modelId, usage) {
   if (!usage) return '';
   const k = fmtK;
-  const cost = estimateCost(modelId, usage);
-  return `${k(usage.in)} in · ${k(usage.out)} out${cost != null ? ` · $${cost < 0.01 ? cost.toFixed(4) : cost.toFixed(3)}` : ''}`;
+  const cost = usage.cost ?? estimateCost(modelId, usage);
+  return `${k(usage.in)} in · ${k(usage.out)} out${cost != null ? ` · ${fmtCost(cost)}` : ''}`;
 }
 
 const safeJson = (s) => { try { return JSON.parse(s || '{}'); } catch { return {}; } };
@@ -301,7 +326,7 @@ export function assembleOpenai(chunks, onText) {
 }
 
 // retrieval: transcript left out, model gets duration + chapters and the transcript tools instead.
-export function buildSystemPrompt({ title, channel, segments, aboutMe = '', tone = '', webSearch = false, cap = PROMPT_CAP, retrieval = false, duration = 0, chapters = [] }) {
+export function buildSystemPrompt({ title, channel, segments, aboutMe = '', tone = '', memory = '', webSearch = false, cap = PROMPT_CAP, retrieval = false, duration = 0, chapters = [] }) {
   const lines = (segments ?? [])
     .map((s) => `[${fmtTime(s.start)}] ${s.text}`)
     .join('\n');
@@ -322,6 +347,7 @@ export function buildSystemPrompt({ title, channel, segments, aboutMe = '', tone
   }
   if (aboutMe.trim()) prompt += `About the user:\n${aboutMe.trim()}\n\n`;
   if (tone.trim()) prompt += `Tone of voice:\n${tone.trim()}\n\n`;
+  if (memory.trim()) prompt += `Memory (facts about the user from earlier chats; use the remember and forget tools when they ask):\n${memory.trim()}\n\n`;
   if (retrieval) {
     prompt +=
       `The transcript (${fmtTime(duration)} long) is too big to include here. Use search_transcript to find passages by ` +
@@ -376,16 +402,18 @@ async function request(provider, req, { onText, signal, onTool } = {}) {
 
 // → { text, usage, model }. `onText(delta)` streams the reply; `signal` (AbortSignal) stops it.
 // `tools` = transcriptTools(): the model may call them; rounds are bounded. `onTool(name, input)` for status.
-export async function chat({ settings, system, messages, maxTokens, onText, signal, tools = null, onTool }) {
+// `meta` ({kind, videoId}) is stamped on the usage ledger row (usage.js); kind defaults to 'chat'.
+export async function chat({ settings, system, messages, maxTokens, onText, signal, tools = null, onTool, meta = {} }) {
   const { provider, id } = parseModel(settings.model);
   const apiKey = keyFor(settings, provider);
   if (!apiKey) throw new Error('no-api-key');
   const effort = supportsEffort(provider, id) ? settings.effort : 'off';
   const webSearch = !!settings.webSearch;
   const req = buildRequest({ provider, apiKey, model: id, system, messages, maxTokens, effort, webSearch, streaming: !!onText, tools: tools?.defs });
+  const t0 = Date.now();
   let data = await request(provider, req, { onText, signal, onTool });
   const msgs = [...req.body.messages];
-  const usage = { in: 0, out: 0, cacheRead: 0 }; // ponytail: summed over rounds; `in` over-counts context by earlier rounds
+  const usage = { in: 0, out: 0, cacheRead: 0, cacheWrite: 0, searches: 0 }; // ponytail: summed over rounds; `in` over-counts context by earlier rounds
   const pre = []; // text the model wrote before a tool call
   const add = (d) => { const u = parseResult(provider, d); for (const k in usage) usage[k] += u.usage[k]; return u; };
   // Anthropic: pause_turn (server-side web search) → resend the partial turn; tool_use → run our tools.
@@ -420,9 +448,13 @@ export async function chat({ settings, system, messages, maxTokens, onText, sign
     data = await request(provider, { ...req, body: { ...req.body, messages: msgs } }, { onText, signal, onTool });
   }
   const out = add(data);
+  usage.cost = estimateCost(id, usage, parsePrices(settings.prices));
   out.usage = usage;
   if (pre.length) out.text = [...pre, out.text].filter(Boolean).join('\n\n');
   out.model = id;
+  // Ledger row, best effort: a storage/vault hiccup must not fail the reply.
+  usageLog.log(settings, { ts: Date.now(), provider, model: id, kind: 'chat', videoId: '', ...meta, effort, web: webSearch, ...usage, ms: Date.now() - t0 })
+    .catch((e) => console.warn('[ytx] usage log', e.message));
   return out;
 }
 
@@ -482,6 +514,7 @@ export async function titleChat({ settings, messages }) {
     system: 'You title conversations. Reply with a 3-6 word title only: no quotes, no trailing punctuation, no preamble.',
     messages: [{ role: 'user', content: sample }],
     maxTokens: 30,
+    meta: { kind: 'title' },
   });
   return raw.split('\n')[0].replace(/^["'“”‘’\s]+|["'“”‘’.\s]+$/g, '').slice(0, 60);
 }

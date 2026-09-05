@@ -159,6 +159,7 @@ kbd { font-family: var(--font-mono); font-size: 11.5px; padding: 1px 6px; border
 .topbar .btn.primary { flex: none; }
 .field-row { display: flex; gap: 8px; }
 .field-row .input { flex: 1; }
+.field-row .field-help { align-self: center; }
 .field-help code { font-family: var(--font-mono); font-size: 11.5px; }
 
 /* library tools */
@@ -253,3 +254,9 @@ kbd { font-family: var(--font-mono); font-size: 11.5px; padding: 1px 6px; border
 .card:hover .card-arc, .card-arc:focus-visible, .card-arc.on { opacity: 1; }
 .card-arc.on, .icon-btn.arc.on { color: var(--accent); }
 .card-del:hover { color: #ff453a; }
+
+/* Settings › Usage & costs */
+.usage-table th { text-align: left; font-weight: 600; padding: 3px 12px 3px 0; color: var(--muted); }
+.usage-table td:not(:first-child), .usage-table th:not(:first-child) { text-align: right; padding-left: 12px; }
+.usage-table td:last-child { color: var(--muted); font-size: 12px; }
+.input.mono { font-family: var(--font-mono); font-size: 12px; white-space: pre; }

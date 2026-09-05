@@ -306,6 +306,9 @@ export const ping = () => native({ op: 'ping' });
 export const pickFolder = async () => (await native({ op: 'pick-folder' })).path;
 // Every file op carries the vault root; the host refuses paths outside it (defence in depth).
 const io = (settings, msg) => native({ root: rootDir(settings), ...msg });
+// <root>/admin/<name>: bookkeeping files (usage ledger), not video content.
+export const writeAdmin = (settings, name, content) => io(settings, { op: 'write', path: join(rootDir(settings), 'admin', name), content });
+export const readAdmin = async (settings, name) => (await io(settings, { op: 'read', path: join(rootDir(settings), 'admin', name) })).content; // null when missing
 
 async function listMd(settings, dir) {
   const { entries } = await io(settings, { op: 'list', path: dir });
