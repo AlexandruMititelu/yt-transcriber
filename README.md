@@ -38,7 +38,7 @@ Temporary add-ons vanish on browser restart. Permanent options:
 1. Click the toolbar button → the Library page opens
 2. Go to **Settings**
 3. Paste an Anthropic and/or OpenAI API key — whichever you set shows up in the model picker
-4. Optional: **About me** and **Tone of voice** — both go into every chat system prompt
+4. Optional: **About me** and **Tone of voice** — both go into every chat system prompt. **Memory** (on by default) adds facts the assistant learns about you across chats: it consolidates every few turns, obeys "remember …" / "forget …", stays under 1200 characters, and lives in `admin/Memory.md` in the knowledge base (editable there or in Settings)
 5. **Save**, then **Test Anthropic key** / **Test OpenAI key** to verify
 
 Model and thinking effort are picked in the chat composer (the picker in the input pill),

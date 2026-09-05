@@ -809,23 +809,26 @@ async function renderSettings() {
 
   // Save is blue only while the form differs from what is stored.
   let saved = JSON.stringify(formValues());
-  const saveBtn = el('button', {
-    class: 'btn primary',
-    onclick: async () => {
-      await db.saveSettings(formValues());
-      await db.clearCachedModels(); // keys may have changed → refetch model lists
-      saved = JSON.stringify(formValues());
-      syncSave();
-      toast('Settings saved');
-    },
-  }, 'Save');
+  let memSaved = memory.clip(memLoaded);
+  const persist = async () => {
+    const v = formValues();
+    await db.saveSettings(v);
+    await db.clearCachedModels(); // keys may have changed → refetch model lists
+    // The memory text also lives in the vault file; write it only when it changed.
+    if (v.memoryText !== memSaved) { await memory.save(v, v.memoryText).catch((err) => toast(`Memory file: ${err.message}`)); memSaved = v.memoryText; }
+    saved = JSON.stringify(formValues());
+    syncSave();
+    toast('Settings saved');
+  };
+  const saveBtn = el('button', { class: 'btn primary', onclick: persist }, 'Save');
   const isDirty = () => JSON.stringify(formValues()) !== saved;
   const syncSave = () => { saveBtn.disabled = !isDirty(); };
-  for (const f of [anthropicKey, openaiKey, aboutMe, tone, vaultDir, lang, prices]) f.addEventListener('input', syncSave);
+  for (const f of [anthropicKey, openaiKey, aboutMe, tone, vaultDir, lang, prices, memText]) f.addEventListener('input', syncSave);
   hotkeys.addEventListener('change', syncSave);
+  paintMem();
   syncSave();
   // Leaving with unsaved edits saves them (nothing here is dangerous to persist).
-  leaveSettings = async () => { if (isDirty()) { await db.saveSettings(formValues()); await db.clearCachedModels(); toast('Settings saved'); } };
+  leaveSettings = async () => { if (isDirty()) await persist(); };
 
   const testBtn = (provider, label) => {
     const b = el('button', { class: 'btn key-eye', type: 'button' }, 'Test');

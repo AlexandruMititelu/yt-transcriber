@@ -20,6 +20,7 @@ src/lib/db.js                 (storage.local wrapper, ESM)
 src/lib/llm.js                (provider-agnostic LLM service, ESM)
 src/lib/search.js             (BM25 over transcript groups, pure)
 src/lib/vault.js              (knowledge-base folder mirror: markdown builders/parsers + disk sync, ESM)
+src/lib/usage.js              (LLM usage ledger: csv/report builders + storage append + vault admin/ mirror, ESM)
 src/lib/tags.js               (Obsidian tag rules: normTag, extractTags (inline #tags), parseTagList (front matter), chipTags (DOM))
 src/ui/quote.js|css           (Ctrl+right-click menu on a selection: Copy / Copy as quote / Quote in a new note; buildQuote(text, label) → blockquote + "— label")
 src/ui/tags.js|css            (tagChip (hue per tag) + createTagEditor: full form = chips + input + known-tag toggles; compact = chips + "+" that drops the same input/list down; shared)
@@ -164,6 +165,7 @@ export const DEFAULT_SETTINGS = {
   model: 'anthropic:claude-sonnet-5', // '<provider>:<id>', chosen in the chat composer (both UIs)
   effort: 'off',                    // 'off'|'low'|'medium'|'high' — thinking/reasoning effort
   aboutMe: '', tone: '',            // free text, injected into the chat system prompt
+  memory: true, memoryText: '',     // cross-chat memory on/off + the text (mirror of <vault>/YT-transcriber/admin/Memory.md); src/lib/memory.js
   vaultDir: '',                     // knowledge base folder (Obsidian vault); '' = storage.local only
   hotkeys: true,                    // all shortcuts on/off; the list itself is fixed in config/hotkeys.js
   webSearch: false,                 // server-side web search tool; globe button in the composer
@@ -172,7 +174,10 @@ export const DEFAULT_SETTINGS = {
   follow: false,                    // transcript Follow toggle, remembered
   lang: 'en',                       // preferred caption language prefix
   prompts: undefined,               // chat presets [{label, text}] (config/prompts.js parsePrompts; legacy "Label: text" lines still parse); undefined = defaults, [] = none
+  prices: '',                       // price table text (llm.parsePrices); '' = llm.DEFAULT_PRICES
 }
+export async function getUsage()               // key `usage`: [] of usage.js ledger rows (oldest first)
+export async function appendUsage(row)         // push + write; returns the whole array
 export async function getSettings()            // {...DEFAULT_SETTINGS, ...stored}; migrates v1 {provider, apiKey, model} → per-provider key + 'provider:model', drops legacy + notion keys
 export async function saveSettings(patch)      // merge + write; returns merged
 export async function getCachedModels(provider)   // ids | null (24h TTL) — key `models:<provider>` = {ids, ts}
@@ -244,13 +249,16 @@ export function buildRequest({ provider, apiKey, model, system, messages, maxTok
 // model falls back to DEFAULT_MODELS[provider] when falsy. Unknown provider → throw.
 
 export function parseResponse(provider, json)   // parseResult(...).text
-export function parseResult(provider, json)     // → { text, usage: {in, out, cacheRead}, truncated }
+export function parseResult(provider, json)     // → { text, usage: {in, out, cacheRead, cacheWrite, searches}, truncated }  (cacheWrite/searches: Anthropic cache_creation_input_tokens / server_tool_use.web_search_requests; 0 on OpenAI)
 // anthropic: text blocks joined; their `citations[].{url,title}` (web search) → "\n\nSources:\n- [title](url)" (unique urls)
 // openai:    choices[0].message.content + the same block from message.annotations[type=url_citation].url_citation
 // stop_reason 'max_tokens' / finish_reason 'length' → truncated, text gets "*[Reply cut off: hit the length limit]*"
 export function assembleAnthropic(events, onText?) / assembleOpenai(chunks, onText?)  // SSE events → the non-streaming JSON shape
-export function estimateCost(modelId, usage)    // USD or null (PRICES table by substring; cache reads at 10%)
-export function fmtUsage(modelId, usage)        // "12k in · 300 out · $0.041" ($ only when priced)
+export const DEFAULT_PRICES                     // text: `<model id substring> <$/M in> <$/M out>` per line, first hit wins (specific ids above families)
+export function parsePrices(text)               // → [[substring, in, out]]; '' / junk lines → defaults
+export function estimateCost(modelId, usage, prices = parsePrices(DEFAULT_PRICES))  // USD or null; cache reads 10%, cache writes 125% of input, + $0.01 per web search
+export const fmtCost = (c) => '$0.0041' | '$0.041'  // 4 decimals under a cent, else 3
+export function fmtUsage(modelId, usage)        // "12k in · 300 out · $0.041" ($ only when priced; usage.cost stamped at call time wins over a fresh estimate)
 export function contextWindow(modelId)   // tokens by model id: 1M (Claude Opus/Sonnet 4.6+, 5.x, Fable/Mythos, GPT-4.1, GPT-5.5+), 200k other Claude, 400k GPT-5, 128k gpt-4o/o*, DEFAULT_WINDOW 128k
 export const CHARS_PER_TOKEN = 3.5; export const PROMPT_SHARE = 0.2
 export function contextCap(modelId)  // max transcript chars in the prompt = 20% of the window × 3.5; PROMPT_CAP = contextCap('')
@@ -261,21 +269,26 @@ export function transcriptTools(segments)  // → { defs: [search_transcript{que
 export function fitHistory({ modelId, system, messages, reserve = 16000 })  // → { messages, dropped }: oldest turns dropped until ~80% of the window minus system and reserve (chars/3.5, 1600/image), history opens with a user turn
 export function toApiMessages(provider, messages)  // {role, content, image?} → provider shape; image (data: URL) → Anthropic base64 image block / OpenAI image_url, text after it
 export const fmtK = (n) => '1.2k' | '400k' | '1M'
+export function mergeTools(...sets)   // several { defs, run } as one (nulls skipped); run() dispatches by tool name → null when empty
+
 export function promptCoverage(segments, cap = PROMPT_CAP)  // share of the transcript that fits (1 = all)
 
-export function buildSystemPrompt({ title, channel, segments, aboutMe = '', tone = '', webSearch = false, cap = PROMPT_CAP, retrieval = false, duration = 0, chapters = [] })
+export function buildSystemPrompt({ title, channel, segments, aboutMe = '', tone = '', memory = '', webSearch = false, cap = PROMPT_CAP, retrieval = false, duration = 0, chapters = [] })
 // retrieval: transcript left out; instead "[the transcript (h:mm:ss) is too big] use search_transcript … then read_transcript …"
 // plus the chapter list `[m:ss] title` (or 'No chapters.'). Callers set retrieval = promptCoverage(segments, cap) < 1.
 // webSearch adds a paragraph: when to search (facts beyond the transcript), focused queries reusing the
 // video's exact terms, several narrow searches, say what was found and where.
 // Persona: assistant for THIS video. Includes title/channel, then optional
-// 'About the user:\n<aboutMe>' and 'Tone of voice:\n<tone>' sections (skipped when blank),
+// 'About the user:\n<aboutMe>', 'Tone of voice:\n<tone>' and 'Memory (…):\n<memory>' sections (skipped when blank),
 // then timestamped transcript lines `[m:ss] text` from grouped segments. Whole prompt
 // hard-capped at `cap` chars with '\n[transcript truncated]' (safety only: retrieval mode kicks in first).
 // States: may answer with markdown; may draw diagrams in ```mermaid fenced blocks;
 // cite timestamps like [12:34] when referencing the video; never use em dashes / '--'.
 
-export async function chat({ settings, system, messages, maxTokens, onText?, signal?, tools?, onTool? })   // → { text, usage, model }
+export async function chat({ settings, system, messages, maxTokens, onText?, signal?, tools?, onTool?, meta? })   // → { text, usage, model }
+// usage.cost = estimateCost(id, usage, parsePrices(settings.prices)) at call time. Every successful call appends a
+// ledger row via usage.log(settings, {ts, provider, model, kind: 'chat', videoId: '', ...meta, effort, web, ...usage, ms}) (best effort,
+// warns on failure). meta = {kind, videoId}: chat.js passes videoId, titleChat kind 'title', the Settings key test kind 'test'.
 // tools = transcriptTools(...): defs go in the request (Anthropic `tools`, OpenAI `type: function`); the loop runs
 // them: Anthropic stop_reason 'tool_use' → assistant turn appended + user turn of tool_result blocks; OpenAI
 // finish_reason 'tool_calls' → assistant message + one `tool` message per call; pause_turn as before. 10 rounds max.
@@ -363,6 +376,7 @@ export function chatToMd(video, chat) / parseChat(md)           // parseChat →
 export function videoToMd(video, {pinnedAt}) / restampHub(md, video, {pinnedAt}) / pinToMd(video)  // hub note; pinToMd = videoToMd with pinned: now
 export function indexToMd(entries) / refreshIndex(settings)    // Index.md
 export async function saveFrame(settings, video, dataUrl, sec)  // → '![[attachments/<m-ss>.jpg]]'
+export const writeAdmin = (settings, name, content)             // <root>/admin/<name>: bookkeeping files (usage ledger), never video content
 export const rootDir = (settings)                               // `${vaultDir}/YT-transcriber`
 export const videoDir = (settings, video)                       // rootDir[/pinned]/<video> depending on video.pinned
 export const ping = () / pickFolder = ()                        // native host
@@ -390,6 +404,24 @@ a failure (host not installed) toasts once and the UI continues with storage.loc
 Write path in both UIs: model mutation → `db.saveVideo` (storage.local, debounced for typing) → the same
 flush calls the matching `vault.sync*` (fire-and-forget, errors toast once per page). Disk writes are
 never gen-guarded (an edit right before SPA nav must still land).
+
+## src/lib/usage.js — LLM usage ledger
+
+One row per successful `llm.chat()` call, appended by `chat()` itself. storage.local `usage` (db.getUsage/appendUsage) is
+the ledger; with a vault it is mirrored after every call to `<vault>/YT-transcriber/admin/usage.csv` (one line per row)
+and `admin/Usage.md` (summary tables). Whole-file rewrite each time (ponytail; add a host append op if the csv gets big).
+
+```js
+// row: { ts, provider, model, kind: 'chat'|'title'|'test', videoId, effort, web, in, out, cacheRead, cacheWrite, searches, ms, cost|null }
+export const CSV_FILE = 'usage.csv', MD_FILE = 'Usage.md'
+export const COLUMNS   // ts_iso,date,time,hour,weekday,provider,model,kind,video_id,effort,web_search,in_tokens,out_tokens,cache_read,cache_write,searches,duration_ms,cost_usd
+export const dayOf = (ts) => 'YYYY-MM-DD'      // local time, like every date on disk
+export function toCsv(rows)                     // header + rows (RFC 4180 quoting), trailing newline; cost 6 decimals, blank when unpriced
+export function report(rows, now = Date.now())  // → { periods: [Today, 7 days, 30 days, All time], byModel (cost desc), byDay (last 30, newest first) }, each {calls, in, out, cacheRead, cost, unpriced}
+export function reportToMd(rep, now)            // "# LLM usage" + the three tables (fmtK / fmtCost, "(n unpriced)")
+export async function mirror(settings, rows?)   // writeAdmin csv + md; no-op without vaultDir
+export async function log(settings, row)        // appendUsage then mirror
+```
 
 ## content/yt.js — the panel (classic script)
 
@@ -575,7 +607,10 @@ Views (hash routing: `#/`, `#/video/<id>`, `#/settings`):
   or error), a "Keyboard shortcuts" checkbox with the HOTKEYS table (kbd + description), "Export data": JSON of
   storage with the API keys blanked → Blob download `yt-transcriber-export.json`; "Import data": merges an export
   back (videos + non-secret settings; keys already stored are kept). Inline help under the folder field explains
-  the layout and the one-time `native/install.ps1` / `install.sh` step.
+  the layout and the one-time `native/install.ps1` / `install.sh` step. "Usage & costs": `usage.report` tables
+  (by period, by model: calls / in / out / cost, "n unpriced"), "Download CSV" (`usage.toCsv` Blob), "Write to
+  knowledge base" (`usage.mirror` on demand; it also runs after every call), and the "Prices" textarea
+  (`settings.prices`, monospace; equal to `llm.DEFAULT_PRICES` is stored as '' so clearing the box restores defaults).
 
 Shared rendering lives in src/ui/ (markdown, toast, chat, notes) — do NOT import content/ files.
 
@@ -621,6 +656,10 @@ unlimitedStorage, fixed key), forbids direct `chrome.*` use outside the shim, an
   callout-header escape, disk-wins conflict (`'reloaded'`), every op carries `root`, hub note + Index.md +
   restamp on pin/unpin + saveFrame. Native host mocked as an in-memory fs (with mtimes) behind
   `browser.runtime.sendMessage`.
+- usage: toCsv (header, local date/time columns, quoting, blank cost when unpriced), report (periods, by model cost
+  desc, by day newest first, unpriced count) + reportToMd, estimateCost (cache write 125%, read 10%, searches, custom
+  price text, stored usage.cost wins in fmtUsage), log (storage append; admin/usage.csv + Usage.md only with vaultDir),
+  chat() stamps a ledger row (kind, videoId, effort, ms, priced usage).
 - Tests must not hit network; fetchTranscript tested via injected fetchFn returning fixtures.
 
 ## Non-goals v1 (ponytail)
@@ -628,3 +667,29 @@ unlimitedStorage, fixed key), forbids direct `chrome.*` use outside the shim, an
 No Whisper/audio fallback when captions missing, no live file watching (disk is re-read when a video is
 opened and checked by mtime before each write; no merging: disk wins), no Shorts/embedded players, no
 playlist context, no multi-user, no i18n, no build tooling.
+
+### src/lib/memory.js — cross-chat memory
+
+Durable facts about the user, injected into every chat system prompt and kept deliberately small
+(`MAX_LINES` 12 bullets, `MAX_CHARS` 1200, ~350 tokens). One file:
+`<vault>/YT-transcriber/admin/Memory.md` is the source of truth when a vault is set (editable in Obsidian);
+`settings.memoryText` mirrors it and is the only copy without a vault. `settings.memory=false` turns
+injection, tools and consolidation off; Settings > Chat > Memory shows/edits the text either way.
+
+```js
+export const FILE = 'Memory.md'; export const MAX_CHARS = 1200; export const MAX_LINES = 12;
+export function clip(text)                 // whole bullets only, newest (first) survive, both caps
+export function addFact(text, fact)        // prepend as '- fact', drop a line saying the same thing
+export function dropFacts(text, words)     // remove lines containing all words (ci) → { text, removed }
+export async function load(settings)       // raw text regardless of the switch (vault file, else memoryText)
+export async function save(settings, text) // clip, write the vault file (when enabled) and memoryText
+export const forPrompt = (settings)        // '' when memory is off, else load()
+export function tools(settings)            // { defs: [remember{fact}, forget{words}], run } or null when off
+export const due = (settings, chat)        // chat grew by ≥4 messages since chat.memAt
+export async function consolidate(settings, chat, meta)  // cheap model (haiku / gpt-5-mini), ledger kind 'memory':
+  // current memory + chat → rewritten bullets or UNCHANGED; saves and returns the text, null when unchanged
+```
+
+Chat wiring (`src/ui/chat.js`): `sysPrompt(id, settings, await memory.forPrompt(settings))`; tools =
+`llm.mergeTools(transcriptTools | null, memory.tools(settings))`; after each reply `memory.due` →
+`consolidate` (stamps `chat.memAt` synchronously, then the chat is saved), toast "Memory updated".
