@@ -9,7 +9,7 @@ Repo lives in WSL; the browser (Zen) runs on Windows and installs the xpi from i
 
 1. Run tests first; abort if they fail:
    ```
-   node --test tests/
+   npm test
    ```
 2. Build, copy to Downloads, and install into Zen's profile (build.sh bumps the patch version in manifest.json and zips manifest/background/src/content/page/vendor; the xpi is then copied to Downloads and to `<zen profile>/extensions/yt-transcriber@alex.local.xpi`):
    ```

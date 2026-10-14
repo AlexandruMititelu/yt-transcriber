@@ -176,11 +176,12 @@ export function installDom() {
     location: win.location, matchMedia: win.matchMedia, requestAnimationFrame: win.requestAnimationFrame, getSelection: win.getSelection,
     innerWidth: 1200, innerHeight: 800,
     CSS: { escape: (s) => String(s).replace(/[^\w-]/g, (c) => `\\${c}`) },
-    navigator: { clipboard: { writeText: async () => {} } },
     addEventListener: win.addEventListener, removeEventListener: win.removeEventListener, dispatchEvent: win.dispatchEvent,
     marked: { parse: (t) => `<p>${t}</p>` },
     DOMPurify: { sanitize: (s, o) => (o?.FORBID_TAGS ?? []).reduce((acc, tag) => acc.replace(new RegExp(`<${tag}\\b[^>]*>`, 'gi'), ''), s) },
     fetch: async () => ({ text: async () => '', ok: true, json: async () => ({}) }),
   });
+  // Node 22 ships a getter-only globalThis.navigator: Object.assign would throw, defineProperty replaces it.
+  Object.defineProperty(globalThis, 'navigator', { value: { clipboard: { writeText: async () => {} } }, configurable: true, writable: true });
   return { document, window: win };
 }

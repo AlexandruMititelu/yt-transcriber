@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test tests/",
+    "test": "node --test tests/*.test.js",
     "start": "web-ext run --source-dir . --firefox-binary \"C:\\Program Files\\Zen Browser\\zen.exe\""
   },
   "devDependencies": {
