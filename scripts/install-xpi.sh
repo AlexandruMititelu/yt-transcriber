@@ -12,7 +12,7 @@ build=0; restart=0
 for a in "$@"; do case "$a" in --build) build=1;; --restart) restart=1;; esac; done
 
 if [ $build = 1 ]; then
-  node --test tests/ >/dev/null 2>&1 || { echo "tests fail — not shipping (run: node --test tests/)" >&2; exit 1; }
+  npm test >/dev/null 2>&1 || { echo "tests fail — not shipping (run: npm test)" >&2; exit 1; }
   ./build.sh >/dev/null
 fi
 [ -f yt-transcriber.xpi ] || { echo "yt-transcriber.xpi missing — pass --build" >&2; exit 1; }
