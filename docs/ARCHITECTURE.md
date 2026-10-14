@@ -147,7 +147,12 @@ export function groupSegments(segs, { window = 20, maxChars = 300 } = {})   // �
 export function parseChapters(description)     // "0:00 Intro" style lines (increasing) → [{start, title}]; [] unless ≥ 2
 export function explainFailure(err)            // error code → sentence: no-captions | live | unplayable: <reason> | bad-response | other
 
+export function panelParams(videoId)           // get_panel `params`: base64 protobuf field 149 { 1: videoId, 3: 2 } (what the watch page sends)
+export function parsePanel(json)               // get_panel response → [{start, dur, text}]; rows = panel rows (a few caption lines each),
+                                               // ms timing from frameworkUpdates…timedSyncDataList keyed by row index, "m:ss" label as fallback
+
 export async function fetchTranscript(videoId, { fetchFn = fetch, lang = 'en', track, translate } = {})
+// Primary (phone client, `credentials: 'omit'`: a phone client never carries web cookies, the mismatch trips bot checks):
 // 1. POST `https://www.youtube.com/youtubei/v1/player` {context:{client:{clientName:'ANDROID',...}}, videoId} → .json()
 //    (watch-page baseUrls return empty bodies since 2025; ANDROID InnerTube URLs work without a PO token)
 //    unparsable → 'bad-response'; playabilityStatus not OK and no captions → 'unplayable: <reason>'; live → 'live'
@@ -155,6 +160,13 @@ export async function fetchTranscript(videoId, { fetchFn = fetch, lang = 'en', t
 // 3. GET track.baseUrl + fmt=json3 (+ tlang=<translate>) → .text(); empty → 'no-captions'; JSON.parse → parseJson3
 // 4. → { lang, trackName, track: {lang, asr}, translate, tracks: [{lang, name, asr}], segments, title, channel,
 //        duration (s), chapters }   (segments raw, NOT grouped; title/channel from videoDetails)
+// Fallback (the watch page's own transcript-panel request, WEB client, `credentials: 'include'`), taken when the primary
+// fails with anything but 'no-captions' / 'live' (typically 'unplayable: Sign in to confirm you’re not a bot') and no
+// translation was asked for (the panel cannot translate):
+// 5. POST `youtubei/v1/get_panel` {context:{client:{clientName:'WEB',...}}, panelId:'PAmodern_transcript_view', params: panelParams(videoId)}
+//    → parsePanel; in parallel POST `youtubei/v1/player` with the WEB client for videoDetails only (title, channel, duration, chapters)
+// 6. → same shape, with lang: null, trackName: 'Transcript panel', track: null, tracks: [] (track menu hidden), translate: null
+//    If the panel fails too, the primary's error is what surfaces. (`youtubei/v1/get_transcript` is gone: 400 "Precondition check failed".)
 ```
 
 ## src/lib/db.js — storage.local, keys: `settings`, `video:<videoId>`, `models:<provider>`

@@ -122,19 +122,55 @@ export function explainFailure(err) {
   return `Couldn't load transcript: ${m}`;
 }
 
-// { lang: preferred language prefix, track?: {lang, asr} exact pick, translate?: target language }
-export async function fetchTranscript(videoId, { fetchFn = fetch, lang = 'en', track: want, translate } = {}) {
-  // Caption baseUrls from the watch-page player response return an empty body since 2025
-  // (need a PO token). The InnerTube player endpoint with the ANDROID client still hands out
-  // URLs that work without one.
-  const res = await fetchFn('https://www.youtube.com/youtubei/v1/player', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      context: { client: { clientName: 'ANDROID', clientVersion: '20.10.38', androidSdkVersion: 30 } },
-      videoId,
-    }),
-  });
+const YTI = 'https://www.youtube.com/youtubei/v1/';
+const ANDROID = { clientName: 'ANDROID', clientVersion: '20.10.38', androidSdkVersion: 30 };
+const WEB = { clientName: 'WEB', clientVersion: '2.20261013.00.00' };
+const post = (fetchFn, endpoint, body, credentials) =>
+  fetchFn(YTI + endpoint, { method: 'POST', credentials, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+
+// `params` of the page's own transcript-panel request (youtubei/v1/get_panel): protobuf field 149 wrapping
+// { 1: videoId, 3: 2 }, base64. Captured from the watch page in Oct 2026.
+export function panelParams(videoId) {
+  const inner = `\x0a${String.fromCharCode(videoId.length)}${videoId}\x18\x02`;
+  return btoa(`\xaa\x09${String.fromCharCode(inner.length)}${inner}`);
+}
+
+// get_panel response → segments. Rows are what the panel shows (a few caption lines each); ms timing comes
+// from the sync entity, keyed by row index; the "m:ss" label is the fallback.
+export function parsePanel(j) {
+  const items = j?.content?.engagementPanelSectionListRenderer?.content?.sectionListRenderer?.contents?.[0]
+    ?.itemSectionRenderer?.contents ?? [];
+  const sync = new Map();
+  for (const m of j?.frameworkUpdates?.entityBatchUpdate?.mutations ?? []) {
+    for (const sec of m.payload?.timedMarkersListSyncEntity?.timedListData?.sections ?? []) {
+      for (const t of sec.timedSyncDataList ?? []) sync.set(Number(/(\d+)$/.exec(t.syncItemId ?? '')?.[1]), t);
+    }
+  }
+  const out = [];
+  for (const it of items) {
+    const vm = it.macroMarkersPanelItemViewModel;
+    const tl = vm?.item?.timelineItemViewModel;
+    if (!tl) continue;
+    const text = (tl.contentItems ?? []).map((c) => c.transcriptSegmentViewModel?.simpleText ?? '').join(' ').replace(/\s+/g, ' ').trim();
+    if (!text) continue;
+    const t = sync.get(Number(vm.index ?? 0));
+    const start = t ? Number(t.videoTimeMs) / 1000 : String(tl.timestamp ?? '0').split(':').reduce((a, p) => a * 60 + Number(p), 0);
+    const dur = t ? Math.max(0, Number(t.endTimeMs) - Number(t.videoTimeMs)) / 1000 : 0;
+    out.push({ start, dur, text });
+  }
+  return out;
+}
+
+const meta = (pr) => {
+  const d = pr?.videoDetails ?? {};
+  return { title: d.title ?? '', channel: d.author ?? '', duration: Number(d.lengthSeconds) || 0, chapters: parseChapters(d.shortDescription) };
+};
+
+// Primary path: InnerTube player with the ANDROID client (caption URLs work without a PO token; the web ones
+// return an empty body since 2025). Cookies omitted: a phone client never carries web cookies, and the
+// mismatch is one bot-check trigger.
+async function viaPlayer(videoId, fetchFn, { lang, want, translate }) {
+  const res = await post(fetchFn, 'player', { context: { client: ANDROID }, videoId }, 'omit');
   let pr;
   try { pr = await res.json(); } catch { throw new Error('bad-response'); }
   const status = pr?.playabilityStatus;
@@ -149,21 +185,42 @@ export async function fetchTranscript(videoId, { fetchFn = fetch, lang = 'en', t
   u.searchParams.set('fmt', 'json3');
   if (translate) u.searchParams.set('tlang', translate);
   let text;
-  try { text = await (await fetchFn(u.toString())).text(); } catch { throw new Error('bad-response'); }
+  try { text = await (await fetchFn(u.toString(), { credentials: 'omit' })).text(); } catch { throw new Error('bad-response'); }
   if (!text) throw new Error('no-captions');
   let json;
   try { json = JSON.parse(text); } catch { throw new Error('bad-response'); }
-  const d = pr?.videoDetails ?? {};
   return {
+    ...meta(pr),
     lang: translate || track.lang,
     trackName: translate ? `${track.name} → ${translate}` : track.name,
     track: { lang: track.lang, asr: !!track.asr },
     translate: translate || null,
     tracks: tracks.map(({ lang: l, name, asr }) => ({ lang: l, name, asr: !!asr })),
     segments: parseJson3(json),
-    title: d.title ?? '',
-    channel: d.author ?? '',
-    duration: Number(d.lengthSeconds) || 0,
-    chapters: parseChapters(d.shortDescription),
   };
+}
+
+// Fallback when YouTube bot-checks the phone client ("Sign in to confirm you're not a bot"): the request the
+// watch page itself makes for its transcript panel, WEB client with the browser's cookies. Same shape as the
+// primary minus what the panel does not offer: track picker, translation, caption-line granularity.
+async function viaPanel(videoId, fetchFn) {
+  const [panel, pr] = await Promise.all([
+    post(fetchFn, 'get_panel', { context: { client: WEB }, panelId: 'PAmodern_transcript_view', params: panelParams(videoId) }, 'include')
+      .then((r) => r.json()).catch(() => { throw new Error('bad-response'); }),
+    post(fetchFn, 'player', { context: { client: WEB }, videoId }, 'include').then((r) => r.json()).catch(() => null), // metadata only
+  ]);
+  const segments = parsePanel(panel);
+  if (!segments.length) throw new Error('no-captions');
+  return { ...meta(pr), lang: null, trackName: 'Transcript panel', track: null, translate: null, tracks: [], segments };
+}
+
+// { lang: preferred language prefix, track?: {lang, asr} exact pick, translate?: target language }
+export async function fetchTranscript(videoId, { fetchFn = fetch, lang = 'en', track: want, translate } = {}) {
+  try {
+    return await viaPlayer(videoId, fetchFn, { lang, want, translate });
+  } catch (e) {
+    // 'no-captions' from a playable response is authoritative; a block or an empty/garbled body is not.
+    if (e.message === 'no-captions' || e.message === 'live' || translate) throw e;
+    try { return await viaPanel(videoId, fetchFn); } catch { throw e; }
+  }
 }

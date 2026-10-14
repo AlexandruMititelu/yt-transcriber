@@ -9,6 +9,8 @@ import {
   fetchTranscript,
   parseChapters,
   explainFailure,
+  panelParams,
+  parsePanel,
 } from '../src/lib/transcript.js';
 const transcript = { parseChapters, explainFailure };
 
@@ -164,6 +166,56 @@ test('fetchTranscript throws no-captions on empty caption body', async () => {
   const fetchFn = async (url) =>
     url.startsWith('https://www.youtube.com/youtubei') ? { json: async () => PR } : { text: async () => '' };
   await assert.rejects(fetchTranscript('abc', { fetchFn }), { message: 'no-captions' });
+});
+
+// Trimmed youtubei/v1/get_panel response captured from a watch page (Oct 2026).
+const PANEL = {
+  content: { engagementPanelSectionListRenderer: { content: { sectionListRenderer: { contents: [{ itemSectionRenderer: { contents: [
+    { macroMarkersPanelItemViewModel: { index: 0, item: { timelineItemViewModel: { timestamp: '0:01', contentItems: [{ transcriptSegmentViewModel: { simpleText: '[♪♪♪]' } }] } } } },
+    { macroMarkersPanelItemViewModel: { index: 1, item: { timelineItemViewModel: { timestamp: '0:18', contentItems: [{ transcriptSegmentViewModel: { simpleText: "♪ We're no strangers to love ♪" } }, { transcriptSegmentViewModel: { simpleText: '♪ You know the rules ♪' } }] } } } },
+    { macroMarkersPanelItemViewModel: { index: 2, item: { timelineItemViewModel: { timestamp: '1:27', contentItems: [{ transcriptSegmentViewModel: { simpleText: 'no sync entry' } }] } } } },
+  ] } }] } } } },
+  frameworkUpdates: { entityBatchUpdate: { mutations: [{ payload: { timedMarkersListSyncEntity: { timedListData: { sections: [{ timedSyncDataList: [
+    { videoTimeMs: '1000', syncItemId: 'timeline_view_sync_item0_0', endTimeMs: '3040' },
+    { videoTimeMs: '18000', syncItemId: 'timeline_view_sync_item0_1', endTimeMs: '26960' },
+  ] }] } } } }] } },
+};
+
+test('panelParams matches the params the watch page sends', () => {
+  assert.equal(panelParams('dQw4w9WgXcQ'), 'qgkPCgtkUXc0dzlXZ1hjURgC');
+});
+
+test('parsePanel: rows with ms timing from the sync entity, m:ss fallback', () => {
+  assert.deepEqual(parsePanel(PANEL), [
+    { start: 1, dur: 2.04, text: '[♪♪♪]' },
+    { start: 18, dur: 8.96, text: "♪ We're no strangers to love ♪ ♪ You know the rules ♪" },
+    { start: 87, dur: 0, text: 'no sync entry' },
+  ]);
+  assert.deepEqual(parsePanel({}), []);
+});
+
+test('fetchTranscript falls back to the transcript panel when the phone client is bot-checked', async () => {
+  const calls = [];
+  const fetchFn = async (url, opts) => {
+    const body = opts?.body ? JSON.parse(opts.body) : null;
+    calls.push({ url, client: body?.context?.client?.clientName, credentials: opts?.credentials });
+    if (body?.context?.client?.clientName === 'ANDROID') return { json: async () => ({ playabilityStatus: { status: 'LOGIN_REQUIRED', reason: 'Sign in to confirm you’re not a bot' } }) };
+    if (url.endsWith('/get_panel')) { assert.equal(body.panelId, 'PAmodern_transcript_view'); assert.equal(body.params, panelParams('abc')); return { json: async () => PANEL }; }
+    return { json: async () => ({ videoDetails: { title: 'T', author: 'A', lengthSeconds: '213' } }) };
+  };
+  const r = await fetchTranscript('abc', { fetchFn });
+  assert.equal(calls[0].credentials, 'omit'); // phone client: no web cookies
+  assert.deepEqual(calls.slice(1).map((c) => [c.url.split('/').pop(), c.client, c.credentials]).sort(), [['get_panel', 'WEB', 'include'], ['player', 'WEB', 'include']]);
+  assert.equal(r.segments.length, 3);
+  assert.equal(r.title, 'T');
+  assert.equal(r.duration, 213);
+  assert.deepEqual(r.tracks, []);
+  assert.equal(r.translate, null);
+  // the panel cannot translate: a translate request surfaces the original block instead
+  await assert.rejects(fetchTranscript('abc', { fetchFn, translate: 'ro' }), /unplayable: Sign in/);
+  // the panel failing too surfaces the original reason, not the panel's
+  const blocked = async (url, opts) => (url.endsWith('/get_panel') ? { json: async () => ({}) } : fetchFn(url, opts));
+  await assert.rejects(fetchTranscript('abc', { fetchFn: blocked }), /unplayable: Sign in/);
 });
 
 test('parseChapters reads description timestamps (needs two or more, increasing)', () => {

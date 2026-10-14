@@ -129,7 +129,7 @@ File map:
 manifest.json          MV2 manifest
 background.js          HTTP proxy (CORS-free API calls, SSE streaming port) + native host bridge + library tab opener
 src/lib/format.js      fmtTime, clampText, chunkText (pure)
-src/lib/transcript.js  player-response extraction, track pick, json3 parse, grouping
+src/lib/transcript.js  InnerTube player (ANDROID) + caption fetch, transcript-panel fallback (get_panel), track pick, json3 parse, grouping
 src/lib/bus.js         runtime message helpers (call, http)
 src/lib/db.js          storage.local wrapper: settings + video:<id> records
 src/lib/llm.js         Anthropic/OpenAI request build/parse, system prompt, chat + transcript tools loop
